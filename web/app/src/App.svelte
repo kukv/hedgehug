@@ -1,6 +1,8 @@
 <script lang="ts">
   import { focusesFilter, hasSyncError, isSyncAllKey, offlineBand, syncCard } from "@hedgehug/core";
   import { AppFrame, CommandPalette, OfflineBand, Toasts } from "@hedgehug/ui";
+  import "./lastScreen";
+  import { myTaskBase } from "./myTasks";
   import { palette } from "./palette";
   import BulkChangeDialog from "./screens/item/BulkChangeDialog.svelte";
   import BulkDeleteDialog from "./screens/item/BulkDeleteDialog.svelte";
@@ -24,26 +26,15 @@
   import Screen from "./shell/Screen.svelte";
   import Sidebar from "./shell/Sidebar.svelte";
   import { isMac } from "./tab";
-  import {
-    catalog,
-    itemDialog,
-    links,
-    online,
-    screen,
-    shell,
-    sync,
-    syncNow,
-    system,
-    toasts,
-  } from "./wire";
+  import { catalog, itemDialog, links, online, screen, shell, sync, syncNow, toasts } from "./wire";
 
   const drawerOpen = shell.drawerOpen;
-  const version = system.version;
   const toastList = toasts.list;
   const stores = catalog.stores;
   const current = screen.current;
   const paletteState = palette.state;
-  system.load();
+  // サイドバーのマイタスクのバッジのために 1 回読む(以後は reloads で読み直す)。
+  void myTaskBase.reload();
 
   const syncStatus = sync.status;
   const isOnline = online;
@@ -106,13 +97,7 @@
   {#if band}
     <OfflineBand text={band} />
   {/if}
-  <Screen
-    current={$current}
-    stores={$stores}
-    version={$version}
-    {alert}
-    ondrawer={shell.openDrawer}
-  />
+  <Screen current={$current} stores={$stores} {alert} ondrawer={shell.openDrawer} />
   <DetailPanel />
 </AppFrame>
 <CreateProjectDialog />

@@ -106,6 +106,7 @@ export {
   type WorkspaceTab,
   workspaceTabOf,
 } from "./features/router/route";
+export { createLastScreen, type LastScreen, lastScreenKey } from "./features/screen/lastScreen";
 export { createScreen, type Screen } from "./features/screen/screen";
 export { focusesFilter } from "./features/search/focusKey";
 export { createShell, type Shell } from "./features/shell/shell";
@@ -129,7 +130,6 @@ export {
   type TabSignalsDeps,
 } from "./features/sync/signals";
 export { createSync, type SyncDeps, type SyncState } from "./features/sync/sync";
-export { createSystemInfo, type SystemInfoState } from "./features/system/system";
 export {
   createToasts,
   type Timer,
@@ -157,7 +157,6 @@ export type {
   SyncStoreResult,
   SyncStoreStatus,
 } from "./model/sync";
-export type { SystemInfo } from "./model/system";
 export type {
   Category,
   ChildKind,
@@ -182,6 +181,7 @@ export {
   stepNone,
   stepParent,
 } from "./model/workspace";
+export * from "./myTasksIndex";
 export * from "./notesIndex";
 export * from "./paletteIndex";
 export * from "./planningIndex";
@@ -191,7 +191,6 @@ export type { ItemsPort } from "./port/items";
 export type { PalettePort } from "./port/palette";
 export type { ProjectsPort, RulesSection } from "./port/projects";
 export type { SyncPort, Watching } from "./port/sync";
-export type { SystemPort } from "./port/system";
 export type { Direction, WorkspacesPort } from "./port/workspaces";
 export {
   get,

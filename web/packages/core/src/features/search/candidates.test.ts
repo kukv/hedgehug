@@ -172,6 +172,25 @@ describe("filterCandidates", () => {
   });
 });
 
+describe("my tasks scope", () => {
+  it("my tasks limit project candidates", () => {
+    const two: CandidateSources = {
+      stores: [
+        store("s1", "blue", "HH", [
+          ["HH-P1", "A"],
+          ["HH-P2", "B"],
+        ]),
+      ],
+      items: [],
+      members: [{ storeId: "s1", login: "bob", name: "Bob" }],
+    };
+    const scope: CandidateScope = { kind: "myTasks", projects: new Set(["s1/p-s1-0"]) };
+    expect(at("project:HH|", two, scope).map((c) => c.label)).toEqual(["HH-P1 A"]);
+    expect(at("workspace:we|", two, scope)).toEqual(at("workspace:we|", two, all));
+    expect(at("assignee:b|", two, scope)).toEqual(at("assignee:b|", two, all));
+  });
+});
+
 describe("applyCandidate", () => {
   it("replaces only the typed part and puts the caret after it", () => {
     const text = "assignee:tanaka,すず kind:bug";

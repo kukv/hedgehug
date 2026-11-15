@@ -33,6 +33,8 @@ export interface SearchRow {
   title: string;
   kind: string;
   status: SearchStatus | null;
+  // statusId は、ステータスの内部 ID。なければ空。
+  statusId: string;
   assignee: SearchAssignee | null;
   priority: SearchPriority | null;
   // end は終了日(YYYY-MM-DD)。なければ空。

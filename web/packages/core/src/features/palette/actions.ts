@@ -83,6 +83,7 @@ export function commandCandidates(d: ActionDeps): Candidate[] {
       hint: "C",
       run: closing(d, () => d.itemDialog.open()),
     },
+    moveTo(d, "command:mytasks", g, "マイタスクを開く", { name: "mytasks" }),
     moveTo(d, "command:inbox", g, "受信箱を開く", { name: "inbox" }),
     moveTo(d, "command:activity", g, "アクティビティを開く", { name: "activity" }),
     openSearchTable(d),

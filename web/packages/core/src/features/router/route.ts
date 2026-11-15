@@ -1,5 +1,6 @@
 // 画面のアドレス(01「画面のアドレス」)。綴りはこの計画の決定 4:
-//   /                               ホーム
+//   /                               画面を指さない(最後に開いていた画面へ移る。E4a)
+//   /my-tasks                       マイタスク(04)
 //   /s/{Store名}/w/{接頭辞}/{タブ}     ワークスペース(タブなしは概要)
 //   /s/{Store名}/p/{HH-P1}/{タブ}     プロジェクト
 //   /s/{Store名}/i/{HH-12}           アイテムの入口
@@ -7,7 +8,7 @@
 //   /inbox                          受信箱(06)
 //   /search                         検索(04)
 //   /activity                       アクティビティ(06)
-// 解釈できないアドレスはホームにする(決定 6)。
+// 解釈できないアドレスはマイタスクにする(決定 6・E4a)。
 
 export type ProjectTab = "overview" | "tree" | "settings";
 export type WorkspaceTab = "overview" | "backlog" | "sprints" | "releases" | "reports" | "settings";
@@ -16,6 +17,7 @@ export type SettingsTab = "general" | "accounts";
 
 export type Route =
   | { name: "home" }
+  | { name: "mytasks" }
   | { name: "workspace"; store: string; prefix: string; tab: WorkspaceTab }
   | { name: "project"; store: string; project: string; tab: ProjectTab }
   | { name: "item"; store: string; item: string }
@@ -59,7 +61,9 @@ export function parseRoute(path: string): Route {
     .split("/")
     .filter((s) => s !== "")
     .map(decode);
-  if (segs.some((s) => s === null || s === "")) return { name: "home" };
+  if (segs.length === 0) return { name: "home" };
+  if (segs.some((s) => s === null || s === "")) return { name: "mytasks" };
+  if (segs[0] === "my-tasks" && segs.length === 1) return { name: "mytasks" };
   if (segs[0] === "inbox" && segs.length === 1) return { name: "inbox" };
   if (segs[0] === "search" && segs.length === 1) return { name: "search" };
   if (segs[0] === "activity" && segs.length === 1) return { name: "activity" };
@@ -67,11 +71,11 @@ export function parseRoute(path: string): Route {
     const t = segs[1] ?? "accounts";
     return settingsTabs.includes(t)
       ? { name: "settings", tab: t as SettingsTab }
-      : { name: "home" };
+      : { name: "mytasks" };
   }
   const [s, store, kind, id, tab, ...rest] = segs as string[];
   if (s !== "s" || store === undefined || id === undefined || rest.length > 0) {
-    return { name: "home" };
+    return { name: "mytasks" };
   }
   if (kind === "w") {
     const t = tab ?? "overview";
@@ -86,7 +90,7 @@ export function parseRoute(path: string): Route {
       return { name: "project", store, project: id, tab: t as ProjectTab };
     }
   }
-  return { name: "home" };
+  return { name: "mytasks" };
 }
 
 export function formatRoute(route: Route): string {
@@ -94,6 +98,8 @@ export function formatRoute(route: Route): string {
   switch (route.name) {
     case "home":
       return "/";
+    case "mytasks":
+      return "/my-tasks";
     case "workspace":
       return `/s/${e(route.store)}/w/${e(route.prefix)}/${route.tab}`;
     case "project":

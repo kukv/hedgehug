@@ -70,13 +70,13 @@ describe("resolveRoute", () => {
     { name: "item", store: "work", item: "HH-13" },
     { name: "item", store: "work", item: "XX-12" },
     { name: "workspace", store: "work", prefix: "XX", tab: "overview" },
-  ] as const)("goes home when %o is not found", async (route) => {
+  ] as const)("goes to my tasks when %o is not found", async (route) => {
     transfers.missing.add("HH-P9");
     transfers.missing.add("HH-13");
     transfers.missing.add("XX-12");
     transfers.missing.add("XX");
     expect(await resolveRoute(route, await stores(), itemsIn("S1"), transfers)).toEqual({
-      name: "home",
+      name: "mytasks",
     });
   });
 
@@ -113,8 +113,8 @@ describe("routes of internal IDs", () => {
     });
     expect(routeOfWorkspace(s, "S1", "S1-W1", "settings")).toMatchObject({ tab: "settings" });
     expect(routeOfWorkspace(s, "S1", "S1-W1", "sprints")).toMatchObject({ tab: "sprints" });
-    expect(routeOfProject(s, "S1", "nope", "tree")).toEqual({ name: "home" });
-    expect(routeOfWorkspace(s, "S9", "S1-W1")).toEqual({ name: "home" });
+    expect(routeOfProject(s, "S1", "nope", "tree")).toEqual({ name: "mytasks" });
+    expect(routeOfWorkspace(s, "S9", "S1-W1")).toEqual({ name: "mytasks" });
   });
 });
 
@@ -143,6 +143,15 @@ describe("resolveRoute settings", () => {
   it("resolves activity without any store", async () => {
     expect(await resolveRoute({ name: "activity" }, [], itemsIn("none"), transfers)).toEqual({
       name: "activity",
+    });
+  });
+
+  it("resolves my tasks and home without any store", async () => {
+    expect(await resolveRoute({ name: "mytasks" }, [], itemsIn("none"), transfers)).toEqual({
+      name: "mytasks",
+    });
+    expect(await resolveRoute({ name: "home" }, [], itemsIn("none"), transfers)).toEqual({
+      name: "home",
     });
   });
 });

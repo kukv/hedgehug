@@ -109,12 +109,12 @@ describe("createScreen", () => {
     expect(opened).toEqual([["S1", "S1-I12", undefined]]);
   });
 
-  it("shows home for an address it cannot resolve", async () => {
+  it("shows my tasks for an address it cannot resolve", async () => {
     const { screen, transfers } = await setup("/s/work/p/HH-P9/overview", false);
     transfers.missing.add("HH-P9");
     screen.start();
     await flush();
-    expect(get(screen.current)).toEqual({ name: "home" });
+    expect(get(screen.current)).toEqual({ name: "mytasks" });
   });
 
   it("opens the found item with its moved-from note after replacing the address with the project tree", async () => {
@@ -138,7 +138,7 @@ describe("createScreen", () => {
     expect(formatRoute(get(navigation.route))).toBe("/s/work/p/HH-P1/tree");
   });
 
-  it("toasts the sentence of a gone item once, as a plain toast, and replaces the address with home", async () => {
+  it("toasts the sentence of a gone item once, as a plain toast, and replaces the address with my tasks", async () => {
     const { screen, navigation, transfers, toasts, catalog, opened } = await setup(
       "/s/work/i/HH-5",
       false,
@@ -161,8 +161,8 @@ describe("createScreen", () => {
         false,
       ],
     ]);
-    expect(formatRoute(get(navigation.route))).toBe("/");
-    expect(get(screen.current)).toEqual({ name: "home" });
+    expect(formatRoute(get(navigation.route))).toBe("/my-tasks");
+    expect(get(screen.current)).toEqual({ name: "mytasks" });
     expect(opened).toEqual([]);
   });
 });

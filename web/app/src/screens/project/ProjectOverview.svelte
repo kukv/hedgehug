@@ -7,6 +7,7 @@
     readOnlyNote,
   } from "@hedgehug/core";
   import { Button } from "@hedgehug/ui";
+  import { today } from "../../clock";
   import { descriptionSaves, detail, links, projectScreen } from "../../wire";
   import CommentsSection from "../notes/CommentsSection.svelte";
   import DescriptionSection from "../notes/DescriptionSection.svelte";
@@ -24,8 +25,7 @@
 
   let { view, onaddepic }: Props = $props();
 
-  // 期限の判定に使う今日は、画面を出したときの日付(ツリーと同じ)。
-  const today = new Date();
+  // 期限の判定に使う今日は、app の時計の日付(ツリーと同じ)。
   const p = $derived(view.project);
   const readonly = $derived(view.store.readOnly);
   const target = $derived({ kind: "project" as const, storeId: view.store.id, id: p.id });
@@ -60,7 +60,7 @@
             items={view.items}
             settings={view.settings}
             members={view.members}
-            {today}
+            today={$today}
             readOnly={readonly}
             onopen={(ev) => links.click(ev, route(e), () => void detail.open(view.store.id, e.id))}
             onauxopen={(ev) => links.click(ev, route(e))}

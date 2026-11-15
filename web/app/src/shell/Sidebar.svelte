@@ -1,9 +1,17 @@
 <script lang="ts">
-  import { type Resolved, type Route, type StoreNode, syncAllHint, syncCard } from "@hedgehug/core";
+  import {
+    myTasksBadge,
+    type Resolved,
+    type Route,
+    type StoreNode,
+    syncAllHint,
+    syncCard,
+  } from "@hedgehug/core";
   import { Brand, Button, SyncCard } from "@hedgehug/ui";
   import { SvelteSet } from "svelte/reactivity";
   import { inbox } from "../inbox";
   import type { Links } from "../links";
+  import { myTaskBase } from "../myTasks";
   import { openSearchTable } from "../search";
   import { isMac } from "../tab";
   import { itemDialog, sync, syncNow } from "../wire";
@@ -22,11 +30,15 @@
   const card = $derived(syncCard($status, $syncNow));
   const hint = syncAllHint(isMac());
   const settings: Route = { name: "settings", tab: "accounts" };
+  const myTasksRoute: Route = { name: "mytasks" };
   const inboxRoute: Route = { name: "inbox" };
   const activityRoute: Route = { name: "activity" };
   // 「検索」はテーブルで開く入口(E3a-9)。修飾キーのない主ボタンのクリックで移れたときだけテーブルにする。
   const searchRoute: Route = { name: "search" };
   const unread = inbox.unread;
+  // マイタスクのバッジは、絞り込みなしの件数(画面の絞り込みでは変わらない)。
+  const myTaskRows = myTaskBase.rows;
+  const myTaskCount = $derived($myTaskRows?.length ?? 0);
 
   // 開閉は、このタブのあいだだけ覚える。
   const collapsed = new SvelteSet<string>();
@@ -60,6 +72,18 @@
   新規作成 <kbd class="kbd">C</kbd>
 </Button>
 <nav class="nav" aria-label="ナビ">
+  <a
+    class="nav-row"
+    href={links.href(myTasksRoute)}
+    aria-current={current?.name === "mytasks" ? "page" : undefined}
+    onclick={(e) => links.click(e, myTasksRoute)}
+    onauxclick={(e) => links.click(e, myTasksRoute)}
+  >
+    <span>マイタスク</span>
+    {#if myTaskCount > 0}
+      <span class="badge" role="img" aria-label={myTasksBadge(myTaskCount)}>{myTaskCount}</span>
+    {/if}
+  </a>
   <a
     class="nav-row"
     href={links.href(inboxRoute)}

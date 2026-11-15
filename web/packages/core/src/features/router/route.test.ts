@@ -46,8 +46,8 @@ describe("parseRoute and formatRoute", () => {
     });
   });
 
-  it("sends an unknown workspace tab home", () => {
-    expect(parseRoute("/s/work/w/HH/kanban")).toEqual({ name: "home" });
+  it("sends an unknown workspace tab to my tasks", () => {
+    expect(parseRoute("/s/work/w/HH/kanban")).toEqual({ name: "mytasks" });
   });
 
   it("opens the overview when the project address has no tab", () => {
@@ -101,8 +101,8 @@ describe("parseRoute and formatRoute", () => {
     "/s/work/i/HH-1/more",
     "/s//i/HH-1",
     "/s/work/i/%E0%A4%A",
-  ])("reads %s as home", (path) => {
-    expect(parseRoute(path)).toEqual({ name: "home" });
+  ])("reads %s as my tasks", (path) => {
+    expect(parseRoute(path)).toEqual({ name: "mytasks" });
   });
 });
 
@@ -136,9 +136,9 @@ describe("settings", () => {
     expect(formatRoute({ name: "settings", tab: "general" })).toBe("/settings/general");
   });
 
-  it("goes home for a tab that is not there", () => {
-    expect(parseRoute("/settings/unknown")).toEqual({ name: "home" });
-    expect(parseRoute("/settings/accounts/x")).toEqual({ name: "home" });
+  it("goes to my tasks for a tab that is not there", () => {
+    expect(parseRoute("/settings/unknown")).toEqual({ name: "mytasks" });
+    expect(parseRoute("/settings/accounts/x")).toEqual({ name: "mytasks" });
   });
 
   it("writes the settings address", () => {
@@ -152,8 +152,8 @@ describe("inbox (06「受信箱」)", () => {
     expect(formatRoute({ name: "inbox" })).toBe("/inbox");
   });
 
-  it("goes home for a path below /inbox", () => {
-    expect(parseRoute("/inbox/mention")).toEqual({ name: "home" });
+  it("goes to my tasks for a path below /inbox", () => {
+    expect(parseRoute("/inbox/mention")).toEqual({ name: "mytasks" });
   });
 });
 
@@ -163,8 +163,8 @@ describe("search (04「検索」)", () => {
     expect(formatRoute({ name: "search" })).toBe("/search");
   });
 
-  it("goes home for a path below /search", () => {
-    expect(parseRoute("/search/x")).toEqual({ name: "home" });
+  it("goes to my tasks for a path below /search", () => {
+    expect(parseRoute("/search/x")).toEqual({ name: "mytasks" });
   });
 });
 
@@ -174,7 +174,7 @@ describe("activity (06「アクティビティ」)", () => {
     expect(formatRoute({ name: "activity" })).toBe("/activity");
   });
 
-  it("goes home for a path below /activity", () => {
-    expect(parseRoute("/activity/x")).toEqual({ name: "home" });
+  it("goes to my tasks for a path below /activity", () => {
+    expect(parseRoute("/activity/x")).toEqual({ name: "mytasks" });
   });
 });

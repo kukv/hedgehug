@@ -11,7 +11,7 @@ import { goneText, movedLine, workspaceGoneText, workspaceMovedLine } from "../t
 
 // いま出す画面。アドレスを一覧の状態で内部 ID にする(A2 の計画の決定 7)。
 // アイテムの入口は、そのアイテムのプロジェクトの「ツリー」に替え(履歴に積まない)、詳細パネルを開く(01)。
-// 旧 ID で開けないもの(削除済み・完全に削除・見えない Store)は、理由をトーストで出してホームに替える(02)。
+// 旧 ID で開けないもの(削除済み・完全に削除・見えない Store)は、理由をトーストで出してマイタスクに替える(02・E4a-13)。
 // プロジェクトの旧 ID で開いたときは、アドレスを移したプロジェクトの同じタブに替え(履歴に積まない)、移動の印を
 // projectMoved に置く(A5b-2・A5b-24)。ワークスペースの旧いアドレスも同じく、見つけた Store の名前の形に替え
 // (履歴に積まない)、workspaceMoved に置く(B5c-2・B5c-13)。
@@ -117,14 +117,14 @@ export function createScreen(deps: ScreenDeps): Screen {
     );
     if (mine < applied || get(deps.navigation.route) !== route) return;
     applied = mine;
-    // 置き換えたホームの解決は gone を持たないので、同じトーストを 2 度出さない。
-    if (r.name === "home" && r.gone) {
+    // 置き換えたマイタスクの解決は gone を持たないので、同じトーストを 2 度出さない。
+    if (r.name === "mytasks" && r.gone) {
       const text = route.name === "workspace" ? workspaceGoneText : goneText;
       deps.toasts.show(text(r.gone, deps.now()));
-      return deps.navigation.replace({ name: "home" });
+      return deps.navigation.replace({ name: "mytasks" });
     }
     // 出していたプロジェクトが、同期・別のタブ・別のプログラムで削除されたときは、ワークスペースの概要へ移る
-    // (A4b-22。履歴には積まない。ワークスペースもなければホーム)。アドレスを打ち込んだだけの解決できないものはホームのまま。
+    // (A4b-22。履歴には積まない。ワークスペースもなければマイタスク)。アドレスを打ち込んだだけの解決できないものはマイタスクのまま。
     // 別の Store の同じ ID に解決された場合も、消えたものとして移る。
     const was = shown;
     shown = null;
@@ -147,9 +147,10 @@ export function createScreen(deps: ScreenDeps): Screen {
       };
     }
     shownWorkspace = null;
-    // 出していたワークスペースが読み直しで見つからなくなったときは、アドレスもホームに替える(履歴に積まない)。替えないと、
+    // 出していたワークスペースが読み直しで見つからなくなったときは、アドレスもマイタスクに替える(履歴に積まない)。替えないと、
     // 次の一覧の読み直しでサーバーに聞き、ほかの書き手が移した先へひとりでに移る(B5c-17)。
-    if (rereadWorkspace && r.name === "home") return deps.navigation.replace({ name: "home" });
+    if (rereadWorkspace && r.name === "mytasks")
+      return deps.navigation.replace({ name: "mytasks" });
     if (r.name === "workspace" && route.name === "workspace") {
       const { storeId, workspaceId, tab, movedFrom: moved } = r;
       if (moved)
@@ -174,7 +175,7 @@ export function createScreen(deps: ScreenDeps): Screen {
       // 一覧がまだ古くても開けるよう、アドレスはサーバーが返したいまの ID で作る。
       const s = stores.find((x) => x.id === storeId);
       return deps.navigation.replace(
-        s ? { name: "project", store: s.name, project: moved.current, tab } : { name: "home" },
+        s ? { name: "project", store: s.name, project: moved.current, tab } : { name: "mytasks" },
       );
     }
     // サーバーがほかの Store で見つけたとき(Store の名前を変えたあとのブックマークなど)は、アドレスを見つけた Store の

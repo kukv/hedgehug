@@ -23,7 +23,6 @@ import (
 	"github.com/kukv/hedgehug/internal/adapter/httpapi/search"
 	"github.com/kukv/hedgehug/internal/adapter/httpapi/stores"
 	syncapi "github.com/kukv/hedgehug/internal/adapter/httpapi/syncing"
-	"github.com/kukv/hedgehug/internal/adapter/httpapi/system"
 	"github.com/kukv/hedgehug/internal/adapter/httpapi/transfers"
 	"github.com/kukv/hedgehug/internal/adapter/httpapi/workspaces"
 	appactivity "github.com/kukv/hedgehug/internal/app/activity"
@@ -114,13 +113,13 @@ type Deps struct {
 }
 
 // NewAPI は、mux に API を登録する。機能の API は httpapi/<機能> の Register を 1 行ずつ足す。
-// 本文の型には機能の名前を付ける(例: system.SystemInfo。OpenAPI のスキーマ名になる)。
+// 本文の型には機能の名前を付ける(例: stores.StoreInfo。OpenAPI のスキーマ名になる)。
 func NewAPI(mux *http.ServeMux, deps Deps) huma.API {
 	cfg := huma.DefaultConfig("hedgehug", deps.Version)
 	cfg.OpenAPIPath = "" // OpenAPI は make generate で api/openapi.yaml に書く。サーバーでは出さない
 	cfg.DocsPath = ""
 	cfg.SchemasPath = ""
-	// 既定の CreateHooks は、本文に $schema(出さないパスへのリンク)を足す。本文は {"version"} のような約束どおりにする
+	// 既定の CreateHooks は、本文に $schema(出さないパスへのリンク)を足す。本文は {"id", "name", …} のような約束どおりにする
 	cfg.CreateHooks = nil
 	api := humago.New(mux, cfg)
 
@@ -129,7 +128,6 @@ func NewAPI(mux *http.ServeMux, deps Deps) huma.API {
 		hub = events.NewHub()
 	}
 
-	system.Register(api, deps.Version)
 	stores.Register(api, appstores.Service{Stores: deps.StoreList})
 	members.Register(api, appmembers.Service{Stores: deps.Stores, Identity: deps.Identity})
 	var scan projects.ScanFunc // Links がなければ(リンクの API を使わない組み立て)探さない

@@ -30,7 +30,7 @@ func TestAllowed(t *testing.T) {
 		{m + "internal/infra/gitstore", m + "internal/infra/github", false, false},
 		{m + "internal/infra/gitstore", "github.com/go-git/go-git/v5", false, true},
 		{m + "internal/adapter/httpapi", m + "internal/app/items", false, true},
-		{m + "internal/adapter/httpapi", m + "internal/adapter/httpapi/system", false, true},
+		{m + "internal/adapter/httpapi", m + "internal/adapter/httpapi/stores", false, true},
 		{m + "internal/adapter/httpapi", m + "internal/adapter/cli", false, false},
 		{m + "internal/adapter/httpapi", m + "internal/infra/gitstore", false, false},
 		{m + "internal/adapter/httpapi", m + "internal/app/apptest", false, false},
