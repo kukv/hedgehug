@@ -295,6 +295,34 @@ func TestAutoRemembersAttemptWhenRecordFails(t *testing.T) {
 	}
 }
 
+// 決定 G1-11: 書き込み後の契機で同期して記録に失敗しても、その書き込みで毎秒同期しない(試みたより前の書き込みは
+// 契機にしない)。試みたあとの書き込みは、書き込み後の契機で同期する。
+func TestAutoWriteBeforeAFailedRecordDoesNotRepeat(t *testing.T) {
+	f, a, _ := newAuto(t)
+	f.svc.State = recordFails{f.state}
+	_ = a.Step(context.Background())
+	f.clock.Advance(time.Minute)
+	a.Wrote("S1")
+	f.clock.Advance(30 * time.Second)
+	_ = a.Step(context.Background())
+	if n := f.syncs()["S1"]; n != 2 {
+		t.Fatalf("not synced after the write: %d", n)
+	}
+	for range 3 {
+		f.clock.Advance(time.Second)
+		_ = a.Step(context.Background())
+	}
+	if n := f.syncs()["S1"]; n != 2 {
+		t.Fatalf("synced again every second: %d", n)
+	}
+	a.Wrote("S1")
+	f.clock.Advance(30 * time.Second)
+	_ = a.Step(context.Background())
+	if n := f.syncs()["S1"]; n != 3 {
+		t.Errorf("write after the attempt not synced: %d", n)
+	}
+}
+
 // 戻ってこないタブは、1 日を過ぎたら覚えておかない(つながっても復帰の契機にならない)。
 func TestAutoForgetsLapsedTabAfterADay(t *testing.T) {
 	f, a, settings := newAuto(t)

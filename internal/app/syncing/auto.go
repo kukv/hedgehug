@@ -166,6 +166,7 @@ func (a *Auto) take(now time.Time, auto bool) (all bool, wrote map[port.StoreID]
 	return all, wrote, false
 }
 
+// pick は、いま同期する Store を選ぶ。保存の時刻 wrote は、最後に試みた時刻より後のものだけを書き込み後の契機にする。
 func (a *Auto) pick(ctx context.Context, now time.Time, all bool, wrote map[port.StoreID]time.Time, timing port.SyncTiming) ([]port.SyncTarget, error) {
 	targets, err := a.Service.Targets.List(ctx)
 	if err != nil {
@@ -182,7 +183,11 @@ func (a *Auto) pick(ctx context.Context, now time.Time, all bool, wrote map[port
 	a.mergeTried(targets, byStore)
 	var picked []port.SyncTarget
 	for _, t := range targets {
-		if eligible(t) && (all || due(now, byStore[t.ID], wrote[t.ID], timing)) {
+		rec, w := byStore[t.ID], wrote[t.ID]
+		if !w.After(rec.LastAttempt) { // 最後に試みたより前の保存は、その試みで送ったか、記録に失敗して残っただけ(決定 G1-11)
+			w = time.Time{}
+		}
+		if eligible(t) && (all || due(now, rec, w, timing)) {
 			picked = append(picked, t)
 		}
 	}
