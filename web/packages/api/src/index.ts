@@ -7,6 +7,7 @@ export { createInboxPort } from "./inbox";
 export { createItemActionsPort } from "./itemActions";
 export { createItemsPort } from "./items";
 export { createLinksPort } from "./links";
+export { createMyTasksPort } from "./myTasks";
 export { createNotesPort } from "./notes";
 export { createPalettePort } from "./palette";
 export { createPlanningPort } from "./planning";
