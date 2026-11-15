@@ -121,7 +121,12 @@ export {
   syncCard,
 } from "./features/sync/card";
 export { createReflection, type Reflection, type ReflectionDeps } from "./features/sync/reflection";
-export { restoredCommentToast, restoredNameToast, restoredToast } from "./features/sync/restored";
+export {
+  joinedToast,
+  restoredCommentToast,
+  restoredNameToast,
+  restoredToast,
+} from "./features/sync/restored";
 export {
   createTabSignals,
   resendMs,

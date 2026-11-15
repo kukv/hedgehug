@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { restoredCommentToast, restoredNameToast, restoredToast } from "./restored";
+import { joinedToast, restoredCommentToast, restoredNameToast, restoredToast } from "./restored";
 
 describe("restoredToast", () => {
   it("別の画面で削除されていたものを取り消したことを知らせる", () => {
@@ -20,5 +20,11 @@ describe("restoredNameToast / restoredCommentToast", () => {
     expect(restoredCommentToast()).toBe(
       "コメントは別の画面で削除されていましたが、変更を保存したため、削除を取り消しました",
     );
+  });
+});
+
+describe("joinedToast", () => {
+  it("メンバーに追加したことを知らせる", () => {
+    expect(joinedToast("taro")).toBe("taro をメンバーに追加しました");
   });
 });
