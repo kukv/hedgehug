@@ -60,9 +60,9 @@ E1・E2a の計画の Global Constraints をすべて引き継ぐ。加えて次
 
 ## Review Focus
 
-1. **同じ ID のアイテムが 2 つの Store にあると、片方の開閉やフォーカスがもう片方に効く。** Store「work」と Store「team」のどちらにも HH-3 があるとき、Store「work」の HH-3 を閉じても Store「team」の HH-3 は開いたまま、↓ で 2 つは別の行として順に移る(E3a-5)。Task 4 の `keys are per store`、Task 9 の e2e に入れる。
-2. **絞り込み中の「上へ移動」が、見えていない兄弟を飛び越えない・または動かす。** 兄弟が HH-3・HH-4・HH-5・HH-7・HH-9 で HH-4・HH-7 が一致しないとき、HH-5 の「上へ移動」で並びは HH-5・HH-3・HH-4・HH-7・HH-9 になる(04 の 512 行)。見えている行だけを `rows` に渡せば既存の `visibleNeighbors` がそうする。Task 4 の `rowsFor gives only visible siblings` と Task 9 の e2e に入れる。
-3. **閲覧のみの Store の行と書ける Store の行が同じツリーに並ぶと、片方の判定がもう片方に移る。** 閲覧のみの Store の Epic の C・Space は何も起こさず、すぐ下の書ける Store の Epic の C はダイアログを開く(書き込みの画面はフォーカスのある行の Store で決める)。Task 4 の `screenFor uses the row's store` と Task 9 の e2e に入れる。
+1. **同じ ID のアイテムが 2 つの Store にあると、片方の開閉やフォーカスがもう片方に効く。** Store「work」と Store「team」のどちらにも HH-3 があるとき、Store「work」の HH-3 を閉じても Store「team」の HH-3 は開いたまま、↓ で 2 つは別の行として順に移る(E3a-5)。Task 4 の `keys are per store`、Task 8 の e2e に入れる。
+2. **絞り込み中の「上へ移動」が、見えていない兄弟を飛び越えない・または動かす。** 兄弟が HH-3・HH-4・HH-5・HH-7・HH-9 で HH-4・HH-7 が一致しないとき、HH-5 の「上へ移動」で並びは HH-5・HH-3・HH-4・HH-7・HH-9 になる(04 の 512 行)。見えている行だけを `rows` に渡せば既存の `visibleNeighbors` がそうする。Task 4 の `rowsFor gives only visible siblings` と Task 8 の e2e に入れる。
+3. **閲覧のみの Store の行と書ける Store の行が同じツリーに並ぶと、片方の判定がもう片方に移る。** 閲覧のみの Store の Epic の C・Space は何も起こさず、すぐ下の書ける Store の Epic の C はダイアログを開く(書き込みの画面はフォーカスのある行の Store で決める)。Task 4 の `screenFor uses the row's store` と Task 8 の e2e に入れる。
 4. **一致しない子を数えずに、進捗やブロック中がずれる。** `kind:task` で Story の下の Task だけが一致するとき、薄い Story の行の Step の「完了/対象」とプロジェクトの行の進捗は、絞り込まないときと同じ数になる(E3a-3)。Task 4 の `progress counts unmatched children` に入れる。
 5. **入口によってはテーブルに戻らない。** ツリーにしたあと、サイドバーの「検索」を押すとテーブルに戻り、再読み込みではツリーのまま開く(E3a-9)。Task 3 の `showTable switches to table` と Task 9 の e2e に入れる。
 
@@ -84,12 +84,14 @@ E1・E2a の計画の Global Constraints をすべて引き継ぐ。加えて次
 
 `move_test.go`(`apptest` の Store に同じワークスペースのプロジェクト A・B・C を作る):
 - `TestMoveProjectUp`: B を上へ → `List` の並びが B・A・C。ログの最後の操作の要約が「B の並びを変更」。
-- `TestMoveProjectEdgesWriteNothing`: A を上へ、C を下へ → どちらも err なし、Store の先端のコミットが変わらない(`MoveWorkspace` の端と同じ扱い。テストは `app/workspaces/order_test.go` の端のテストを写す)。
+- `TestMoveProjectEdgesWriteNothing`: A を上へ、C を下へ → どちらも err なし、A・C のログの行が増えない(`app/workspaces/order_test.go` の 46〜53 行の端のテストを写す)。
 - `TestMoveProjectOnlyMovedRankChanges`: B を下へ → A・C の `Rank` は前と同じ。
+- `TestMoveProjectWithoutRanks`: rank のないプロジェクト(`apptest.Sample` のもの)を動かすと、同じ保存で表示の順に rank を振ってから動かす(`TestWorkspaceOrderWithoutRanks` と同じ)。
 - `TestMoveProjectOtherWorkspaceUntouched`: 別のワークスペースのプロジェクトの並びは変わらない。
-- `TestMoveProjectDeletedIsNotFound`: 削除済みのプロジェクト → `port.ErrNotFound`。
+- `TestMoveProjectDeleted`: 削除済みのプロジェクトの扱いは `Rename` と同じ(`s.editable` と `saveAs` の流れを通す)。削除の根でないもの(ワークスペースごと削除されたもの)は `port.ErrNotFound`。
+- 履歴: プロジェクトの履歴は `rank` の行を出さない(`internal/domain/history/project_test.go` の O10 の行がすでに確かめている)。足すテストはない。
 
-`edit_test.go` に `TestMoveProjectRoute`: `POST …/move` `{"direction":"down"}` → 204、`{"direction":"left"}` → 422。
+`edit_test.go` に `TestMoveProjectRoute`: `POST …/move` `{"direction":"down"}` → 204、端で `{"direction":"up"}` → 204(何も書かない)、`{"direction":"left"}` → 422。
 
 - [ ] **Step 2: 落ちることを確かめる**
 
@@ -98,7 +100,7 @@ Expected: FAIL(`MoveProject undefined`)
 
 - [ ] **Step 3: `MoveProject` と API を書く**
 
-`MoveWorkspace`(`internal/app/workspaces/order.go`)と同じ組み立てにする: 生きているプロジェクトを `Rank` の順(同じなら作成の保存が早い順、さらに内部 ID の順。`port.LiveProjects` の並び)で並べる。動かすのは 1 件だけで、その rank を新しい隣どうしのあいだの値(`rank.Between`)にする。rank のないものがあれば先に埋める。端なら何も書かない。プロジェクトの rank の変更の行の書き方は、作成のときに rank を入れている `create.go` に合わせる。`make generate` のあと、api の `projects.ts` に `move` を足す。
+並びの決め方は `MoveWorkspace`(`internal/app/workspaces/order.go`)と同じにし、削除済みの扱いと保存の流れは `Rename`(`rename.go`)に合わせる: 生きているプロジェクトを `Rank` の順(同じなら作成の保存が早い順、さらに内部 ID の順。`port.LiveProjects` の並び)で並べる。動かすのは 1 件だけで、その rank を新しい隣どうしのあいだの値(`rank.Between`)にする。rank のないものがあれば先に埋める。端なら何も書かない。プロジェクトの rank の変更の行の書き方は、作成のときに rank を入れている `create.go` に合わせる。`make generate` のあと、api の `projects.ts` に `move` を足す。
 
 - [ ] **Step 4: 通ることを確かめる**
 
@@ -178,7 +180,7 @@ git commit -m "refactor(core): ツリーの部品を行の型で使えるよう�
 - Produces(`Search` に足す):
   - `SearchState` に `layout: SearchLayout; tree: TreeSettings`
   - `setLayout(layout: SearchLayout): void` — 書くだけで検索しない。テーブル以外にするときは `deps.selection?.clear()`(E3a-10。`SearchDeps.selection` の型を `Pick<RowSelection, "prune" | "clear">` にする)
-  - `showTable(): void` — `setLayout("table")`(E3a-9 の入口が呼ぶ)
+  - `showTable(): void` — E3a-9 の入口が呼ぶ。そのブラウザのタブでまだ `open` が画面の状態を読んでいなければ、書かずに印だけを付け、`open` が読んだあとで `layout` を `table` にして書く(読む前に書くと、保存した絞り込み・列・開閉が初めの値で上書きされる)。読んだあとなら `setLayout("table")`
   - `setCollapsed(collapsed: string[]): void` — 書くだけ
   - `replaceQuery`・`prepareQuery` は、絞り込みを入れ替える前に `showTable()` を行う(パレットの「検索で開く」「{N} 件をまとめて変更…」の入口)
 
@@ -190,6 +192,7 @@ git commit -m "refactor(core): ツリーの部品を行の型で使えるよう�
 - `setLayout writes the state without searching`: `setLayout("tree")` → 書いた値が `{query, layout: "tree", table, tree}`、`port.search` の呼び出しが増えない。
 - `setLayout away from table clears the selection`。
 - `showTable switches to table`(Review Focus 5): `open` で `layout: "tree"` を読んだあと `showTable()` → `layout` が `table`。
+- `showTable before the first open keeps the saved state`: 保存が `{query: "kind:bug", layout: "tree", table: {columns: ["id","title"], …}, tree: {collapsed: ["s/1"]}}` で、`open` の前に `showTable()` → `open` のあとの状態と書いた値が `query: "kind:bug"`・`layout: "table"`・その `columns`・その `collapsed`。`open` の前には `screenStates.write` が呼ばれない。
 - `replaceQuery opens in table`: `layout: "tree"` の状態で `replaceQuery("kind:bug")` → `table`。
 - `open keeps the saved layout`: 保存が `tree` なら `open` のあと `tree`。
 
@@ -225,7 +228,7 @@ git commit -m "feat(core): 検索の画面の状態にレイアウトとツリ�
 - Produces(`searchTree.ts`):
   - `type SearchTreeRow = { id: string /* 鍵 */; parentId: string | null; kind: "project"; store: StoreNode; workspace: WorkspaceNode; project: ProjectNode } | { id: string; parentId: string | null; kind: "item"; store: StoreNode; workspace: WorkspaceNode; item: Item; dim: boolean }`
   - `interface ProjectData { items: Item[]; settings: WorkspaceSettings; members: Member[] }`
-  - `interface SearchTreeSection { store: StoreNode; workspace: WorkspaceNode; projects: { project: ProjectNode; data: ProjectData; nodes: TreeNodeOf<SearchTreeRow> }[] }`
+  - `interface SearchTreeSection { store: StoreNode; workspace: WorkspaceNode; projects: { project: ProjectNode; data: ProjectData; node: TreeNodeOf<SearchTreeRow> /* プロジェクトの行と、その下 */ }[] }`
   - `interface SearchTreeView { sections: SearchTreeSection[]; nodes: TreeNodeOf<SearchTreeRow>[] /* フォーカスに渡す。プロジェクトの行が根 */; matched: number /* E3a-6 */; hasProjects: boolean }`
   - `const rowKey = (storeId: string, id: string) => \`${storeId}/${id}\``
   - `function treeScope(stores: StoreNode[], rows: SearchRow[], filtered: boolean): { storeId: string; projectId: string }[]`(E3a-3。並びは E3a-4)
@@ -259,7 +262,7 @@ Expected: FAIL
 
 - [ ] **Step 3: 書く**
 
-木は `buildTree(data.items)` を刈り込む。残すのは、一致したアイテムか、一致したアイテムを子孫に持つアイテム。一致の集まりは `rows` の `storeId`・`itemId`(削除済みの行は入れない)。`filtered: false` なら刈り込まない。
+`filtered` は、応答の元になった絞り込み(`SearchState.resultQuery`)が空でないかで決める(入力中の `query` で決めると、刈り込む行と食い違う)。木は `buildTree(data.items)` を刈り込む。残すのは、一致したアイテムか、一致したアイテムを子孫に持つアイテム。一致の集まりは `rows` の `storeId`・`itemId`(削除済みの行は入れない)。`filtered: false` なら刈り込まない。
 
 - [ ] **Step 4: 通ることを確かめる**
 
@@ -321,7 +324,8 @@ git commit -m "feat(search): 応答に sort: の有無を足し、ツリーの�
 - Produces:
   - `createTreeKeyboard<T extends TreeRowLike>(deps: TreeKeyboardDeps<T>): TreeKeyboard<T>`(`TreeKeyboard` の中身はいまのまま。`focus: TreeFocus<T>`)
   - `interface TreeKeyboardDeps<T> { focus: TreeFocus<T>; list(): HTMLElement | undefined; itemOf(row: T): Item | null /* プロジェクトの行は null */; screen(): TreeScreen | null /* フォーカスのある行で書く画面 */; readOnly(row: T): boolean; open(row: T): void /* Enter */; openTab(row: T): void /* Ctrl+Enter */; openMenu(row: T, rect: { left: number; bottom: number }): void; create(row: T): void /* C */; setStatus(item: Item, statusId: string): Promise<void>; moveProject?(row: T, dir: "up" | "down"): void /* プロジェクトの行の Alt+↑↓ */; afterChange(): Promise<void> }`
-  - アイテムの行は `treeKeyAction(event, item)`、プロジェクトの行は `projectKeyAction(event)` でキーを読む。プロジェクトの行の Alt+↑↓ は順番待ちに積まず `moveProject` を呼ぶ。閲覧のみの行の C と Alt+↑↓ は何もしない(E3a-16)
+  - アイテムの行は `treeKeyAction(event, item)`、プロジェクトの行は `projectKeyAction(event)` でキーを読む。プロジェクトの行の Alt+↑↓ は順番待ちに積まず `moveProject` を呼ぶ。閲覧のみの行の C と Alt+↑↓ は何もしない(E3a-16)。先頭・末尾のプロジェクトの Alt+↑↓ も何もしない(呼ぶ側の `moveProject` が `canMoveProject` で確かめる)
+  - 鍵と内部 ID の境目: `createTreeWrites` には内部 ID を渡す(`toggleDone(itemOf(row).id)`・`moveSibling`・`changeParent` も `itemOf(row).id`)。`TreeScreen.rows` は `Item` なので、書き込みの側は内部 ID で行を探す。`TreeWritesDeps.expand(id)` に来るのは候補の内部 ID なので、`expand: (id) => focus.expand(deps.keyOf(id))` で鍵に戻す。そのため deps に `keyOf(internalId: string): string` を足す(プロジェクトの画面は `(id) => id`、検索のツリーはフォーカスのある行の Store で `rowKey(storeId, id)`)
 
 - [ ] **Step 1: いまのテストで守られていることを確かめる**
 
@@ -389,77 +393,107 @@ git commit -m "feat(web): ツリーのプロジェクトの行・プロジェク
 
 ---
 
-### Task 8: 検索の画面のレイアウトの切り替えとツリー
+### Task 8: 検索の画面のツリー
 
 **Files:**
-- Create: `web/packages/ui/src/patterns/LayoutSwitch.svelte`(と `patterns.test.ts` へのテスト)、`web/app/src/screens/tree/SearchTree.svelte`、`web/app/src/screens/tree/SearchTreeBody.svelte`(ワークスペースの見出しとプロジェクトの段を描く)、`web/app/src/screens/search/SearchToolbar.svelte`、`web/app/src/screens/search/SearchBody.svelte`(テーブル・ツリー・空・削除済みの案内のどれを出すか)、`web/app/src/searchTree.ts`(`createSearchTreeData` の組み立てと、Store が変わった知らせでの `reset`)
-- Modify: `web/app/src/screens/search/SearchScreen.svelte`(200 行未満にする)、`web/app/src/screens/table/TableToolbar.svelte`(左端に部品を置く `lead?: Snippet` を足す)、`web/app/src/screens/project/TreeRow.svelte`(`rowKey?: (it: Item) => string`(初めは `it.id`)・`dim?: ReadonlySet<string>`・`storeColor?: string` を足す)、`web/app/src/shell/Sidebar.svelte`(「検索」を押したら `search.showTable()`)、`web/packages/core/src/features/palette/actions.ts`(コマンド「検索を開く」の前に `deps.showSearchTable()`)、`web/app/src/palette.ts`(`showSearchTable: () => search.showTable()` を渡す)、パレットの deps の型と `palette.test-util.ts`
+- Create: `web/app/src/screens/tree/SearchTree.svelte`、`web/app/src/screens/tree/SearchTreeBody.svelte`(ワークスペースの見出しとプロジェクトの段を描く)、`web/app/src/screens/search/SearchBody.svelte`(テーブル・ツリー・空のどれを出すか。`SearchScreen.svelte` から本体を移す)、`web/app/src/searchTree.ts`(`createSearchTreeData` の組み立て)、`web/e2e/search-tree.spec.ts`
+- Modify: `web/app/src/screens/search/SearchScreen.svelte`(200 行未満にする)、`web/app/src/screens/project/TreeRow.svelte`(`rowKey?: (it: Item) => string`(初めは `it.id`)・`dim?: ReadonlySet<string>`・`storeColor?: string` を足す)、`web/app/src/search.ts`(Store が変わった知らせの処理で、`searchTreeData.reset()` をしてから `search.reload()` する。1 つの処理の中でこの順にする)、`web/e2e/helpers.ts`(`resetSearchScreen` が `layout`・`tree` も初めに戻す。このタスクの e2e は画面の状態に `layout: "tree"` を書いてから開く)
 
 **Interfaces:**
-- Consumes: Task 3 の `layoutChoices`・`setLayout`・`showTable`・`setCollapsed`、Task 4 の `buildSearchTree`・`treeScope`・`screenFor`・`rowKey`、Task 5 の `layoutNote`・`deletedTreeText`、Task 6 の `createTreeKeyboard`、Task 7 の `ProjectRow`・`openProjectMenu`・`projectMover`
+- Consumes: Task 3 の `setCollapsed`、Task 4 の `buildSearchTree`・`treeScope`・`screenFor`・`rowKey`、Task 6 の `createTreeKeyboard`、Task 7 の `ProjectRow`・`openProjectMenu`・`projectMover`・`canMoveProject`
+
+- [ ] **Step 1: 失敗するテストを書く**
+
+`search-tree.spec.ts`(各テストの前に `resetSearchScreen`、そのあと画面の状態を `layout: "tree"` にする。サンプルデータに足りない材料(2 つ目の Store の同じ ID、閲覧のみの Store)は、既存の e2e の助け(`tree-readonly.spec.ts`・`sync.spec.ts` の Store の作り方)を使う):
+- `draws matches with dim ancestors`: `kind:task` → 一致しない祖先の行が薄い、一致しないプロジェクトの行がない、件数が一致した行の数。
+- `collapse survives reload`: Epic を閉じて再読み込み → 閉じたまま。
+- `same id in two stores`(Review Focus 1)。
+- `move up among visible siblings`(Review Focus 2)。
+- `space and alt-up on item rows`: アイテムの行で Space → 完了の既定のステータスになる、Alt+↑ → 見えている兄弟の前へ動き、フォーカスがその行に残る。
+- `read-only row next to writable row`(Review Focus 3): 閲覧のみの Store の Epic で C を押してもダイアログが開かず、書ける Store の Epic の C で開く。
+- `project row keys and menu`: プロジェクトの行で Enter → 概要、Alt+↓ → サイドバーの並びも変わる、末尾のプロジェクトの Alt+↓ は何もしない、メニューの「名前を変更…」でタイトルが変わる、Epic の Alt+Shift+↓ で次のプロジェクトへ移る。
+
+- [ ] **Step 2: 落ちることを確かめる**
+
+Run: `make e2e-bin && pnpm -C web exec playwright test e2e/search-tree.spec.ts`
+Expected: FAIL(ツリーがない)
+
+- [ ] **Step 3: ツリーを組む**
+
+- `SearchBody.svelte`: レイアウトが `tree` なら `SearchTree`、空なら E3a-19 の文。そうでなければ今のテーブルと空の文。
+- `SearchTree.svelte`: 結果が変わるたびに `treeScope` で `searchTreeData.load` を呼び、読めたら `buildSearchTree` を作る(`filtered` は Task 4 のとおり `resultQuery` で決める)。`createTreeFocus<SearchTreeRow>(state の collapsed)` を作る。`focus.state` の `collapsed` が変わったら `search.setCollapsed([...collapsed])`。`createTreeKeyboard` の deps は次のとおり。
+  - `itemOf`: アイテムの行なら `item`。
+  - `screen`: `screenFor(rows, currentId, data.get)`。
+  - `keyOf`: フォーカスのある行の Store で `rowKey`。
+  - `readOnly`: 行の Store が閲覧のみか。
+  - `open`: アイテムの行は `detail.open(storeId, item.id)`、プロジェクトの行は概要へ移る。
+  - `openTab`: 新しいタブで開く。
+  - `openMenu`: アイテムの行は `itemMenuHost.open(item, {rows: screenFor(...).rows, children, row: true}, x, y)`、プロジェクトの行は `openProjectMenu`。
+  - `create`: アイテムの行は同じ親の兄弟、プロジェクトの行は Epic。
+  - `setStatus`: `setRowStatus` で、あと `search.reload()`。
+  - `moveProject`: `canMoveProject` が真のときだけ `projectMover.move`。
+  - `afterChange`: `search.reload()` と `itemRefresh.afterChange()`。
+  
+  `selection.provide(1, …)` は E3a-20。`<ul aria-label="ツリー">`。
+- `SearchTreeBody.svelte`: ワークスペースの見出し(ui の `StoreBadge` とワークスペース名。フォーカスの対象にしない)、`ProjectRow`、その下に `TreeRow`(`rowKey`・`dim`・`storeColor`。`prefix`・`settings`・`members`・`items` はそのプロジェクトのデータ)。
+
+- [ ] **Step 4: 通ることを確かめる**
+
+Run: `pnpm -C web test && pnpm -C web check && pnpm -C web lint && pnpm -C web size && make e2e-bin && pnpm -C web exec playwright test e2e/search-tree.spec.ts e2e/search.spec.ts e2e/search-table.spec.ts e2e/search-table-select.spec.ts`
+Expected: PASS
+
+- [ ] **Step 5: コミット**
+
+```bash
+git add web
+git commit -m "feat(web): 検索の画面のツリーを作る(E3a Task 8)"
+```
+
+---
+
+### Task 9: レイアウトの切り替え・注記・削除済みの案内・テーブルで開く入口
+
+**Files:**
+- Create: `web/packages/ui/src/patterns/LayoutSwitch.svelte`(と `patterns.test.ts` へのテスト)、`web/app/src/screens/search/SearchToolbar.svelte`、`web/e2e/search-layout.spec.ts`
+- Modify: `web/app/src/screens/search/SearchScreen.svelte`、`web/app/src/screens/search/SearchBody.svelte`(削除済みの案内)、`web/app/src/screens/table/TableToolbar.svelte`(左端に部品を置く `lead?: Snippet` を足す)、`web/app/src/shell/Sidebar.svelte`(「検索」を押したら `search.showTable()`)、`web/packages/core/src/features/palette/actions.ts`(コマンド「検索を開く」の前に `deps.showSearchTable()`)、`web/app/src/palette.ts`(`showSearchTable: () => search.showTable()` を渡す)、パレットの deps の型と `palette.test-util.ts`
+
+**Interfaces:**
+- Consumes: Task 3 の `layoutChoices`・`setLayout`・`showTable`、Task 5 の `layoutNote`・`deletedTreeText`
 - Produces: ui `LayoutSwitch.svelte` の props `{ choices: { id: string; label: string }[]; value: string; onchange(id: string): void }`(`role="group"`・`aria-label="レイアウト"`、ボタンは `aria-pressed`)
 
 - [ ] **Step 1: 失敗するテストを書く**
 
 ui `patterns.test.ts` `LayoutSwitch`: 2 つのボタン、選んでいるものが `aria-pressed="true"`、押すと `onchange` に id。パレットの `actions.test.ts` `search command shows table first`: 「検索を開く」を選ぶと `showSearchTable` のあとに移る。
 
+`search-layout.spec.ts`(各テストの前に `resetSearchScreen`):
+- `switches layouts and keeps the filter`: `kind:task` でツリーに切り替え → 欄は `kind:task` のまま。テーブルに戻すと列の設定が前のまま。テーブルで選んでいた行の選択バーが、ツリーに切り替えると消える。
+- `reload keeps tree, sidebar opens table`(Review Focus 5)。新しいブラウザのタブでサイドバーの「検索」を押しても、保存した絞り込みと列が残る。
+- `notes for sort and group`: ツリーで `sort:id group:kind` → 「ツリー・ガントでは sort: と group: は使われず、並び順のままです」。テーブルでは出ない。
+- `deleted shows guidance`: `is:deleted` でツリー → 案内と「テーブルで開く」、件数「0 件」。押すとテーブルになり、欄は `is:deleted` のまま。
+- `palette opens in table`: ツリーにしてからパレットの「このクエリで」の「検索で開く」→ テーブル。
+
 - [ ] **Step 2: 落ちることを確かめる**
 
-Run: `pnpm -C web test -- LayoutSwitch actions`
+Run: `pnpm -C web test -- LayoutSwitch actions && make e2e-bin && pnpm -C web exec playwright test e2e/search-layout.spec.ts`
 Expected: FAIL
 
 - [ ] **Step 3: 画面を組む**
 
-- ツールバー: `LayoutSwitch`(左端)。テーブルなら `TableToolbar`(その `lead` に置く)、ツリーなら件数「{N} 件」(`matched`。削除済みの案内のときは 0)だけ。
+- ツールバー(`SearchToolbar.svelte`): `LayoutSwitch` を左端に置く。テーブルなら `TableToolbar`(その `lead` に置く)、ツリーなら件数「{N} 件」(`matched`。削除済みの案内のときは 0)だけ。
 - 絞り込み欄の下: エラー(いまのまま)と、`layoutNote` の灰色の文。
-- 本体: テーブルなら今のテーブル。ツリーなら、`deleted` のときは `deletedTreeText` とボタン「テーブルで開く」(`search.setLayout("table")`)。そうでなければ `SearchTree`、空なら E3a-19 の文。
-- `SearchTree.svelte`: 結果が変わるたびに `treeScope` で `searchTreeData.load` を呼び、読めたら `buildSearchTree`(`filtered` は `$view.query.trim() !== ""`)。`createTreeFocus<SearchTreeRow>(state の collapsed)` を作り、`focus.state` の `collapsed` が変わったら `search.setCollapsed([...collapsed])`。`createTreeKeyboard` の deps: `itemOf`(アイテムの行なら `item`)、`screen`(`screenFor(rows, currentId, data.get)`)、`readOnly`(行の Store)、`open`(アイテムは `detail.open(storeId, item.id)`、プロジェクトは概要へ移る)、`openTab`、`openMenu`(アイテムは `itemMenuHost.open(item, {rows: screenFor(...).rows, children, row: true}, x, y)`、プロジェクトは `openProjectMenu`)、`create`(アイテムは同じ親の兄弟、プロジェクトは Epic)、`setStatus`(`setRowStatus` で `search.reload()`)、`moveProject`(`projectMover.move`)、`afterChange`(`search.reload()` と `itemRefresh.afterChange()`)。`selection.provide(1, …)` は E3a-20。
-- `SearchTreeBody.svelte`: ワークスペースの見出し(ui の `StoreBadge` とワークスペース名。フォーカスの対象にしない)、`ProjectRow`、その下に `TreeRow`(`rowKey`・`dim`・`storeColor`、`prefix`・`settings`・`members`・`items` はそのプロジェクトのデータ)。
-- サイドバーの「検索」の `onclick` は、`links.click` の前に `search.showTable()`(新しいタブで開くクリックでは呼ばない。`links.click` が新しいタブにするかを返さないなら、修飾キーなしの主ボタンのときだけ呼ぶ)。
+- 本体(`SearchBody.svelte`): ツリーで `deleted` のときは `deletedTreeText` とボタン「テーブルで開く」(`search.setLayout("table")`)。
+- サイドバーの「検索」の `onclick` は、`links.click` の前に `search.showTable()` を呼ぶ。新しいタブで開くクリックでは呼ばない(修飾キーなしの主ボタンのときだけ)。
 
 - [ ] **Step 4: 通ることを確かめる**
 
-Run: `pnpm -C web test && pnpm -C web check && pnpm -C web lint && pnpm -C web size && make e2e-bin && pnpm -C web exec playwright test e2e/search.spec.ts e2e/search-table.spec.ts e2e/search-table-select.spec.ts`
-Expected: PASS(既存の検索の e2e が通る)
+Run: `pnpm -C web test && pnpm -C web check && pnpm -C web lint && pnpm -C web size && make e2e-bin && pnpm -C web exec playwright test e2e/search-layout.spec.ts e2e/search-tree.spec.ts e2e/search.spec.ts e2e/search-table.spec.ts`
+Expected: PASS
 
 - [ ] **Step 5: コミット**
 
 ```bash
 git add web
-git commit -m "feat(web): 検索の画面にレイアウトの切り替えとツリーを足す(E3a Task 8)"
-```
-
----
-
-### Task 9: 通しのテスト
-
-**Files:**
-- Create: `web/e2e/search-tree.spec.ts`(長くなるなら `search-tree-keys.spec.ts` に分ける)
-- Modify: `web/e2e/helpers.ts`(`resetSearchScreen` が `layout`・`tree` も初めに戻すこと)
-
-- [ ] **Step 1: テストを書く**
-
-各テストの前に `resetSearchScreen`。サンプルデータに足りない材料(2 つ目の Store の同じ ID、閲覧のみの Store)は、既存の e2e の助け(`tree-readonly.spec.ts`・`sync.spec.ts` の Store の作り方)を使う。
-- `switches layouts and keeps the filter`: `kind:task` でツリーに切り替え → 欄は `kind:task` のまま、一致しない祖先の行が薄い、件数が一致した行の数。テーブルに戻すと列の設定が前のまま。
-- `reload keeps tree, sidebar opens table`(Review Focus 5)。
-- `notes for sort and group`: ツリーで `sort:id group:kind` → 「ツリー・ガントでは sort: と group: は使われず、並び順のままです」。
-- `deleted shows guidance`: `is:deleted` でツリー → 案内と「テーブルで開く」、押すとテーブルで欄は `is:deleted` のまま。
-- `collapse survives reload`: Epic を閉じて再読み込み → 閉じたまま。
-- `same id in two stores`(Review Focus 1)。
-- `move up among visible siblings`(Review Focus 2)。
-- `read-only row next to writable row`(Review Focus 3): 閲覧のみの Store の Epic で C を押してもダイアログが開かず、書ける Store の Epic の C で開く。
-- `project row keys and menu`: プロジェクトの行で Enter → 概要、Alt+↓ → サイドバーの並びも変わる、メニューの「名前を変更…」でタイトルが変わる、Epic の Alt+Shift+↓ で次のプロジェクトへ移る。
-
-- [ ] **Step 2: 流して確かめる**
-
-Run: `make e2e-bin && pnpm -C web exec playwright test e2e/search-tree.spec.ts`
-Expected: PASS
-
-- [ ] **Step 3: コミット**
-
-```bash
-git add web/e2e
-git commit -m "test(e2e): 検索のツリーとレイアウトの切り替えを通しで確かめる(E3a Task 9)"
+git commit -m "feat(web): 検索の画面にレイアウトの切り替え・注記・削除済みの案内を足す(E3a Task 9)"
 ```
 
 ---
@@ -467,16 +501,16 @@ git commit -m "test(e2e): 検索のツリーとレイアウトの切り替えを
 ### Task 10: 文書と、すべての確かめ
 
 **Files:**
-- Modify: `docs/superpowers/plans/2026-11-15-hedgehug-track-e.md`、`docs/superpowers/plans/2026-11-15-hedgehug-track-e1.md`(末尾「E3(保存したビュー)」の各行に「E3a で足した」「E3b に回した」を添える)、`docs/superpowers/plans/2026-11-13-hedgehug-track-a4b.md`(末尾の E への申し送りの各行に「E3a で足した」「E7 に回した」を添える)、この計画の末尾「E3b・E5〜E7 に渡すもの」
+- Modify: `docs/superpowers/plans/2026-11-15-hedgehug-track-e.md`、`docs/superpowers/plans/2026-11-15-hedgehug-track-e1.md`(末尾「E3(保存したビュー)」の各行に「E3a で足した」「E3b に回した」を添える)、`docs/superpowers/plans/2026-11-13-hedgehug-track-a4b.md`(末尾の E への申し送りの各行に「E3a で足した」「E7 に回した」を添える)、この計画の末尾「E3b・E4〜E7 に渡すもの」
 
 - [ ] **Step 1: 文書を直す**
 
-- トラック E の分け方: 決めたことの表に「E-7 E3 は 2 本に分ける(E3a・E3b)。切り替えには作ってあるレイアウトだけを出し、カンバン・ガントのボタンは E5・E6 が足す。ユーザーの決定(2026-11-15)」を足す。小計画の一覧の E3 の行を E3a(この計画の Goal の中身)と E3b(「始める前に」の E3b の中身、待つものは E3a)の 2 行にし、E4〜E7 の待つものを「E3a」にする(E3b は E4〜E7 をブロックしない)。E7 の行の中身から、E3a で作ったもの(プロジェクトの行・プロジェクトのメニュー・プロジェクトの行のキー・Epic の Alt+Shift+↑↓・絞り込んだときの刈り込みの部品)を外し、「ワークスペース・プロジェクトのツリーのタブの絞り込み欄(E3a の `buildSearchTree` の刈り込みと同じ規則)、ワークスペースの画面の「ツリー」タブ(E3a の `ProjectRow` を使う)、ツリーのタブの開閉を画面の状態に残すこと(E3a-21)、ドラッグ」にする。「ほかのトラックから回された項目の行き先」の A5c の「ビューとして保存」「ビューの群」と B5b の「保存したビュー」を E3b にする。
-- この計画の末尾「E3b・E5〜E7 に渡すもの」を、実装で変えたことに合わせて直す。
+- トラック E の分け方: 決めたことの表に「E-7 E3 は 2 本に分ける(E3a・E3b)。切り替えには作ってあるレイアウトだけを出し、カンバン・ガントのボタンは E5・E6 が足す。ユーザーの決定(2026-11-15)」を足す。小計画の一覧の E3 の行を E3a(この計画の Goal の中身)と E3b(「始める前に」の E3b の中身、待つものは E3a)の 2 行にし、E4〜E7 の待つものを「E3a」にする(E3b は E4〜E7 をブロックしない)。E7 の行の中身から、E3a で作ったもの(プロジェクトの行・プロジェクトのメニュー・プロジェクトの行のキー・Epic の Alt+Shift+↑↓・絞り込んだときの刈り込みの部品)を外し、「ワークスペース・プロジェクトのツリーのタブの絞り込み欄(E3a の `buildSearchTree` の刈り込みと同じ規則)、ワークスペースの画面の「ツリー」タブ(E3a の `ProjectRow` を使う)、ツリーのタブの開閉を画面の状態に残すこと(E3a-21)、ドラッグ」にする。E4 の行の中身に「ワークスペースの概要のプロジェクトの一覧の行のプロジェクトのメニュー(04 の 84 行。E3a の `openProjectMenu` を使う)」を足す。「ほかのトラックから回された項目の行き先」の A5c の「ビューとして保存」「ビューの群」と B5b の「保存したビュー」を E3b にする。
+- この計画の末尾「E3b・E4〜E7 に渡すもの」を、実装で変えたことに合わせて直す。
 
 - [ ] **Step 2: すべてを確かめる**
 
-Run: `make check && make e2e-bin && pnpm -C web exec playwright test e2e/search-tree.spec.ts e2e/search.spec.ts e2e/search-table.spec.ts`
+Run: `make check && make e2e-bin && pnpm -C web exec playwright test e2e/search-tree.spec.ts e2e/search-layout.spec.ts e2e/search.spec.ts e2e/search-table.spec.ts e2e/search-table-select.spec.ts`
 Expected: PASS
 
 - [ ] **Step 3: コミット**
@@ -486,13 +520,17 @@ git add docs
 git commit -m "docs: トラック E の分け方を E3a・E3b に書き換え、E7 との境目を書く(E3a Task 10)"
 ```
 
-## E3b・E5〜E7 に渡すもの
+## E3b・E4〜E7 に渡すもの
 
 ### E3b(保存したビュー)
 
 - 画面の状態は `{query, layout, table, tree}`(E3a-2)。ビューが持つもの(04 の 366〜375 行)は、このうち `query`・`layout`・`table` と、E5・E6 が足すカンバン・ガントの設定。`tree.collapsed` は「未保存の変更」の比べる対象に入れない(04 の 418 行)。
 - ビューの画面は、検索の画面の部品(`SearchToolbar`・`SearchBody`・`LayoutSwitch`・`SearchTree`)を使う。検索の流れ(core の `createSearch`)は画面の状態の鍵 `search` に決め打ちなので、鍵を引数にとる形にする。
 - 「このクエリで」の群(`queryGroup.ts`)の「検索で開く」と「{N} 件をまとめて変更…」のあいだに「ビューとして保存…」を足す。テーブルで開く入口なので `search.showTable()` を通る(E3a-9)。
+
+### E4(マイタスクと概要)
+
+- ワークスペースの概要のプロジェクトの一覧の行にも、プロジェクトのメニューを付ける(04 の 84 行)。`projectRows.ts` の `openProjectMenu` と、core の `projectMenu`・`canMoveProject` を使う。
 
 ### E5(カンバン)・E6(ガント)
 
