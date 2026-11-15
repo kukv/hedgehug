@@ -62,7 +62,9 @@ describe("screenFor", () => {
     const two = { ...work, workspaces: [w1, w2] } as typeof work;
     const d = dataOf({
       "work/work-P1": [itemWithId("work", "work-P1", "x", "Epic", null)],
-      "work/work-Q1": [{ ...itemWithId("work", "work-Q1", "z", "Epic", null), workspaceId: "work-W2" }],
+      "work/work-Q1": [
+        { ...itemWithId("work", "work-Q1", "z", "Epic", null), workspaceId: "work-W2" },
+      ],
     });
     const visible = visibleRows(buildSearchTree([two], [], false, d).nodes, new Set());
     const s = screenFor(visible, "work/x", d);

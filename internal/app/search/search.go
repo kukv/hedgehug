@@ -19,8 +19,8 @@ type Row struct {
 
 // Result は、検索の結果。Errors があれば Rows は空(アイテムは読まない)。
 type Result struct {
-	Errors  []string
-	HasKey  bool
+	Errors []string
+	HasKey bool
 	// HasSort は、クエリに sort: の語があるか(エラーのときも解析の結果から入れる)。
 	HasSort bool
 	Group   string
