@@ -19,6 +19,8 @@ export interface SyncCard {
   error: boolean;
   last: string;
   stale: string | null;
+  // clock は、時計のずれの行(「このマシンの時計が {N} 分ずれています」)。警告がなければ null。
+  clock: string | null;
   rows: SyncRow[];
 }
 
@@ -56,8 +58,19 @@ export function syncCard(status: SyncStatus | null, now: Date): SyncCard | null 
     ...summaryOf(stores),
     last: `最終同期 ${newest} · Store ${stores.length} 件`,
     stale: stale > 0 ? `${stale} 件の Store が 24 時間以上同期されていません` : null,
+    clock:
+      status && status.clockSkew !== 0
+        ? `このマシンの時計が ${Math.abs(status.clockSkew)} 分ずれています`
+        : null,
     rows,
   };
+}
+
+// clockWarning は、設定「一般」の時計のずれの警告の文。カードがなくても出す。ずれがなければ null。
+export function clockWarning(status: SyncStatus | null): string | null {
+  if (!status || status.clockSkew === 0) return null;
+  const direction = status.clockSkew > 0 ? "進んで" : "遅れて";
+  return `このマシンの時計が GitHub の時刻より ${Math.abs(status.clockSkew)} 分${direction}います。同期で後から届いた変更の勝ち負けと、削除済みを完全に削除する日が、他の人とずれます。OS の日時の設定を確かめてください。`;
 }
 
 // hasSyncError は、860px 以下のメニューのボタンに点を付けるか。閲覧のみも数え、非表示は数えない。

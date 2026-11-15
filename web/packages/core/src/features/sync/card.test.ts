@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 import type { SyncStatus, SyncStoreStatus } from "../../model/sync";
-import { hasSyncError, isSyncAllKey, offlineBand, syncAllHint, syncCard } from "./card";
+import {
+  clockWarning,
+  hasSyncError,
+  isSyncAllKey,
+  offlineBand,
+  syncAllHint,
+  syncCard,
+} from "./card";
 
 const now = new Date(2026, 10, 13, 12, 0, 0);
 const hoursAgo = (h: number) => new Date(now.getTime() - h * 3_600_000);
@@ -148,5 +155,40 @@ describe("isSyncAllKey (Shift+Ctrl+S、Mac は Shift+Cmd+S)", () => {
   it("names the shortcut for the platform", () => {
     expect(syncAllHint(true)).toBe("Shift+Cmd+S");
     expect(syncAllHint(false)).toBe("Shift+Ctrl+S");
+  });
+});
+
+const skewed = (clockSkew: number, ...stores: SyncStoreStatus[]): SyncStatus => ({
+  auto: true,
+  clockSkew,
+  stores,
+});
+const tail =
+  "同期で後から届いた変更の勝ち負けと、削除済みを完全に削除する日が、他の人とずれます。OS の日時の設定を確かめてください。";
+
+describe("時計のずれの警告(06「同期の状態の表示」・08「一般」)", () => {
+  it("puts the minutes on the sync card line, without a sign", () => {
+    expect(syncCard(skewed(7, store({})), now)?.clock).toBe("このマシンの時計が 7 分ずれています");
+    expect(syncCard(skewed(-6, store({})), now)?.clock).toBe("このマシンの時計が 6 分ずれています");
+    expect(syncCard(skewed(0, store({})), now)?.clock).toBeNull();
+  });
+
+  it("says 進んで or 遅れて in the 設定「一般」 text", () => {
+    expect(clockWarning(skewed(7))).toBe(
+      `このマシンの時計が GitHub の時刻より 7 分進んでいます。${tail}`,
+    );
+    expect(clockWarning(skewed(-6))).toBe(
+      `このマシンの時計が GitHub の時刻より 6 分遅れています。${tail}`,
+    );
+  });
+
+  it("has no text without a skew or a status", () => {
+    expect(clockWarning(skewed(0))).toBeNull();
+    expect(clockWarning(null)).toBeNull();
+  });
+
+  it("still has the text when the card is absent", () => {
+    expect(syncCard(skewed(7), now)).toBeNull();
+    expect(clockWarning(skewed(7))).not.toBeNull();
   });
 });

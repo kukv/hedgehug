@@ -9,6 +9,7 @@ const card: SyncCardView = {
   error: true,
   last: "最終同期 2 時間前 · Store 2 件",
   stale: "1 件の Store が 24 時間以上同期されていません",
+  clock: null,
   rows: [
     {
       storeId: "S1",
@@ -32,6 +33,20 @@ describe("SyncCard", () => {
     expect(all).toHaveAttribute("title", "Shift+Ctrl+S");
     await fireEvent.click(all);
     expect(onsyncall).toHaveBeenCalledOnce();
+  });
+
+  it("shows the clock line as a warning after the stale line, and not when null", () => {
+    const text = "このマシンの時計が 7 分ずれています";
+    const { unmount } = render(SyncCard, {
+      props: { card: { ...card, clock: text }, hint: "", onsyncall: vi.fn(), onsyncstore: vi.fn() },
+    });
+    const line = screen.getByText(text);
+    expect(line).toHaveClass("line", "warn");
+    const stale = screen.getByText("1 件の Store が 24 時間以上同期されていません");
+    expect(stale.nextElementSibling).toBe(line);
+    unmount();
+    render(SyncCard, { props: { card, hint: "", onsyncall: vi.fn(), onsyncstore: vi.fn() } });
+    expect(screen.queryByText(text)).not.toBeInTheDocument();
   });
 
   it("opens 「Store ごとの同期状態」 and syncs the chosen store", async () => {
