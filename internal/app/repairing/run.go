@@ -24,6 +24,7 @@ var steps = []step{
 	backlogClosed,      // 完了したスプリントに入った未完了のアイテム
 	clearDanglingPlan,  // 存在しないスプリント・リリースの参照
 	dropOrphanRules,    // ワークスペースにないプロジェクトのルール
+	restoreReferenced,  // 設定が指す値・0 個になる分類の値の同時の削除
 }
 
 // syncActor は、修復の保存の実行者。
