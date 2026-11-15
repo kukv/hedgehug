@@ -28,21 +28,22 @@ import (
 )
 
 // wire は、本物の部品を口に差し込み、自動の同期と GitHub の自動の読み取りと Store の見張りを ctx が終わるまで動かす。
-// Store の一覧は読まない(この計画の決定 6、C2 の決定 C2-2)。
-func wire(ctx context.Context) (httpapi.Deps, error) {
+// Store の一覧は読まない(この計画の決定 6、C2 の決定 C2-2)。2 つ目の戻り値は、wrap に渡す判定の記録(履歴が読むのと同じ
+// state.db。本物のビルドの wrap は使わない)。
+func wire(ctx context.Context) (httpapi.Deps, port.JudgedSaves, error) {
 	clock, ids := sysclock.Clock{}, sysclock.IDs{}
 	stores := gitstore.New(clock, ids)
 	cfg, err := configPath()
 	if err != nil {
-		return httpapi.Deps{}, err
+		return httpapi.Deps{}, nil, err
 	}
 	state, err := statePath()
 	if err != nil {
-		return httpapi.Deps{}, err
+		return httpapi.Deps{}, nil, err
 	}
 	db, err := statedb.Open(state)
 	if err != nil {
-		return httpapi.Deps{}, err
+		return httpapi.Deps{}, nil, err
 	}
 	file := machineconfig.Open(cfg)
 	gh := github.New(nil) // 時計のずれは受け取らない(トラック D の計画の決定 3)
@@ -95,7 +96,7 @@ func wire(ctx context.Context) (httpapi.Deps, error) {
 	deps.SyncLog, deps.Commits, deps.Received = db.SyncLog(), stores, db
 	deps.Links = linksOf(deps, conn) // トークンの入口は同期と同じ Connector(D4a-2)
 	go (&githublink.Reader{Links: deps.Links, Settings: file.SyncSettings(), Waiting: auto.Waiting}).Run(ctx)
-	return deps, nil
+	return deps, db.JudgedSaves(), nil
 }
 
 // newReplicator は、合わせたあと、送る前に修復し(C3a の決定 C3a-3)、同期の最後に受け取った保存から通知を作る
@@ -130,4 +131,4 @@ func newToken() string {
 }
 
 // wrap は、本物のビルドでは何も足さない(e2e のビルドだけが、テストの入口を足す)。
-func wrap(_ string, _ httpapi.Deps, h http.Handler) http.Handler { return h }
+func wrap(_ string, _ httpapi.Deps, _ port.JudgedSaves, h http.Handler) http.Handler { return h }

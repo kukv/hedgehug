@@ -41,20 +41,27 @@ func TestE2EAddrMustBeLoopback(t *testing.T) {
 func TestWireRefusesNonLoopbackAddr(t *testing.T) {
 	t.Setenv("HEDGEHUG_TOKEN", "secret")
 	t.Setenv("HEDGEHUG_ADDR", "0.0.0.0:8080")
-	if _, err := wire(t.Context()); err == nil {
+	if _, _, err := wire(t.Context()); err == nil {
 		t.Error("wire accepted a non-loopback address")
 	}
 }
 
 func e2eDeps(t *testing.T) httpapi.Deps {
 	t.Helper()
+	deps, _ := e2eWire(t)
+	return deps
+}
+
+// e2eWire は、e2e の組み立ての口と、wrap に渡す判定の記録を返す。
+func e2eWire(t *testing.T) (httpapi.Deps, port.JudgedSaves) {
+	t.Helper()
 	t.Setenv("HEDGEHUG_TOKEN", "secret")
 	t.Setenv("HEDGEHUG_ADDR", "127.0.0.1:0")
-	deps, err := wire(t.Context())
+	deps, judged, err := wire(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
-	return deps
+	return deps, judged
 }
 
 // e2e のビルドの Store は e2e・readonly・team の 3 つ。e2e にはワークスペース Web と Mobile、team には Team がある。

@@ -16,7 +16,6 @@ import (
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/domain/account"
 	"github.com/kukv/hedgehug/internal/domain/ghcall"
-	"github.com/kukv/hedgehug/internal/infra/statedb"
 )
 
 // e2eGitHub・e2eDevice・e2eTokens は、wire が口に差し込み、wrap の入口が答えを書き込む。同じものを使うので、
@@ -133,12 +132,9 @@ func (d *e2eDevice) handler(token string, next http.Handler) http.Handler {
 }
 
 // wrap は、通しのテストが偽の GitHub とデバイスフローの答えを決める入口と、1 回の読み取りの入口と、受信箱に通知を足す入口と、同期の行を足す入口と、
-// 同期で受け取った保存を書く入口を足す。受け取った保存は、履歴が読む Received と同じ state.db の判定の記録に書く(e2e の組み立ては
-// Received に state.db を入れる)。
-func wrap(token string, deps httpapi.Deps, h http.Handler) http.Handler {
+// 同期で受け取った保存を書く入口を足す。受け取った保存は judged(wire が返す、履歴が読む Received と同じ state.db の判定の記録)に書く。
+func wrap(token string, deps httpapi.Deps, judged port.JudgedSaves, h http.Handler) http.Handler {
 	h = githubReadHandler(token, deps.Links, pullsHandler(token, githubHandler(token, e2eDeviceFlow.handler(token, h))))
-	if db, ok := deps.Received.(*statedb.DB); ok {
-		h = receiveHandler(token, deps.Stores, db.JudgedSaves(), deps.IDs, deps.Clock, h)
-	}
+	h = receiveHandler(token, deps.Stores, judged, deps.IDs, deps.Clock, h)
 	return noticeHandler(token, deps.Inbox, syncLogHandler(token, deps.SyncLog, deps.Clock, h))
 }

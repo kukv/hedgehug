@@ -35,25 +35,23 @@ const (
 // トークンか待ち受けが空なら起動しない(空のトークンでは誰でも API を使え、空の待ち受けは全アドレスで待つため)。
 // 待ち受けがこのマシンの中(ループバック)でなければ起動しない(固定のトークンを外に見せないため)。
 // 自動の同期と同じく、GitHub の自動の読み取り(Reader)も動かさない。読み取りは入口 POST /e2e/github-read で行う(D4a-19)。
-func wire(ctx context.Context) (httpapi.Deps, error) {
-	if os.Getenv("HEDGEHUG_TOKEN") == "" || os.Getenv("HEDGEHUG_ADDR") == "" {
-		return httpapi.Deps{}, errors.New("e2e のビルドには HEDGEHUG_TOKEN と HEDGEHUG_ADDR が要る")
-	}
-	if err := checkLoopback(os.Getenv("HEDGEHUG_ADDR")); err != nil {
-		return httpapi.Deps{}, err
+// 2 つ目の戻り値は、入口 POST /e2e/receive が書く判定の記録で、履歴が読む Received と同じ state.db のもの。
+func wire(ctx context.Context) (httpapi.Deps, port.JudgedSaves, error) {
+	if err := checkEnv(); err != nil {
+		return httpapi.Deps{}, nil, err
 	}
 	ids := apptest.NewIDs()
 	stores, err := e2eStores(ctx, ids)
 	if err != nil {
-		return httpapi.Deps{}, err
+		return httpapi.Deps{}, nil, err
 	}
 	accounts := apptest.NewAccounts()
 	if err := accounts.Add(ctx, account.Account{ID: e2eAccount, Name: "e2e", Login: "e2e-bot", Method: account.EnvVar}); err != nil {
-		return httpapi.Deps{}, err
+		return httpapi.Deps{}, nil, err
 	}
 	state, err := e2eReads(ctx)
 	if err != nil {
-		return httpapi.Deps{}, err
+		return httpapi.Deps{}, nil, err
 	}
 	hub := events.NewHub()
 	context.AfterFunc(ctx, hub.Close) // 止めるとき SSE の流れを終える(決定 C2-27)
@@ -68,7 +66,7 @@ func wire(ctx context.Context) (httpapi.Deps, error) {
 		Stores:   commits,
 		Commits:  commits,
 		SyncLog:  state.SyncLog(),
-		Received: state, // 入口 POST /e2e/receive が、同じ state.db の判定の記録に書く
+		Received: state,
 		IDs:      ids,
 		Identity: apptest.Identity{Login: "taro"},
 		Inbox:    state.Inbox(clock),
@@ -99,7 +97,7 @@ func wire(ctx context.Context) (httpapi.Deps, error) {
 		Delivery:    syncSvc,
 		SyncTargets: syncSvc.Targets,
 		Recent:      state.Recent(),
-	}), nil
+	}), state.JudgedSaves(), nil
 }
 
 // e2eStores は、e2e と readonly の Store にサンプル(e2e にはワークスペース Mobile も)、team の Store に Team の
@@ -150,6 +148,14 @@ func e2eWithLinks(d httpapi.Deps) httpapi.Deps {
 		Hosts: d.Hosts, Stores: d.StoreGitHub, Clock: d.Clock,
 	})
 	return d
+}
+
+// checkEnv は、トークンと待ち受けが空でなく、待ち受けがこのマシンの中(ループバック)であることを確かめる。
+func checkEnv() error {
+	if os.Getenv("HEDGEHUG_TOKEN") == "" || os.Getenv("HEDGEHUG_ADDR") == "" {
+		return errors.New("e2e のビルドには HEDGEHUG_TOKEN と HEDGEHUG_ADDR が要る")
+	}
+	return checkLoopback(os.Getenv("HEDGEHUG_ADDR"))
 }
 
 // checkLoopback は、addr の host が 127.0.0.1・::1・localhost でなければエラーを返す。

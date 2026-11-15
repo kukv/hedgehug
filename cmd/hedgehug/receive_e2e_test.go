@@ -11,19 +11,14 @@ import (
 
 	"github.com/kukv/hedgehug/internal/adapter/httpapi"
 	"github.com/kukv/hedgehug/internal/app/apptest"
-	"github.com/kukv/hedgehug/internal/infra/statedb"
 )
 
 // /e2e/receive は、トークンが違えば 401、POST でなければ 405、本文が読めなければ 400、アイテムがなければ 404。
 // 書けたら 204 で、そのアイテムの最後の行の op が、同期で受け取った保存になる。
 func TestReceiveHandler(t *testing.T) {
-	deps := e2eDeps(t)
-	db, ok := deps.Received.(*statedb.DB)
-	if !ok {
-		t.Fatalf("Received = %T", deps.Received)
-	}
+	deps, judged := e2eWire(t)
 	next := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusTeapot) })
-	h := receiveHandler("tok", deps.Stores, db.JudgedSaves(), deps.IDs, deps.Clock, next)
+	h := receiveHandler("tok", deps.Stores, judged, deps.IDs, deps.Clock, next)
 	body := `{"store":"` + e2eStore + `","item":"` + string(apptest.SampleTask) + `"}`
 	for _, tc := range []struct {
 		name, method, target, auth, body string
@@ -52,10 +47,10 @@ func TestReceiveHandler(t *testing.T) {
 
 // e2e の組み立てでは、/e2e/receive のあと、GET の履歴でそのアイテムのいちばん新しい行が received になる。
 func TestE2EWireReceive(t *testing.T) {
-	deps := e2eDeps(t)
+	deps, judged := e2eWire(t)
 	mux := http.NewServeMux()
 	httpapi.NewAPI(mux, deps)
-	h := wrap("secret", deps, mux)
+	h := wrap("secret", deps, judged, mux)
 	do := func(method, path, body string) *httptest.ResponseRecorder {
 		r := httptest.NewRequest(method, path, strings.NewReader(body))
 		r.Header.Set("Authorization", "Bearer secret")
