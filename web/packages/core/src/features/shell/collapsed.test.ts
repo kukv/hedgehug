@@ -53,4 +53,15 @@ describe("createCollapsed (G1-14)", () => {
     expect(c.has("w2")).toBe(true);
     expect(write).toHaveBeenCalledWith("sidebar", { collapsed: ["w1", "w2"] });
   });
+
+  it("drops ids of workspaces that are gone when it writes, but not while the list is empty", async () => {
+    const write = vi.fn();
+    const c = createCollapsed(statesOf({ collapsed: ["gone", "w1"] }, write));
+    await c.ready;
+    c.toggle("w2", []);
+    expect(write).toHaveBeenLastCalledWith("sidebar", { collapsed: ["gone", "w1", "w2"] });
+    c.toggle("w3", ["w1", "w2", "w3"]);
+    expect(write).toHaveBeenLastCalledWith("sidebar", { collapsed: ["w1", "w2", "w3"] });
+    expect(c.has("gone")).toBe(false);
+  });
 });

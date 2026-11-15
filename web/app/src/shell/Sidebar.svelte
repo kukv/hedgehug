@@ -45,7 +45,10 @@
   };
   void saved.ready.then(() => version++);
   function toggle(id: string) {
-    saved.toggle(id);
+    saved.toggle(
+      id,
+      stores.flatMap((s) => s.workspaces.map((w) => w.id)),
+    );
     version++;
   }
 </script>

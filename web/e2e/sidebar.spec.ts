@@ -47,13 +47,16 @@ test("a closed workspace stays closed after a reload", async ({ page }, info) =>
     .locator(".ws-row")
     .filter({ has: page.getByRole("link", { name: "Web", exact: true }) })
     .getByRole("button", { name: "開閉" });
-  await twisty.click();
-  await expect(e2e.getByRole("link", { name: "ログイン" })).toBeHidden();
-  await page.reload();
-  await sidebar(page, info);
-  await expect(e2e.getByRole("link", { name: "Web", exact: true })).toBeVisible();
-  await expect(e2e.getByRole("link", { name: "ログイン" })).toBeHidden();
-  // 同じサーバーを使う後のテストのために、開き直す。
-  await twisty.click();
+  try {
+    await twisty.click();
+    await expect(e2e.getByRole("link", { name: "ログイン" })).toBeHidden();
+    await page.reload();
+    await sidebar(page, info);
+    await expect(e2e.getByRole("link", { name: "Web", exact: true })).toBeVisible();
+    await expect(e2e.getByRole("link", { name: "ログイン" })).toBeHidden();
+  } finally {
+    // 同じサーバーを使う後のテストのために、途中で失敗しても開き直す。
+    if (await e2e.getByRole("link", { name: "ログイン" }).isHidden()) await twisty.click();
+  }
   await expect(e2e.getByRole("link", { name: "ログイン" })).toBeVisible();
 });

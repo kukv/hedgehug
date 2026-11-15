@@ -4,7 +4,8 @@ import type { ScreenStates } from "../screenstate/screenStates";
 // 画面の状態の画面 `sidebar` に `{"collapsed": [ID…]}` で残す。
 export interface Collapsed {
   has(id: string): boolean;
-  toggle(id: string): void;
+  // live は、いま画面にあるワークスペースの ID。空でなければ、書くときにそれ以外の ID を落とす。
+  toggle(id: string, live?: readonly string[]): void;
   // ready は、残していた値を読み終えたとき(読めなくても)に解ける。
   ready: Promise<void>;
 }
@@ -42,8 +43,13 @@ export function createCollapsed(states: ScreenStates): Collapsed {
 
   return {
     has: (id) => ids.has(id),
-    toggle(id) {
+    toggle(id, live) {
       flip(id);
+      // 読み込みが済む前と、一覧がまだ空のときは刈らない(残していた ID を消さない)。
+      if (loaded && live && live.length > 0) {
+        const keep = new Set(live);
+        for (const old of [...ids]) if (!keep.has(old)) ids.delete(old);
+      }
       if (loaded) save();
       else early.push(id);
     },
