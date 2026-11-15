@@ -24,7 +24,14 @@ describe("buildSearchTree", () => {
       "team/team-P1": [it("team", "team-P1", "b", "Epic", null)],
       "team/team-P2": [it("team", "team-P2", "c", "Epic", null)],
     });
-    const v = buildSearchTree([work, team], [], false, data);
+    // 空の絞り込みでは、サーバーは削除されていないすべての行を返す。
+    const rows = [
+      match("work", "work-P1", "a"),
+      match("team", "team-P1", "b"),
+      match("team", "team-P2", "c"),
+    ];
+    const v = buildSearchTree([work, team], rows, false, data);
+    expect(v.matched).toBe(3);
     expect(v.nodes.map((n) => n.item.id)).toEqual([
       "work/work-P1",
       "work/work-P2",

@@ -55,6 +55,21 @@ describe("screenFor", () => {
     expect(s?.rows.map((r) => `${r.storeId}/${r.id}`)).toEqual(["work/x", "work/y"]);
   });
 
+  test("order excludes other workspaces of the same store", () => {
+    const [w1] = work.workspaces;
+    if (!w1) throw new Error("no workspace");
+    const w2 = { ...w1, id: "work-W2", projects: [{ ...w1.projects[0], id: "work-Q1" }] };
+    const two = { ...work, workspaces: [w1, w2] } as typeof work;
+    const d = dataOf({
+      "work/work-P1": [it("work", "work-P1", "x", "Epic", null)],
+      "work/work-Q1": [{ ...it("work", "work-Q1", "z", "Epic", null), workspaceId: "work-W2" }],
+    });
+    const visible = visibleRows(buildSearchTree([two], [], false, d).nodes, new Set());
+    const s = screenFor(visible, "work/x", d);
+    expect(s?.order?.map((r) => r.id)).toEqual(["work-P1", "x"]);
+    expect(s?.rows.map((r) => r.id)).toEqual(["x"]);
+  });
+
   test("rowsFor gives only visible siblings", () => {
     const sib = (id: string, n: number) => it("work", "work-P1", id, "Story", "E", n);
     const items = [
