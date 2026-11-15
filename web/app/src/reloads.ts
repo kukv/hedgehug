@@ -10,3 +10,6 @@ export const githubReloads = new Set<() => Promise<unknown>>();
 export const propertySaved = new Set<(storeId: string, propertyId: string, item: Item) => void>();
 // inboxReloads は、inbox の知らせのときだけ読み直すもの(受信箱の未読数と一覧。C4a-13)。
 export const inboxReloads = new Set<() => Promise<unknown>>();
+// itemChanges は、アイテムを変えたあとの読み直し(wireActions.ts の itemRefresh.afterChange)で読み直すもの(検索のツリー。
+// 削除・移動・並べ替えのあと、Store が変わった知らせを待たずに描き直す)。
+export const itemChanges = new Set<() => Promise<unknown>>();

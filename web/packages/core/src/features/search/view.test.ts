@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { searchHelp } from "./help";
 import type { SearchRow } from "./types";
-import { assigneeText, deletedNote, emptyText, readOnlyBands } from "./view";
+import { assigneeText, deletedNote, emptyText, readOnlyBands, treeEmptyText } from "./view";
 
 function row(storeName: string, readOnly: boolean): SearchRow {
   return {
@@ -139,5 +139,32 @@ describe("searchHelp", () => {
         "語だけを書くと、ID・タイトル・説明に含む語。空白を含むときは引用符で囲む",
       ],
     ]);
+  });
+});
+
+describe("treeEmptyText", () => {
+  const noMatch = {
+    title: "一致するものはありません",
+    body: "絞り込みを変えてみてください。",
+    create: false,
+  };
+
+  it("行があれば出さない", () => {
+    expect(treeEmptyText({ hasProjects: true, rows: 2 }, [])).toBeNull();
+  });
+  it("表示中の Store にプロジェクトがなければ「プロジェクトはまだありません」(作成のボタンは出さない)", () => {
+    expect(treeEmptyText({ hasProjects: false, rows: 0 }, [])).toEqual({
+      title: "プロジェクトはまだありません",
+      body: "ワークスペースにプロジェクトを作ると、ここに Epic・Story・Task・Bug・Step の木が並びます。",
+      create: false,
+    });
+  });
+  it("行が 0 件なら、絞り込み中の文", () => {
+    expect(treeEmptyText({ hasProjects: true, rows: 0 }, [])).toEqual(noMatch);
+  });
+  it("書き方に誤りがあれば、絞り込み中の文", () => {
+    expect(treeEmptyText({ hasProjects: true, rows: 3 }, ["「status:」に値がありません"])).toEqual(
+      noMatch,
+    );
   });
 });

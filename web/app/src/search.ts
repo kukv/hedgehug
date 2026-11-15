@@ -17,6 +17,7 @@ import {
   setRowStatus,
 } from "@hedgehug/core";
 import { reloads } from "./reloads";
+import { searchTreeData } from "./searchTree";
 import { catalog, itemsPort, listMembers, navigation } from "./wire";
 import { bulkChange, itemMenuHost } from "./wireActions";
 import { palettePort, timer, toasts } from "./wireBase";
@@ -71,9 +72,11 @@ export function selectedOne(): SelectedItem | null {
 // refreshCandidates は、開いている検索の画面の候補の元を読み直す。画面を閉じると null。
 let refreshCandidates: (() => Promise<void>) | null = null;
 
-// Store が変わった知らせで、検索の画面を開いていれば、結果と候補の元を読み直す(E1-19)。
+// Store が変わった知らせで、検索の画面を開いていれば、結果と候補の元を読み直す(E1-19)。ツリーのデータは、
+// 取っておいたものを捨ててから結果を読み直す(結果が変わるとツリーが読み直す。E3a-3)。
 reloads.add(async () => {
   if (get(navigation.route).name !== "search") return;
+  searchTreeData.reset();
   await Promise.all([search.reload(), refreshCandidates?.()]);
 });
 
