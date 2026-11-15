@@ -153,7 +153,7 @@ describe("createScreen with a moved workspace", () => {
   });
 
   // 出していたワークスペースのアドレスを読み直すときは、サーバーに聞かない(A5b-19 と同じ)。ほかの書き手が移した
-  // ときも、移った先を開かずにホームへ移る(B5c-17)。アドレスもホームに替えるので、次の一覧の読み直しでもサーバーに
+  // ときも、移った先を開かずにマイタスクへ移る(B5c-17)。アドレスもマイタスクに替えるので、次の一覧の読み直しでもサーバーに
   // 聞かず、移った先へひとりでに移らない。
   it("goes to my tasks without asking locateWorkspace when reloads no longer find the shown workspace", async () => {
     const { screen, catalog, stack, transfers, goneWorkspaces } =
