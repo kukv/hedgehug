@@ -117,6 +117,7 @@ func e2eStores(ctx context.Context, ids port.IDs) (*apptest.Stores, error) {
 		func() error { return apptest.SampleMobile(ctx, stores, e2eStore) },
 		func() error { return apptest.Sample(ctx, stores, readonlyStore) },
 		func() error { return readonlyProject(ctx, stores) },
+		func() error { return readonlyAssignee(ctx, stores) },
 		func() error { return apptest.SampleTeam(ctx, stores, teamStore) },
 	} {
 		if err := f(); err != nil {
@@ -143,6 +144,15 @@ func readonlyProject(ctx context.Context, stores *apptest.Stores) error {
 			tx.WriteWorkspaces().Append(apptest.SampleWorkspace, numbering.Draft(numbering.Projects, 2)),
 			tx.WriteProjects().Append(pr.ID, project.Create(pr)),
 		)
+	})
+}
+
+// readonlyAssignee は、閲覧のみの Store のサンプルの Task HH-2「ログイン画面を作る」の担当者を taro にする(マイタスクで、
+// 閲覧のみの Store の行のステータスのボタンが無効になることを確かめるため。閲覧のみの Store には API で書けない。E4a-21)。
+func readonlyAssignee(ctx context.Context, stores *apptest.Stores) error {
+	op := port.Operation{Actor: change.User("taro"), Summary: "サンプルデータを作成"}
+	return stores.Write(ctx, readonlyStore, op, func(tx port.Tx) error {
+		return tx.WriteItems().Append(apptest.SampleTask, change.NewSet("assignee", nil, "taro"))
 	})
 }
 

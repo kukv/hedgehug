@@ -3,6 +3,7 @@
   import { PageHead } from "@hedgehug/ui";
   import ActivityScreen from "../screens/activity/ActivityScreen.svelte";
   import InboxScreen from "../screens/inbox/InboxScreen.svelte";
+  import MyTasksScreen from "../screens/mytasks/MyTasksScreen.svelte";
   import ProjectScreen from "../screens/project/ProjectScreen.svelte";
   import SearchScreen from "../screens/search/SearchScreen.svelte";
   import SettingsScreen from "../screens/settings/SettingsScreen.svelte";
@@ -37,6 +38,8 @@
     <InboxScreen {ondrawer} {alert} />
   {:else if current?.name === "activity"}
     <ActivityScreen {ondrawer} {alert} />
+  {:else if current?.name === "mytasks"}
+    <MyTasksScreen {ondrawer} {alert} />
   {:else if current?.name === "search"}
     <SearchScreen {ondrawer} {alert} />
   {:else if current?.name === "project"}
