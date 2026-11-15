@@ -78,12 +78,13 @@ func (l link) fetchTo(ctx context.Context, repo *git.Repository, branch plumbing
 	return ref.Hash(), nil
 }
 
-// send は、branch を remote の同じ名前のブランチへ送る。履歴を書き換えない(強制しない)。
-// theirs は、この回で合わせた remote の先端(remote が空ならゼロ)、mine は送る自分の先端。
+// send は、mine を remote の branch へ送る。履歴を書き換えない(強制しない)。
+// theirs は、この回で合わせた remote の先端(remote が空ならゼロ)、mine は送る自分の先端。送るのは mine までで、
+// 手元の branch がそのあと進んでいても(ロックの外で送るあいだの保存)、それは送らない(決定 G1-10)。
 func (l link) send(ctx context.Context, branch plumbing.ReferenceName, theirs, mine plumbing.Hash) error {
 	wctx, done := watch(ctx)
 	defer done()
-	spec := config.RefSpec(branch.String() + ":" + branch.String())
+	spec := config.RefSpec(mine.String() + ":" + branch.String())
 	err := l.remote.PushContext(wctx, &git.PushOptions{RemoteName: remoteName, RefSpecs: []config.RefSpec{spec}, Auth: l.auth})
 	if err == nil || errors.Is(err, git.NoErrAlreadyUpToDate) {
 		return nil

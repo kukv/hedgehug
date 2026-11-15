@@ -4,15 +4,13 @@ import (
 	"context"
 	"errors"
 	"log/slog"
-	"os"
-	"path/filepath"
+	"sync"
 	"time"
 
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
 
 	"github.com/kukv/hedgehug/internal/app/port"
-	"github.com/kukv/hedgehug/internal/infra/gitstore/saves"
 )
 
 // maxSendTries は、送信が他の人の更新と重なったときに、受け取りからやり直す最大の回数(06「同期のエラー」)。
@@ -21,6 +19,8 @@ const maxSendTries = 3
 // Replicator は、gitstore の Store を remote と合わせる(port.Replicator)。
 type Replicator struct {
 	stores *Stores
+	// syncing は、Store ごとの mutex(*sync.Mutex)。同じ Store の Sync・SyncSave を 1 つずつにする(決定 G1-10)。
+	syncing sync.Map
 
 	// Repair は、合わせたあと、送る前に呼ぶ修復(決定 C3a-2・C3a-3)。cmd が置く。nil なら呼ばない。Mirror では使わない。
 	Repair port.RepairFunc
@@ -33,19 +33,23 @@ type Replicator struct {
 
 	// beforeSend は、送る直前に呼ぶ。テストで、送信が他の人の更新と重なる場面を作るためのもの。
 	beforeSend func() error
+	// duringFetch・duringSend は、Sync の受け取り・送りの通信の直前に(ロックの外で)呼ぶ。テストで、通信のあいだに保存できることを確かめるためのもの。
+	duringFetch, duringSend func()
 }
 
 func NewReplicator(s *Stores) *Replicator { return &Replicator{stores: s} }
 
-// Sync は、受け取り、合わせ、修復し、送る。合わせ、修復しているあいだは、Store のロックを持つ。
+// Sync は、受け取り、合わせ、修復し、送る。Store のロックを持つのは、合わせ、修復し、判定するあいだだけで、
+// 受け取りと送りの通信のあいだは持たない(決定 G1-10。そのあいだも画面から保存できる)。
 func (r *Replicator) Sync(ctx context.Context, id port.StoreID, remote port.Remote) (port.SyncResult, error) {
+	defer r.hold(id)()
 	ctx = withSkew(ctx, r.OnSkew, r.stores.clock.Now)
 	s, unlock, err := r.begin(id, remote)
 	if err != nil {
 		return port.SyncResult{}, err
 	}
-	defer unlock()
 	s.baseline(ctx)
+	unlock()
 	// 2 回目からの試みが失敗しても(断る理由のエラーでも、ErrSendConflict と同じく)、前の試みで作った
 	// 合わせたコミットはこのマシンに残る。それは受け取ったものを正しく合わせたもので、次の同期で続ける。
 	// 修復が失敗したときも(最初の試みでも)、合わせたコミットと、それまでに書いた修復は残る。合わせはまだ
@@ -56,11 +60,20 @@ func (r *Replicator) Sync(ctx context.Context, id port.StoreID, remote port.Remo
 			continue
 		}
 		if errors.Is(err, port.ErrRemoteRewritten) {
-			err = errors.Join(err, s.restoreSeen())
+			err = errors.Join(err, s.locked(s.restoreSeen))
 		}
 		return res, err
 	}
 	return port.SyncResult{}, port.ErrSendConflict
+}
+
+// hold は、Store ごとの mutex を取り、放す関数を返す。受け取りは remote の位置の ref を書き換えるので、
+// 同じ Store の通信どうしは重ねない(決定 G1-10)。
+func (r *Replicator) hold(id port.StoreID) (release func()) {
+	v, _ := r.syncing.LoadOrStore(id, &sync.Mutex{})
+	mu, _ := v.(*sync.Mutex)
+	mu.Lock()
+	return mu.Unlock
 }
 
 // begin は、Store のロックを取り、1 回の同期の状態を作る。unlock は呼ぶ側が呼ぶ。
@@ -105,181 +118,129 @@ type syncRun struct {
 	receiveOnly bool
 }
 
-// once は、受け取り・合わせる・修復する・送るを 1 回行う。送信が拒否されたら errRejected。
-func (s syncRun) once(ctx context.Context) (port.SyncResult, error) {
-	theirs, err := s.receive(ctx)
+// locked は、Store のロックを取り、途中で止まった保存の跡を戻してから fn を呼ぶ。
+func (s syncRun) locked(fn func() error) error {
+	unlock, err := open(s.root)
+	if err != nil {
+		return err
+	}
+	defer unlock()
+	return fn()
+}
+
+// once は、受け取り・合わせる・修復する・送るを 1 回行う。送信が拒否されたら errRejected。通信はロックの外で行い、
+// 送るのはロックの中で読んだ先端 mine まで(そのあとの保存は次の同期で送る)。判定と数え方も mine までにする。
+func (s syncRun) once(ctx context.Context) (res port.SyncResult, err error) {
+	if s.r.duringFetch != nil {
+		s.r.duringFetch()
+	}
+	theirs, err := s.fetch(ctx)
 	if err != nil {
 		return port.SyncResult{}, err
 	}
-	if s.receiveOnly {
-		return s.finish(ctx, theirs, theirs, false)
+	var mine plumbing.Hash
+	err = s.locked(func() error {
+		if err := s.accept(theirs); err != nil {
+			return err
+		}
+		if s.receiveOnly {
+			res, err = s.finish(ctx, theirs, theirs, false)
+			return err
+		}
+		// 修復は送る前に書く。送ったあとに書くと、相手のマシンが修復していない合わせた結果を受け取る(決定 C3a-2)。
+		if err := s.repairUnsent(ctx, theirs); err != nil {
+			return err
+		}
+		mine, err = s.head()
+		return err
+	})
+	if err != nil || s.receiveOnly {
+		return res, err
 	}
-	// 修復は送る前に書く。送ったあとに書くと、相手のマシンが修復していない合わせた結果を受け取る(決定 C3a-2)。
-	if err := s.repairUnsent(ctx, theirs); err != nil {
+	if s.r.duringSend != nil {
+		s.r.duringSend()
+	}
+	if err := s.send(ctx, theirs, mine); err != nil {
 		return port.SyncResult{}, err
 	}
-	head, err := s.push(ctx, theirs)
-	if err != nil {
-		return port.SyncResult{}, err
-	}
-	return s.finish(ctx, theirs, head, true)
+	err = s.locked(func() error {
+		s.markSent(mine)
+		res, err = s.finish(ctx, theirs, mine, true)
+		return err
+	})
+	return res, err
 }
 
 // receive は、remote から受け取り、自分の先端に取り込む。remote の先端 theirs を返す(空ならゼロ)。
 func (s syncRun) receive(ctx context.Context) (plumbing.Hash, error) {
+	theirs, err := s.fetch(ctx)
+	if err != nil {
+		return plumbing.ZeroHash, err
+	}
+	return theirs, s.accept(theirs)
+}
+
+// fetch は、remote から受け取り、remote の先端 theirs を返す(空ならゼロ)。書くのは、中身で決まる名前の
+// オブジェクトと remote の位置の ref だけで、作業ツリーと自分の先端には触らないので、ロックの外で呼んでよい。
+func (s syncRun) fetch(ctx context.Context) (plumbing.Hash, error) {
 	theirs, err := s.link.fetch(ctx, s.repo, s.branch)
 	if errors.Is(err, port.ErrNoCommonHistory) && !s.seen.IsZero() {
 		return plumbing.ZeroHash, port.ErrRemoteRewritten // 前に受け取ったブランチが消えた(決定 C2-12)
 	}
-	if err != nil {
-		return plumbing.ZeroHash, err
-	}
+	return theirs, err
+}
+
+// accept は、受け取った remote の先端 theirs を確かめ、自分の先端に取り込む。ロックの中で呼ぶ。
+func (s syncRun) accept(theirs plumbing.Hash) error {
 	if err := s.checkSeen(theirs); err != nil {
-		return plumbing.ZeroHash, err
+		return err
 	}
 	if theirs.IsZero() {
-		return theirs, nil
+		return nil
 	}
 	if err := checkRemoteStore(s.repo, theirs); err != nil {
-		return plumbing.ZeroHash, err
+		return err
 	}
-	return theirs, s.integrate(theirs)
+	return s.integrate(theirs)
 }
 
 // push は、自分の先端を remote へ送り、送った先端を返す。error は送れなかったときだけ返す(送れたあとの
 // 記録の失敗はログに残すだけ。SyncSave が送れた保存を捨てないため)。
 func (s syncRun) push(ctx context.Context, theirs plumbing.Hash) (plumbing.Hash, error) {
-	if s.r.beforeSend != nil {
-		if err := s.r.beforeSend(); err != nil {
-			return plumbing.ZeroHash, err
-		}
-	}
-	head, err := s.repo.Head()
+	head, err := s.head()
 	if err != nil {
 		return plumbing.ZeroHash, err
 	}
-	if err := s.link.send(ctx, s.branch, theirs, head.Hash()); err != nil {
+	if err := s.send(ctx, theirs, head); err != nil {
 		return plumbing.ZeroHash, err
 	}
-	// 送ったので、remote の先端は自分の先端になった。未送信の数え方(Unsent)の基準を進める。
-	// 進められなくても、未送信の数が次の同期まで多く見えるだけ(次の受け取りが基準を進める)。
-	ref := plumbing.NewHashReference(plumbing.ReferenceName(remotePrefix+s.branch.Short()), head.Hash())
+	s.markSent(head)
+	return head, nil
+}
+
+// send は、mine を remote へ送る。
+func (s syncRun) send(ctx context.Context, theirs, mine plumbing.Hash) error {
+	if s.r.beforeSend != nil {
+		if err := s.r.beforeSend(); err != nil {
+			return err
+		}
+	}
+	return s.link.send(ctx, s.branch, theirs, mine)
+}
+
+// markSent は、remote の位置の ref を送った先端 mine にする。未送信の数え方(Unsent)の基準を進める。
+// 進められなくても、未送信の数が次の同期まで多く見えるだけ(次の受け取りが基準を進める)。
+func (s syncRun) markSent(mine plumbing.Hash) {
+	ref := plumbing.NewHashReference(plumbing.ReferenceName(remotePrefix+s.branch.Short()), mine)
 	if err := s.repo.Storer.SetReference(ref); err != nil {
 		slog.Warn("送ったあとに remote の位置を記録できませんでした", "store", s.root, "error", err)
 	}
-	return head.Hash(), nil
 }
 
-// integrate は、自分の先端に remote の先端 theirs を取り込む。
-func (s syncRun) integrate(theirs plumbing.Hash) error {
+func (s syncRun) head() (plumbing.Hash, error) {
 	head, err := s.repo.Head()
 	if err != nil {
-		return err
+		return plumbing.ZeroHash, err
 	}
-	ours := head.Hash()
-	oc, err := s.repo.CommitObject(ours)
-	if err != nil {
-		return err
-	}
-	tc, err := s.repo.CommitObject(theirs)
-	if err != nil {
-		return err
-	}
-	if ours == theirs {
-		return nil
-	}
-	if behind, err := tc.IsAncestor(oc); err != nil || behind {
-		return err
-	}
-	wt, err := s.repo.Worktree()
-	if err != nil {
-		return err
-	}
-	if ahead, err := oc.IsAncestor(tc); err != nil {
-		return err
-	} else if ahead {
-		return s.guarded(func() error { return s.forward(wt, ours, theirs) })
-	}
-	bases, err := oc.MergeBase(tc)
-	if err != nil {
-		return err
-	}
-	if len(bases) == 0 {
-		return port.ErrNoCommonHistory
-	}
-	return s.guarded(func() error { return s.merge(wt, bases[0].Hash, ours, theirs) })
-}
-
-// guarded は、作業ツリーを変える fn のあいだ、保存の途中であることを示す印を置く。プロセスが落ちても、
-// 次の操作が印を見て、いまのコミットに戻す(保存形式「技術構成」)。fn が失敗したときは印を残し、
-// 次の操作に戻させる(戻すのは何度行っても同じ結果になる)。
-func (s syncRun) guarded(fn func() error) error {
-	if err := os.WriteFile(markerPath(s.root), nil, 0o600); err != nil {
-		return err
-	}
-	if err := fn(); err != nil {
-		return err
-	}
-	// 作業ツリーはコミットと同じ。印が消せなくても、次の操作がいまのコミットに戻すだけで、何も失われない。
-	_ = os.Remove(markerPath(s.root))
-	return nil
-}
-
-// forward は、自分の先端を remote の先端 theirs へ進める。ハードリセットは使わない(go-git v5 のハードリセットは
-// インデックスにないファイルも消すので、Store のものでないファイルまで消してしまう)。
-func (s syncRun) forward(wt *git.Worktree, ours, theirs plumbing.Hash) error {
-	from, err := readTree(s.repo, ours)
-	if err != nil {
-		return err
-	}
-	to, err := readTree(s.repo, theirs)
-	if err != nil {
-		return err
-	}
-	return s.apply(wt, ours, from, to, func() error {
-		return s.repo.Storer.SetReference(plumbing.NewHashReference(s.branch, theirs))
-	})
-}
-
-// merge は、3 つのツリーを合わせて作業ツリーに書き、2 つの親を持つコミットにする。
-func (s syncRun) merge(wt *git.Worktree, base, ours, theirs plumbing.Hash) error {
-	trees := make([]tree, 3)
-	for i, h := range []plumbing.Hash{base, ours, theirs} {
-		t, err := readTree(s.repo, h)
-		if err != nil {
-			return err
-		}
-		trees[i] = t
-	}
-	merged, err := mergeTrees(trees[0], trees[1], trees[2])
-	if err != nil {
-		return err
-	}
-	return s.apply(wt, ours, trees[1], merged, func() error {
-		sig := signature(saves.BotName, botEmail, s.r.stores.clock.Now())
-		// 結果が自分の版と同じ(相手が書いたのが、こちらで完全に削除したものだけ)でも、合わせを保存する(決定 C4b2-15)。
-		opts := &git.CommitOptions{Author: sig, Committer: sig, Parents: []plumbing.Hash{ours, theirs}, AllowEmptyCommits: true}
-		_, err := wt.Commit("remote と合わせる\n", opts)
-		return err
-	})
-}
-
-// apply は、作業ツリーを from から to にし、変えたファイルだけをインデックスに載せて、finish でブランチを動かす。
-// 失敗したら ours に戻し、新しく作ったファイルを消す。
-func (s syncRun) apply(wt *git.Worktree, ours plumbing.Hash, from, to tree, finish func() error) error {
-	changes, err := writeTree(s.root, from, to)
-	if err == nil {
-		err = stage(wt, changes)
-	}
-	if err == nil {
-		err = finish()
-	}
-	if err != nil {
-		errs := []error{err, wt.Reset(&git.ResetOptions{Commit: ours, Mode: git.HardReset})}
-		for _, p := range changes.created {
-			errs = append(errs, os.Remove(filepath.Join(s.root, p)))
-		}
-		return errors.Join(errs...)
-	}
-	return nil
+	return head.Hash(), nil
 }
