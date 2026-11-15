@@ -6,7 +6,10 @@ import (
 
 	"github.com/kukv/hedgehug/internal/app/apptest"
 	"github.com/kukv/hedgehug/internal/app/port"
+	"github.com/kukv/hedgehug/internal/domain/automation"
 	"github.com/kukv/hedgehug/internal/domain/change"
+	"github.com/kukv/hedgehug/internal/domain/project"
+	"github.com/kukv/hedgehug/internal/domain/projectrule"
 	"github.com/kukv/hedgehug/internal/domain/workspace"
 )
 
@@ -14,6 +17,8 @@ const (
 	priorityHigh change.ID = "01SAMPLEVAL000000000000007"
 	closed       change.ID = "01CLOSED000000000000000001"
 	shipped      change.ID = "01SHIPPED00000000000000001"
+	bugTemplate  change.ID = "01TEMPLATE000000000000001"
+	notifyRule   change.ID = "01RULE00000000000000000003"
 )
 
 var priorities = workspace.ParseList("priorities")
@@ -117,4 +122,122 @@ func TestRestoreReferencedAfterOverlap(t *testing.T) {
 		change.NewSet("category_default/doing", apptest.SampleStatusInProgress, review),
 	)
 	wantOps(t, e.run(ours, del), "「レビュー」の削除を取り消し")
+}
+
+const (
+	webReview   = "プロジェクト「Web」のルールから「Review」を削除(削除された値)"
+	webTemplate = "プロジェクト「Web」のルールから「バグ報告」を削除(削除された値)"
+	bugDefault  = "Bug の既定のテンプレートを変更(削除された値)"
+	notifyOff   = "自動化「レビューで通知」を無効にする(削除された値)"
+)
+
+// addWebRules は、サンプルのワークスペースに、プロジェクト「Web」と、その使わないステータス「Review」・
+// 使うテンプレート「バグ報告」・Bug の既定「バグ報告」を書く。
+func (e *env) addWebRules() {
+	web := project.Project{ID: webProject, Place: project.Place{Workspace: apptest.SampleWorkspace, Number: 3}, Rank: "X", Title: "Web", Owner: "taro", Status: project.Todo}
+	e.write(taro, func(tx port.Tx) error {
+		return errors.Join(
+			tx.WriteProjects().Append(web.ID, project.Create(web)),
+			tx.WriteWorkspaces().Append(apptest.SampleWorkspace,
+				change.NewAdd(projectrule.HiddenField(webProject), review),
+				change.NewAdd(projectrule.TemplatesField(webProject), bugTemplate),
+				change.NewSet(projectrule.TemplateDefaultField(webProject, "Bug"), nil, string(bugTemplate)),
+			),
+		)
+	})
+}
+
+// addTemplate は、テンプレート「バグ報告」を書き、Bug の既定にする。
+func (e *env) addTemplate() {
+	e.workspaceWrite(
+		change.NewSet(workspace.TemplateField(bugTemplate, "name"), nil, "バグ報告"),
+		change.NewSet(workspace.TemplateField(bugTemplate, "kind"), nil, "Bug"),
+		change.NewSet("template_default/Bug", nil, string(bugTemplate)),
+	)
+}
+
+// addNotifyRule は、きっかけが「Review」の有効なルール「レビューで通知」を書く。
+func (e *env) addNotifyRule(enabled bool) {
+	r := automation.Rule{ID: notifyRule, Name: "レビューで通知", Trigger: automation.TriggerStatus, TriggerStatus: review, Action: automation.ActionAssignee, Value: automation.Unassigned, Enabled: enabled}
+	e.workspaceWrite(automation.Drafts(automation.Rule{}, r)...)
+}
+
+// deleteValues は、「Review」と「バグ報告」を削除する。
+func (e *env) deleteValues() {
+	e.workspaceWrite(change.NewDelete(reviewRef), change.NewDelete(workspace.TemplateField(bugTemplate)))
+}
+
+// 削除された値を指すものは、プロジェクト別のルール(値の ID 順)、種類ごとの既定、ルールの順に直す。
+func TestDropDanglingRefs(t *testing.T) {
+	e := newEnv(t)
+	e.addTemplate()
+	e.addWebRules()
+	e.addNotifyRule(true)
+	e.deleteValues()
+	wantOps(t, e.run(nil, nil), webReview, webTemplate, bugDefault, notifyOff)
+	set, rules := e.sampleRules()
+	if !set.Of(webProject).Empty() {
+		t.Errorf("project rules = %+v", set.Of(webProject))
+	}
+	if st := e.settings(); st.TemplateDefaults["Bug"] != "" {
+		t.Errorf("template defaults = %+v", st.TemplateDefaults)
+	}
+	for _, r := range rules {
+		if r.ID == notifyRule && r.Enabled {
+			t.Errorf("rule still enabled: %+v", r)
+		}
+	}
+}
+
+// 無効のルールは書かない。
+func TestDropDanglingRefsSkipsDisabledRule(t *testing.T) {
+	e := newEnv(t)
+	e.addNotifyRule(false)
+	e.deleteValues()
+	wantOps(t, e.run(nil, nil))
+}
+
+// 「Web」が同じ Store の別のワークスペースへ移ったら、「メイン」に残ったルールは (9) で外れ、この段は書かない。
+func TestDropDanglingRefsAfterOrphans(t *testing.T) {
+	e := newEnv(t)
+	e.addWebInMobile()
+	e.addOrphanRules(webProject)
+	e.deleteValues()
+	wantOps(t, e.run(nil, nil), orphanWebOp)
+}
+
+// 完了の分類にされた初期ステータスは、未着手の既定に戻す。「Review」の分類は変えない。
+func TestResetFinishedInitial(t *testing.T) {
+	e := newEnv(t)
+	e.workspaceWrite(
+		change.NewSet("initial_status", apptest.SampleStatusTodo, review),
+		change.NewSet(statuses.Field(review, "category"), workspace.CategoryDoing, workspace.CategoryDone),
+	)
+	wantOps(t, e.run(nil, nil), "初期ステータスを「Todo」に戻し")
+	st := e.settings()
+	if st.InitialStatus != apptest.SampleStatusTodo || !st.Finished(review) {
+		t.Errorf("initial = %s, finished(Review) = %v", st.InitialStatus, st.Finished(review))
+	}
+}
+
+// 1 回の Run で、削除の取り消し、削除された値を指すものの修復、初期ステータスの戻しの順に書く。
+func TestValuesStepOrder(t *testing.T) {
+	e := newEnv(t)
+	e.addTemplate()
+	e.addWebRules()
+	e.workspaceWrite(change.NewDelete(workspace.TemplateField(bugTemplate)))
+	del := e.workspaceWrite(change.NewDelete(reviewRef))
+	pick := e.workspaceWrite(
+		change.NewSet("category_default/doing", apptest.SampleStatusInProgress, review),
+		change.NewSet("initial_status", apptest.SampleStatusTodo, apptest.SampleStatusDone),
+	)
+	wantOps(t, e.run(pick, del), "「Review」の削除を取り消し", webTemplate, bugDefault, "初期ステータスを「Todo」に戻し")
+}
+
+// 使わないステータスを別の側で初期ステータスにしても、修復の保存は書かない。
+func TestHiddenInitialNotRepaired(t *testing.T) {
+	e := newEnv(t)
+	e.addWebRules()
+	e.workspaceWrite(change.NewSet("initial_status", apptest.SampleStatusTodo, review))
+	wantOps(t, e.run(nil, nil))
 }
