@@ -33,7 +33,7 @@ func TestCommitsDoesNotHoldLock(t *testing.T) {
 	// 終わらなかったときも、Write の goroutine を待ってからテストを終える。
 	t.Cleanup(func() {
 		if pending {
-			_ = <-wrote
+			t.Log("Write after Commits:", <-wrote)
 		}
 	})
 	m.stores.duringCommits = func() {
