@@ -9,7 +9,7 @@ import { createNavigation } from "../router/navigation";
 import type { Resolved } from "../router/resolve";
 import { createScreenStates } from "../screenstate/screenStates";
 import { createToasts } from "../toasts/toasts";
-import { fakeTransfers } from "../transfers/transfers.test-util";
+import { type FakeTransfers, fakeTransfers } from "../transfers/transfers.test-util";
 import { createLastScreen, lastScreenKey } from "./lastScreen";
 import { createScreen } from "./screen";
 
@@ -90,20 +90,12 @@ describe("createLastScreen", () => {
     expect(stack).toEqual(["/", "/inbox"]);
   });
 
-  // Review Focus 4: 最後の画面が削除済みのワークスペースのとき、トーストは 1 回だけで、マイタスクへ移る。
-  it("restore goes to my tasks when gone", async () => {
+  // 本物の画面(screen.ts)と合わせて、覚えたアドレスで開く。
+  async function restoreWith(saved: string, transfers: FakeTransfers) {
     const { history, stack } = fakeHistory("/");
     const navigation = createNavigation(history);
     const catalog = createCatalog(fakeCatalogPort());
     await catalog.load();
-    const transfers = fakeTransfers();
-    transfers.locatedWorkspace = {
-      kind: "gone",
-      reason: "deleted",
-      old: "XX",
-      at: new Date(2026, 10, 13, 9, 5).toISOString(),
-      newDisplay: "team",
-    };
     const toasts = createToasts({ set: () => 0, clear: () => undefined });
     const screen = createScreen({
       navigation,
@@ -115,7 +107,7 @@ describe("createLastScreen", () => {
       openItem: () => {},
     });
     const port: ScreenStatesPort = {
-      get: vi.fn(async () => '{"path":"/s/work/w/XX/overview"}'),
+      get: vi.fn(async () => saved),
       put: vi.fn(async () => {}),
     };
     const last = createLastScreen({
@@ -128,12 +120,59 @@ describe("createLastScreen", () => {
     await flush();
     await catalog.load();
     await flush();
+    return { navigation, screen, toasts, stack };
+  }
+
+  // Review Focus 4: 最後の画面が削除済みのワークスペースのとき、トーストは 1 回だけで、マイタスクへ移る。
+  it("restore goes to my tasks when gone", async () => {
+    const transfers = fakeTransfers();
+    transfers.locatedWorkspace = {
+      kind: "gone",
+      reason: "deleted",
+      old: "XX",
+      at: new Date(2026, 10, 13, 9, 5).toISOString(),
+      newDisplay: "team",
+    };
+    const { navigation, screen, toasts, stack } = await restoreWith(
+      '{"path":"/s/work/w/XX/overview"}',
+      transfers,
+    );
     expect(get(toasts.list).map((t) => t.text)).toEqual([
       "このワークスペースは 11/13 09:05 に team へ移動しましたが、削除されています。設定の「削除済み」から復元できます",
     ]);
     expect(get(navigation.route)).toEqual({ name: "mytasks" });
     expect(get(screen.current)).toEqual({ name: "mytasks" });
     expect(stack).toEqual(["/my-tasks"]);
+  });
+
+  // 転送の記録のない削除でも、開き直したアドレスを残さず、マイタスクのアドレスに替える(トーストは出ない)。
+  it("restore replaces a dead address with my tasks", async () => {
+    const transfers = fakeTransfers();
+    transfers.missing.add("XX");
+    const { navigation, screen, toasts, stack } = await restoreWith(
+      '{"path":"/s/work/w/XX/overview"}',
+      transfers,
+    );
+    expect(get(toasts.list)).toEqual([]);
+    expect(get(navigation.route)).toEqual({ name: "mytasks" });
+    expect(get(screen.current)).toEqual({ name: "mytasks" });
+    expect(stack).toEqual(["/my-tasks"]);
+  });
+
+  // 開き直す前から出していた画面(いまの値)は見ない。前の画面がマイタスクでも、覚えた画面を開いたままにする。
+  // (覚えた値は、出した画面で書き換わらないよう、読むだけの口にする。)
+  it("restore ignores the screen shown before", async () => {
+    const { history, stack } = fakeHistory("/");
+    const navigation = createNavigation(history);
+    const current = writable<Resolved | null>({ name: "mytasks" });
+    const last = createLastScreen({
+      navigation,
+      current,
+      screenStates: { read: async <T>() => ({ path: "/inbox" }) as T, write: () => {} },
+    });
+    last.start();
+    await flush();
+    expect(stack).toEqual(["/inbox"]);
   });
 
   it("stops following when stopped", () => {
