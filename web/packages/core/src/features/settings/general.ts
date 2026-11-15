@@ -32,32 +32,36 @@ export interface LoginField {
   // commit は、Enter と欄からフォーカスが外れたときの確定。前後の空白を取り除いて保存してある値と同じなら何もしない。
   // 確定の処理中(確認ダイアログを出しているあいだを含む)は、次の確定を捨てる。
   commit(text: string): Promise<void>;
-  // confirm は確認の「変更」、cancel は「キャンセル」(欄を元の値に戻す)。確認を出していなければ、どちらも何もしない。
-  // cancel は、「変更」の保存を待っているあいだでも確認を閉じる。
+  // confirm は確認の「変更」、cancel は「キャンセル」(欄を元の値に戻す)。確定の処理中でなければ、どちらも何もしない。
+  // cancel は、preview の途中なら、返ってきても確認を開かない。「変更」の保存を待っているあいだでも確認を閉じる。
   confirm(): Promise<void>;
   cancel(): void;
 }
 
 // createLoginField は、ログイン名の欄(08 の「ログイン名」と決定 G1-15・G1-16)。検査はサーバーに任せ、断りなら文言を出して元の値に戻す。
-// ほかの失敗はエラーのトーストを出し、確認を閉じて元の値に戻す。
+// ほかの失敗はエラーのトーストを出し、断りの文言を消し、確認を閉じて元の値に戻す。
 export function createLoginField(port: SettingsPort, toasts: Toasts): LoginField {
   let saved = "";
   // busy は、確定の処理中。pending は、確認ダイアログで「変更」を待っている値。running は、口を呼んでいるあいだ。
+  // round は、確定とキャンセルのたびに進める。preview が返ったときに違っていれば、その確定はキャンセル済み。
   let busy = false;
   let pending = "";
   let running = false;
+  let round = 0;
   const state = writable<LoginFieldState>({ text: "", error: "", confirm: null });
   const patch = (p: Partial<LoginFieldState>) => state.update((s) => ({ ...s, ...p }));
 
-  async function settle(fn: () => Promise<void>) {
+  async function settle(mine: number, fn: () => Promise<void>) {
     running = true;
     try {
       await fn();
     } catch (e) {
-      pending = "";
-      if (e instanceof Refused) patch({ text: saved, error: e.message, confirm: null });
-      else {
-        patch({ text: saved, confirm: null });
+      const live = mine === round;
+      if (live) pending = "";
+      if (e instanceof Refused) {
+        if (live) patch({ text: saved, error: e.message, confirm: null });
+      } else {
+        if (live) patch({ text: saved, error: "", confirm: null });
         failed(toasts, e);
       }
     } finally {
@@ -91,8 +95,11 @@ export function createLoginField(port: SettingsPort, toasts: Toasts): LoginField
       if (busy) return;
       if (login === saved) return patch({ text: saved });
       busy = true;
-      await settle(async () => {
+      round += 1;
+      const mine = round;
+      await settle(mine, async () => {
         const lines = await port.previewLogin(login);
+        if (mine !== round) return;
         if (lines.length === 0) return save(login);
         pending = login;
         patch({ confirm: lines });
@@ -101,10 +108,11 @@ export function createLoginField(port: SettingsPort, toasts: Toasts): LoginField
     async confirm() {
       if (pending === "") return;
       const login = pending;
-      await settle(() => save(login));
+      await settle(round, () => save(login));
     },
     cancel() {
-      if (get(state).confirm === null) return;
+      if (!busy) return;
+      round += 1;
       pending = "";
       if (!running) busy = false;
       patch({ text: saved, confirm: null });

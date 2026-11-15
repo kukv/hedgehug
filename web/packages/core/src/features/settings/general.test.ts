@@ -123,15 +123,44 @@ describe("createLoginField", () => {
     expect(calls).toEqual(["preview tarou", "preview tarou"]);
   });
 
-  it("does nothing on cancel while the preview is running", async () => {
+  it("does not open the confirmation when cancel comes while the preview is running", async () => {
+    const { field, calls, ctl, release } = await loaded("taro", [line]);
+    ctl.hold = true;
+    field.edit("tarou");
+    const enter = field.commit("tarou");
+    field.cancel();
+    expect(get(field.state).text).toBe("taro");
+    // preview が返るまでは、次の確定を受けない。
+    const blur = field.commit("tarou");
+    release();
+    await Promise.all([enter, blur]);
+    expect(get(field.state)).toEqual({ text: "taro", error: "", confirm: null });
+    expect(calls).toEqual(["preview tarou"]);
+    // 返ったあとは、また確定できる。
+    ctl.hold = false;
+    await field.commit("tarou");
+    expect(get(field.state).confirm).toEqual([line]);
+  });
+
+  it("does not save when cancel comes while a preview without lines is running", async () => {
     const { field, calls, ctl, release } = await loaded();
     ctl.hold = true;
     const enter = field.commit("tarou");
     field.cancel();
-    const blur = field.commit("tarou");
     release();
-    await Promise.all([enter, blur]);
-    expect(calls).toEqual(["preview tarou", "set tarou"]);
+    await enter;
+    expect(calls).toEqual(["preview tarou"]);
+    expect(get(field.state).text).toBe("taro");
+  });
+
+  it("clears the refusal when a later save fails for another reason", async () => {
+    const { field, ctl, errors } = await loaded();
+    await field.commit("ta ro");
+    expect(get(field.state).error).toBe(refusal);
+    ctl.fail.add("preview");
+    await field.commit("tarou");
+    expect(get(field.state)).toEqual({ text: "taro", error: "", confirm: null });
+    expect(errors()).toEqual([network]);
   });
 
   it("closes the confirmation and goes back when saving fails, with an error toast", async () => {
