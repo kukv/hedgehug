@@ -62,6 +62,19 @@ export {
   type ProjectForm,
 } from "./features/projects/createDialog";
 export {
+  canMoveProject,
+  createProjectMover,
+  type ProjectMenuId,
+  type ProjectMenuItem,
+  type ProjectMover,
+  projectMenu,
+} from "./features/projects/projectMenu";
+export {
+  createRenameProjectDialog,
+  type RenameProjectDialog,
+  type RenameProjectDialogState,
+} from "./features/projects/renameDialog";
+export {
   createProjectScreen,
   ownerName,
   type ProjectScreen,
