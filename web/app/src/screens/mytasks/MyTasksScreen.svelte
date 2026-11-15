@@ -43,6 +43,12 @@
     () => ({ kind: "myTasks", projects: myTaskProjects(get(myTaskBase.rows) ?? []) }),
   );
   let filter = $state<HTMLElement>();
+  // `project:` の候補の範囲は絞り込みなしの行で決まるので、その行が読み終わったら作り直す。
+  const baseRows = myTaskBase.rows;
+  $effect(() => {
+    void $baseRows;
+    if (term?.key === "project") candidates = sources.list(term);
+  });
 
   // 空の表示の見分けに、絞り込みなしの行を読む(アプリの開始で読むようになるまで、画面を開くたびに読む)。
   onMount(() => {

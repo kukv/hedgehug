@@ -18,7 +18,8 @@
   import StatusButton from "../item/StatusButton.svelte";
 
   // マイタスクの 1 行(04「マイタスク」)。種類・ID・タイトル・Store とプロジェクト・期限・優先度・ステータスを出す。
-  // ステータスは、行のワークスペースの設定を読めたらボタン(閲覧のみ・削除済みは無効)、読めるまでは名前の文字にする。
+  // ステータスは、行のワークスペースの設定を読めたらボタン(閲覧のみは無効)、読めるまでと削除済みの行は名前の文字にする
+  // (削除済みの行は削除の注記を添えるので、ボタンの「閲覧のみの Store です」を出さない)。
   interface Props {
     row: SearchRow;
   }
@@ -88,12 +89,12 @@
   {#if row.priority}
     <span class="meta">{row.priority.name}</span>
   {/if}
-  {#if settings}
+  {#if settings && row.deleted === null}
     <StatusButton
       status={row.statusId}
       {settings}
       project={row.projectId}
-      disabled={row.readOnly || row.deleted !== null}
+      disabled={row.readOnly}
       onchange={onstatus}
     />
   {:else if row.status}

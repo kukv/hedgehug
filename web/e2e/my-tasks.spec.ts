@@ -1,4 +1,5 @@
 import { expect, test } from "./fixtures";
+import { send } from "./helpers";
 import {
   dayFrom,
   filterBy,
@@ -10,6 +11,7 @@ import {
   rowOf,
   shownDay,
 } from "./my-tasks-helpers";
+import { base } from "./search-table-helpers";
 
 // マイタスクの画面の通しのテスト(04「マイタスク」、E4a)。アイテムはテストごとの印をタイトルに入れて作り、
 // 絞り込みでほかのテストのアイテムを除く。サイドバーの入口は Task 6 で足すので、ここではアドレスから開く。
@@ -65,6 +67,7 @@ test("shows filter errors and empty states", async ({ page }, info) => {
   await filterBy(page, "status:");
   await expect(page.getByText("「status:」に値がありません")).toBeVisible();
   await expect(page.getByText("一致するものはありません")).toBeVisible();
+  await expect(groupHeadings(page)).toHaveCount(0);
 
   await filterBy(page, `${markOf(info)}ない`);
   await expect(page.getByText("一致するものはありません")).toBeVisible();
@@ -104,4 +107,17 @@ test("opens the detail panel from the title", async ({ page }, info) => {
   await rowOf(page, title).getByRole("link", { name: title }).click();
   const panel = page.getByRole("region", { name: "詳細パネル" });
   await expect(panel.getByRole("textbox", { name: "タイトル" })).toHaveValue(title);
+});
+
+test("deleted rows show the note instead of a status button", async ({ page }, info) => {
+  const mark = markOf(info);
+  const title = `${mark} 削除`;
+  const id = await myTask(page, title);
+  await send(page, "delete", `${base}/items/${id}`, undefined);
+  await openMyTasks(page);
+  await filterBy(page, `${mark} is:deleted`);
+  const row = rowOf(page, title);
+  await expect(row).toContainText(/あと \d+ 日で完全に削除/);
+  await expect(row.getByRole("button", { name: /^ステータス: / })).toHaveCount(0);
+  await expect(row.getByRole("link", { name: title })).toHaveCount(0);
 });
