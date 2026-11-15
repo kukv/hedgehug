@@ -34,53 +34,99 @@ func (j joining) Write(ctx context.Context, id port.StoreID, op port.Operation, 
 	if op.Actor.Kind != change.ActorUser {
 		return j.Stores.Write(ctx, id, op, fn)
 	}
-	login := op.Actor.Login
-	var joined bool
-	err := j.Stores.Write(ctx, id, op, func(tx port.Tx) error {
+	w := &joinWrite{list: j.list, id: id, login: op.Actor.Login, fn: fn}
+	err := j.Stores.Write(ctx, id, op, w.run(ctx))
+	if errors.Is(err, errNothingWritten) {
+		return nil
+	}
+	return w.done(ctx, err)
+}
+
+// JoinOnSyncSave は、remote のある Store への人の保存(SyncSave。移動先への送り届け)でも、JoinOnWrite と同じく、
+// 実行者がメンバーにいなければ同じ保存で足す port.Replicator を返す(決定 G1-6)。メンバーかは fn の中で、試みごとに
+// 受け取ったあとの Tx から決める。足したのに fn が何も書かなかったら、保存も送信もせずに成功を返す。そのときの結果の
+// Seen は前の同期の位置(remote.Seen)のままにする(受け取りは済んでいるが、空の Seen を記録させないため)。
+// SyncSave 以外はそのまま渡す。
+func JoinOnSyncSave(r port.Replicator, list port.StoreGitHub) port.Replicator {
+	return joiningReplicator{Replicator: r, list: list}
+}
+
+type joiningReplicator struct {
+	port.Replicator
+	list port.StoreGitHub
+}
+
+func (j joiningReplicator) SyncSave(ctx context.Context, id port.StoreID, remote port.Remote, op port.Operation, fn func(tx port.Tx) error) (port.SyncResult, error) {
+	if op.Actor.Kind != change.ActorUser {
+		return j.Replicator.SyncSave(ctx, id, remote, op, fn)
+	}
+	w := &joinWrite{list: j.list, id: id, login: op.Actor.Login, fn: fn}
+	res, err := j.Replicator.SyncSave(ctx, id, remote, op, w.run(ctx))
+	if errors.Is(err, errNothingWritten) { // fn のエラーは *port.SaveError に包まれて返る
+		return port.SyncResult{Seen: remote.Seen}, nil
+	}
+	return res, w.done(ctx, err)
+}
+
+// joinWrite は、1 回の人の書き込みの fn を包み、「あなた」を足したかを覚える(JoinOnWrite と JoinOnSyncSave で共通)。
+type joinWrite struct {
+	list  port.StoreGitHub
+	id    port.StoreID
+	login string
+	fn    func(tx port.Tx) error
+	// joined は、最後に呼ばれた fn で足したか。SyncSave は送信が重なると fn を呼び直すので、呼ぶたびに決め直す。
+	joined bool
+}
+
+// run は、保存の fn。メンバーにいなければ、利用者の fn を呼ぶ前に足す。足したのに fn が何も書かなかったら
+// errNothingWritten を返して、足した分も保存させない。
+func (w *joinWrite) run(ctx context.Context) func(tx port.Tx) error {
+	return func(tx port.Tx) error {
 		var err error
-		if joined, err = j.join(ctx, tx, id, login); err != nil {
+		if w.joined, err = w.join(ctx, tx); err != nil {
 			return err
 		}
-		if !joined {
-			return fn(tx)
+		if !w.joined {
+			return w.fn(tx)
 		}
 		c := &counting{Tx: tx}
-		if err := fn(c); err != nil {
+		if err := w.fn(c); err != nil {
 			return err
 		}
 		if c.writes == 0 {
 			return errNothingWritten
 		}
 		return nil
-	})
-	if errors.Is(err, errNothingWritten) {
-		return nil
 	}
-	if err == nil && joined {
-		port.NoteJoined(ctx, login)
+}
+
+// done は、保存の結果 err を受け、保存できて足していたら port.NoteJoined で ctx に積む。errNothingWritten は呼ぶ側が先に扱う。
+func (w *joinWrite) done(ctx context.Context, err error) error {
+	if err == nil && w.joined {
+		port.NoteJoined(ctx, w.login)
 	}
 	return err
 }
 
 // join は、メンバーに login(大文字と小文字を区別しない)がいなくて、id が閲覧のみの Store でなければ足し、足したかを
 // 返す。Store の一覧(config.yaml)は、メンバーにいないと分かったときだけ読む(読めなくても、メンバーの書き込みは通す)。
-func (j joining) join(ctx context.Context, tx port.Tx, id port.StoreID, login string) (bool, error) {
+func (w *joinWrite) join(ctx context.Context, tx port.Tx) (bool, error) {
 	ms, err := tx.Members().List()
 	if err != nil {
 		return false, err
 	}
-	if slices.ContainsFunc(ms, func(m member.Member) bool { return strings.EqualFold(m.Login, login) }) {
+	if slices.ContainsFunc(ms, func(m member.Member) bool { return strings.EqualFold(m.Login, w.login) }) {
 		return false, nil
 	}
-	if ro, err := j.readOnly(ctx, id); err != nil || ro {
+	if ro, err := readOnly(ctx, w.list, w.id); err != nil || ro {
 		return false, err
 	}
-	return true, tx.WriteMembers().Append(member.Join(login))
+	return true, tx.WriteMembers().Append(member.Join(w.login))
 }
 
 // readOnly は、id が閲覧のみの Store か。一覧にない Store は閲覧のみではないとする。
-func (j joining) readOnly(ctx context.Context, id port.StoreID) (bool, error) {
-	infos, err := j.list.List(ctx)
+func readOnly(ctx context.Context, list port.StoreGitHub, id port.StoreID) (bool, error) {
+	infos, err := list.List(ctx)
 	if err != nil {
 		return false, err
 	}

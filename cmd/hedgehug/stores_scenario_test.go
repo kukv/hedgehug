@@ -22,9 +22,11 @@ import (
 	"github.com/kukv/hedgehug/internal/app/apptest"
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/domain/change"
+	"github.com/kukv/hedgehug/internal/domain/item"
 	"github.com/kukv/hedgehug/internal/domain/member"
 	"github.com/kukv/hedgehug/internal/domain/numbering"
 	"github.com/kukv/hedgehug/internal/domain/project"
+	"github.com/kukv/hedgehug/internal/domain/rank"
 	"github.com/kukv/hedgehug/internal/domain/workspace"
 	"github.com/kukv/hedgehug/internal/infra/gitstore"
 )
@@ -42,23 +44,30 @@ const (
 // wiredStoreDir は、メンバーが hanako だけで、ワークスペース(WD)とプロジェクト(WD-P1)を持つ Store を作り、そのフォルダを返す。
 func wiredStoreDir(t *testing.T) string {
 	t.Helper()
+	return newWiredStoreDir(t, wiredStore, workspace.Workspace{ID: wiredWS, Name: "配線", Prefix: "WD"}, wiredProject)
+}
+
+// newWiredStoreDir は、メンバーが hanako だけで、ワークスペース w とそのプロジェクト pid(P1)を持つ Store id を作り、そのフォルダを
+// 返す。ステータスなどの値の内部 ID は、どの Store でも同じ。
+func newWiredStoreDir(t *testing.T, id port.StoreID, w workspace.Workspace, pid project.ID) string {
+	t.Helper()
 	dir := filepath.Join(t.TempDir(), "store")
-	if err := gitstore.Create(dir, wiredStore, scenarioStart); err != nil {
+	if err := gitstore.Create(dir, id, scenarioStart); err != nil {
 		t.Fatal(err)
 	}
 	s := gitstore.New(apptest.NewClock(scenarioStart), apptest.NewIDs())
 	if _, err := s.Attach(dir); err != nil {
 		t.Fatal(err)
 	}
-	ws, err := workspace.CreateWithSettings(workspace.Workspace{ID: wiredWS, Name: "配線", Prefix: "WD"}, ruleSettings("01WIREDVALUE", ""))
+	ws, err := workspace.CreateWithSettings(w, ruleSettings("01WIREDVALUE", ""))
 	if err != nil {
 		t.Fatal(err)
 	}
-	pr := project.Project{ID: wiredProject, Place: project.Place{Workspace: wiredWS, Number: 1}, Rank: "V", Title: "Web", Owner: "hanako", Status: project.Todo}
-	err = s.Write(t.Context(), wiredStore, port.Operation{Actor: change.User("hanako"), Summary: "ワークスペースを作成"}, func(tx port.Tx) error {
+	pr := project.Project{ID: pid, Place: project.Place{Workspace: w.ID, Number: 1}, Rank: "V", Title: "Web", Owner: "hanako", Status: project.Todo}
+	err = s.Write(t.Context(), id, port.Operation{Actor: change.User("hanako"), Summary: "ワークスペースを作成"}, func(tx port.Tx) error {
 		return errors.Join(
 			tx.WriteMembers().Append(member.Init(), member.Join("hanako")),
-			tx.WriteWorkspaces().Append(wiredWS, ws, numbering.Draft(numbering.Projects, 1)),
+			tx.WriteWorkspaces().Append(w.ID, ws, numbering.Draft(numbering.Projects, 1)),
 			tx.WriteProjects().Append(pr.ID, project.Create(pr)),
 		)
 	})
@@ -177,6 +186,23 @@ func createItem(t *testing.T, h http.Handler, token string) *httptest.ResponseRe
 	return rec
 }
 
+// memberLogins は、Store id のメンバーのログイン名。
+func memberLogins(t *testing.T, deps httpapi.Deps, id port.StoreID) []string {
+	t.Helper()
+	var logins []string
+	err := deps.Stores.Read(t.Context(), id, func(r port.Reader) error {
+		ms, err := r.Members().List()
+		for _, m := range ms {
+			logins = append(logins, m.Login)
+		}
+		return err
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return logins
+}
+
 func TestWireJoinsYouOnWrite(t *testing.T) {
 	deps, _ := wireWith(t, storeRow(wiredStore, "main", wiredStoreDir(t)))
 	token := newToken()
@@ -184,19 +210,72 @@ func TestWireJoinsYouOnWrite(t *testing.T) {
 	if got := createItem(t, h, token).Header().Get("Hedgehug-Joined"); got != "taro" {
 		t.Errorf("first Hedgehug-Joined = %q, want taro", got)
 	}
-	var logins []string
-	err := deps.Stores.Read(t.Context(), wiredStore, func(r port.Reader) error {
-		ms, err := r.Members().List()
-		for _, m := range ms {
-			logins = append(logins, m.Login)
-		}
-		return err
-	})
-	if err != nil || !slices.Equal(logins, []string{"hanako", "taro"}) {
-		t.Errorf("members = %v, %v, want [hanako taro]", logins, err)
+	if got := memberLogins(t, deps, wiredStore); !slices.Equal(got, []string{"hanako", "taro"}) {
+		t.Errorf("members = %v, want [hanako taro]", got)
 	}
 	if got, ok := createItem(t, h, token).Header()["Hedgehug-Joined"]; ok {
 		t.Errorf("second Hedgehug-Joined = %q, want none", got)
+	}
+}
+
+const (
+	remoteStore   port.StoreID = "01WIREDSTORE00000000000002"
+	remoteWS      workspace.ID = "01WIREDWS00000000000000002"
+	remoteProject project.ID   = "01WIREDPR00000000000000002"
+)
+
+// TestWireJoinsYouOnRemoteMove は、remote のある Store へ移すとき(移動先の保存は Replicator.SyncSave を通る)も、
+// メンバーにいない「あなた」を同じ保存で足して送り、応答に Hedgehug-Joined を付けることを確かめる(G1-6)。
+// トークンはキーチェーンを読まない偽物に差し替え、自動の同期は止めておく。
+func TestWireJoinsYouOnRemoteMove(t *testing.T) {
+	remote := newBareRemote(t)
+	dest := newWiredStoreDir(t, remoteStore, workspace.Workspace{ID: remoteWS, Name: "送り先", Prefix: "RM"}, remoteProject)
+	source := wiredStoreDir(t)
+	addHanakoEpic(t, source)
+	deps, _ := wireConfig(t, "login: taro\nsync:\n  auto: false\nstores:\n"+storeRow(wiredStore, "main", source)+
+		fmt.Sprintf("  - {id: %q, name: dest, path: %q, remote: %q, account: acc}\n", remoteStore, dest, remote.URL))
+	deps.Sync.Tokens = &apptest.SyncTokens{}
+	token := newToken()
+	h := httpapi.New(token, fstest.MapFS{}, deps)
+	body := fmt.Sprintf(`{"toStore":%q,"toWorkspace":%q,"toProject":%q,"statusChoices":{}}`, remoteStore, remoteWS, remoteProject)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/api/stores/"+string(wiredStore)+"/items/"+string(wiredEpic)+"/transfer", strings.NewReader(body))
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code < 200 || rec.Code >= 300 {
+		t.Fatalf("transfer = %d %s", rec.Code, rec.Body)
+	}
+	if got := rec.Header().Get("Hedgehug-Joined"); got != "taro" {
+		t.Errorf("Hedgehug-Joined = %q, want taro", got)
+	}
+	if got := memberLogins(t, deps, remoteStore); !slices.Equal(got, []string{"hanako", "taro"}) {
+		t.Errorf("destination members = %v, want [hanako taro]", got)
+	}
+	if got, want := head(t, remote.URL), head(t, dest); got != want {
+		t.Errorf("remote head = %s, want the destination head %s (the join was sent)", got, want)
+	}
+}
+
+const wiredEpic item.ID = "01WIREDIT00000000000000001"
+
+// addHanakoEpic は、wiredStoreDir の Store の WD-P1 に、hanako だけが関わる Epic wiredEpic(WD-1)を足す
+// (移すときに、移動先のメンバーへ taro が足される理由を「あなた」だけにするため)。
+func addHanakoEpic(t *testing.T, dir string) {
+	t.Helper()
+	s := gitstore.New(apptest.NewClock(scenarioStart), apptest.NewIDs())
+	if _, err := s.Attach(dir); err != nil {
+		t.Fatal(err)
+	}
+	epic := item.Item{ID: wiredEpic, Place: item.Place{Workspace: wiredWS, Project: wiredProject, Number: 1}, Kind: item.Epic, Rank: rank.First, Title: "移すもの"}
+	err := s.Write(t.Context(), wiredStore, port.Operation{Actor: change.User("hanako"), Summary: "アイテムを作成"}, func(tx port.Tx) error {
+		return errors.Join(
+			tx.WriteWorkspaces().Append(wiredWS, numbering.Draft(numbering.Items, 1)),
+			tx.WriteItems().Append(wiredEpic, item.Create(epic)),
+		)
+	})
+	if err != nil {
+		t.Fatal(err)
 	}
 }
 

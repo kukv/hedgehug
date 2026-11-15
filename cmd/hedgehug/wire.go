@@ -64,10 +64,10 @@ func wireRunning(ctx context.Context, running *sync.WaitGroup) (httpapi.Deps, po
 	rep := newReplicator(stores, db, clock, hub, skew, noticing.Service{Identity: identity, List: view.StoreList()})
 	svc := &syncing.Service{
 		Targets: view.SyncTargets(), Tokens: conn,
-		Replicator: rep, State: db.SyncState(), Log: db.SyncLog(), Events: hub, Clock: clock,
+		Replicator: members.JoinOnSyncSave(rep, view.StoreGitHub()), State: db.SyncState(), Log: db.SyncLog(), Events: hub, Clock: clock,
 	}
 	auto := syncing.NewAuto(svc, file.SyncSettings())
-	// 人の書き込みでは「あなた」をメンバーに足す(G1-6)。移動先への保存(Deliver)も、ほかの保存と同じく自動の同期と画面に知らせる
+	// 人の書き込みでは「あなた」をメンバーに足す(G1-6。remote のある Store への移動先の保存 SyncSave は上の Replicator で)。移動先への保存(Deliver)も、ほかの保存と同じく自動の同期と画面に知らせる
 	notified := syncing.NotifyWrites(members.JoinOnWrite(stores, view.StoreGitHub()), auto.Wrote)
 	svc.Stores = notified
 	context.AfterFunc(ctx, hub.Close) // 止めるとき SSE の流れを終える(決定 C2-27)
