@@ -1,11 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { Refused } from "../../model/errors";
-import type { SettingsPort, SyncTiming } from "../../port/settings";
 import { get } from "../../reactive/store";
+import { fakeSettings, line, network, refusal } from "./fixtures.test-util";
 import {
   afterWriteChoices,
   createLoginField,
-  createSyncTimingField,
   githubChoices,
   intervalChoices,
   keyboardRows,
@@ -14,51 +12,9 @@ import {
   treeKeyRows,
 } from "./general";
 
-const refusal = "英数字・ハイフン・アンダースコアのログイン名(39 文字以内)を入力してください";
-const line = "team-a での あなた が @taro から tarou に変わります。";
-
-// fakeSettings は、メモリの口。calls に呼ばれた操作を残す。lines は preview が返す行。
-// ログイン名に空白があれば、preview と setLogin は Refused で断る(サーバーの検査の代わり)。
-// hold を true にすると、preview は release を呼ぶまで返らない。
-function fakeSettings(login = "taro", lines: string[] = []) {
-  const calls: string[] = [];
-  const saved = { login, lines };
-  let timing: SyncTiming = {
-    auto: true,
-    intervalMinutes: 5,
-    afterWriteSeconds: 30,
-    githubMinutes: 5,
-  };
-  let release = () => {};
-  const ctl = { hold: false };
-  const check = (l: string) => {
-    if (/\s/.test(l)) throw new Refused(refusal);
-  };
-  const port: SettingsPort = {
-    login: async () => saved.login,
-    async previewLogin(l) {
-      calls.push(`preview ${l}`);
-      if (ctl.hold) await new Promise<void>((r) => (release = r));
-      check(l);
-      return saved.lines;
-    },
-    async setLogin(l) {
-      calls.push(`set ${l}`);
-      check(l);
-      saved.login = l;
-    },
-    timing: async () => timing,
-    async setTiming(t) {
-      calls.push(`timing ${JSON.stringify(t)}`);
-      timing = t;
-    },
-  };
-  return { port, calls, saved, ctl, release: () => release() };
-}
-
 async function loaded(login = "taro", lines: string[] = []) {
   const f = fakeSettings(login, lines);
-  const field = createLoginField(f.port);
+  const field = createLoginField(f.port, f.toasts);
   await field.load();
   return { ...f, field };
 }
@@ -178,6 +134,46 @@ describe("createLoginField", () => {
     expect(calls).toEqual(["preview tarou", "set tarou"]);
   });
 
+  it("closes the confirmation and goes back when saving fails, with an error toast", async () => {
+    const { field, ctl, errors } = await loaded("taro", [line]);
+    field.edit("tarou");
+    await field.commit("tarou");
+    ctl.fail.add("set");
+    await field.confirm();
+    expect(get(field.state)).toEqual({ text: "taro", error: "", confirm: null });
+    expect(errors()).toEqual([network]);
+    // 閉じたあとは、また確定できる。
+    ctl.fail.clear();
+    await field.commit("tarou");
+    expect(get(field.state).confirm).toEqual([line]);
+  });
+
+  it("goes back when the preview fails, with an error toast", async () => {
+    const { field, ctl, calls, errors } = await loaded();
+    ctl.fail.add("preview");
+    field.edit("tarou");
+    await field.commit("tarou");
+    expect(get(field.state)).toEqual({ text: "taro", error: "", confirm: null });
+    expect(errors()).toEqual([network]);
+    ctl.fail.clear();
+    await field.commit("tarou");
+    expect(calls).toEqual(["preview tarou", "preview tarou", "set tarou"]);
+  });
+
+  it("closes the confirmation on cancel while 変更 is saving", async () => {
+    const { field, ctl, calls, release } = await loaded("taro", [line]);
+    await field.commit("tarou");
+    ctl.holdSet = true;
+    const saving = field.confirm();
+    field.cancel();
+    expect(get(field.state).confirm).toBeNull();
+    // 保存が終わるまでは、次の確定を受けない。
+    await field.commit("jiro");
+    release();
+    await saving;
+    expect(calls).toEqual(["preview tarou", "set tarou"]);
+  });
+
   it("shows the refusal and goes back to the saved login, and the blur keeps the refusal", async () => {
     const { field, calls } = await loaded();
     field.edit("ta ro");
@@ -205,30 +201,18 @@ describe("createLoginField", () => {
     expect(get(field.state).text).toBe("jiro");
   });
 
+  it("shows an error toast when the login cannot be read", async () => {
+    const { field, ctl, errors } = await loaded();
+    ctl.fail.add("login");
+    await field.load();
+    expect(get(field.state).text).toBe("taro");
+    expect(errors()).toEqual([network]);
+  });
+
   it("takes a login changed elsewhere when nothing is being typed", async () => {
     const { field, saved } = await loaded();
     saved.login = "jiro";
     await field.load();
     expect(get(field.state).text).toBe("jiro");
-  });
-});
-
-describe("createSyncTimingField", () => {
-  it("loads the timing and saves a change", async () => {
-    const f = fakeSettings();
-    const timing = createSyncTimingField(f.port);
-    expect(get(timing.state)).toBeNull();
-    await timing.load();
-    expect(get(timing.state)).toEqual({
-      auto: true,
-      intervalMinutes: 5,
-      afterWriteSeconds: 30,
-      githubMinutes: 5,
-    });
-    await timing.set({ intervalMinutes: 15 });
-    expect(f.calls).toEqual([
-      'timing {"auto":true,"intervalMinutes":15,"afterWriteSeconds":30,"githubMinutes":5}',
-    ]);
-    expect(get(timing.state)?.intervalMinutes).toBe(15);
   });
 });

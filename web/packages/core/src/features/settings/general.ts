@@ -1,8 +1,13 @@
 import { Refused } from "../../model/errors";
 import type { SettingsPort, SyncTiming } from "../../port/settings";
 import { get, type Readable, readonly, writable } from "../../reactive/store";
+import type { Toasts } from "../toasts/toasts";
 
 // 設定の「一般」(08「一般」)。ログイン名の欄、同期のタイミングの選択肢、キーボードの一覧。
+
+// failed は、断り(422)でない失敗をエラーのトーストで出す(受信箱・アクティビティと同じ出し方)。
+const failed = (toasts: Toasts, e: unknown) =>
+  toasts.show(e instanceof Error ? e.message : String(e), { error: true });
 
 export const intervalChoices: readonly number[] = [1, 5, 15, 30, 60];
 export const afterWriteChoices: readonly number[] = [10, 30, 60];
@@ -21,33 +26,42 @@ export interface LoginFieldState {
 
 export interface LoginField {
   state: Readable<LoginFieldState>;
-  // load は、保存してあるログイン名を読む。打っている途中なら欄はそのまま。
+  // load は、保存してあるログイン名を読む。打っている途中なら欄はそのまま。読めなければエラーのトーストを出す。
   load(): Promise<void>;
   edit(text: string): void;
   // commit は、Enter と欄からフォーカスが外れたときの確定。前後の空白を取り除いて保存してある値と同じなら何もしない。
   // 確定の処理中(確認ダイアログを出しているあいだを含む)は、次の確定を捨てる。
   commit(text: string): Promise<void>;
   // confirm は確認の「変更」、cancel は「キャンセル」(欄を元の値に戻す)。確認を出していなければ、どちらも何もしない。
+  // cancel は、「変更」の保存を待っているあいだでも確認を閉じる。
   confirm(): Promise<void>;
   cancel(): void;
 }
 
 // createLoginField は、ログイン名の欄(08 の「ログイン名」と決定 G1-15・G1-16)。検査はサーバーに任せ、断りなら文言を出して元の値に戻す。
-export function createLoginField(port: SettingsPort): LoginField {
+// ほかの失敗はエラーのトーストを出し、確認を閉じて元の値に戻す。
+export function createLoginField(port: SettingsPort, toasts: Toasts): LoginField {
   let saved = "";
-  // busy は、確定の処理中。pending は、確認ダイアログで「変更」を待っている値。
+  // busy は、確定の処理中。pending は、確認ダイアログで「変更」を待っている値。running は、口を呼んでいるあいだ。
   let busy = false;
   let pending = "";
+  let running = false;
   const state = writable<LoginFieldState>({ text: "", error: "", confirm: null });
   const patch = (p: Partial<LoginFieldState>) => state.update((s) => ({ ...s, ...p }));
 
   async function settle(fn: () => Promise<void>) {
+    running = true;
     try {
       await fn();
     } catch (e) {
-      if (!(e instanceof Refused)) throw e;
-      patch({ text: saved, error: e.message, confirm: null });
+      pending = "";
+      if (e instanceof Refused) patch({ text: saved, error: e.message, confirm: null });
+      else {
+        patch({ text: saved, confirm: null });
+        failed(toasts, e);
+      }
     } finally {
+      running = false;
       if (pending === "") busy = false;
     }
   }
@@ -62,7 +76,12 @@ export function createLoginField(port: SettingsPort): LoginField {
   return {
     state: readonly(state),
     async load() {
-      const login = await port.login();
+      let login: string;
+      try {
+        login = await port.login();
+      } catch (e) {
+        return failed(toasts, e);
+      }
       if (!busy && get(state).text === saved) patch({ text: login });
       saved = login;
     },
@@ -85,38 +104,69 @@ export function createLoginField(port: SettingsPort): LoginField {
       await settle(() => save(login));
     },
     cancel() {
-      if (pending === "") return;
+      if (get(state).confirm === null) return;
       pending = "";
-      busy = false;
+      if (!running) busy = false;
       patch({ text: saved, confirm: null });
     },
   };
 }
 
 export interface SyncTimingField {
-  // state は、読む前は null。
+  // state は、出す値。読む前は null。
   state: Readable<SyncTiming | null>;
+  // load は、保存済みの値を読む。読めなければエラーのトーストを出す。
   load(): Promise<void>;
-  // set は、1 つの項目を変えて保存する(選んだらすぐに有効になる。08)。
+  // set は、1 つの項目を変えて保存する(選んだらすぐに有効になる。08)。保存は 1 つずつ順に行い、
+  // 前の保存の結果に次の変更を重ねる(後の保存が先の変更を消さない)。失敗したらエラーのトーストを出し、保存済みの値に戻す。
   set(patch: Partial<SyncTiming>): Promise<void>;
 }
 
 // createSyncTimingField は、「同期のタイミング」の 4 つの項目。
-export function createSyncTimingField(port: SettingsPort): SyncTimingField {
+export function createSyncTimingField(port: SettingsPort, toasts: Toasts): SyncTimingField {
   const state = writable<SyncTiming | null>(null);
-  let current: SyncTiming | null = null;
+  // saved は、保存済みの値。queue は、待っている保存の続き。waiting は、まだ終わっていない保存の数
+  // (後ろに保存が待っていれば、先の保存が終わっても、出している後の変更を消さない)。
+  let saved: SyncTiming | null = null;
+  let queue: Promise<void> = Promise.resolve();
+  let waiting = 0;
   const put = (t: SyncTiming) => {
-    current = t;
+    saved = t;
     state.set(t);
   };
+
+  async function save(patch: Partial<SyncTiming>) {
+    try {
+      // set は読んだあとだけ保存を並べるので、saved はある(型のための確かめ)。
+      if (!saved) return;
+      const next = { ...saved, ...patch };
+      await port.setTiming(next);
+      saved = next;
+      if (waiting === 1) state.set(next);
+    } catch (e) {
+      state.set(saved);
+      failed(toasts, e);
+    } finally {
+      waiting -= 1;
+    }
+  }
+
   return {
     state: readonly(state),
-    load: async () => put(await port.timing()),
-    async set(patch) {
-      if (!current) return;
-      const next = { ...current, ...patch };
-      await port.setTiming(next);
-      put(next);
+    async load() {
+      try {
+        put(await port.timing());
+      } catch (e) {
+        failed(toasts, e);
+      }
+    },
+    set(patch) {
+      if (!saved) return queue;
+      // 選んだ値をすぐに出す(保存を待つあいだ、チェックボックスと選択が元に戻って見えないように)。
+      state.update((s) => (s ? { ...s, ...patch } : s));
+      waiting += 1;
+      queue = queue.then(() => save(patch));
+      return queue;
     },
   };
 }
