@@ -1,6 +1,6 @@
-import type { Page, TestInfo } from "@playwright/test";
+import type { Locator, Page, TestInfo } from "@playwright/test";
 import { expect, test } from "./fixtures";
-import { prefixOf, resetSearchScreen, tokenUrl } from "./helpers";
+import { prefixOf, resetSearchScreen, sidebar, tokenUrl } from "./helpers";
 import { filterOf, search } from "./search-tree-helpers";
 
 // ビューのメニュー(E3b-13)の通しのテスト。ビューは同じ worker のほかのテストと同じサーバーに残るので、
@@ -23,11 +23,9 @@ async function newView(page: Page, name: string) {
   return ((await res.json()) as { id: string }).id;
 }
 
-async function listNames(page: Page) {
-  const res = await page.request.get("/api/views", { headers: auth });
-  const { views } = (await res.json()) as { views: { name: string }[] };
-  return views.map((v) => v.name);
-}
+// viewRow は、サイドバーの「保存したビュー」の、その名前の行。
+const viewRow = (side: Locator, name: string) =>
+  side.getByRole("region", { name: "保存したビュー" }).getByRole("link", { name, exact: true });
 
 // openMenu は、ビューの画面の見出しのメニューを開き、項目を選ぶ。
 async function choose(page: Page, name: string, item: string) {
@@ -75,8 +73,9 @@ test("rename", async ({ page }, info) => {
   await input.press("Enter");
   await expect(dialog).toBeHidden();
   await expect(page.getByRole("heading", { name: renamed })).toBeVisible();
-  expect(await listNames(page)).toContain(renamed);
-  expect(await listNames(page)).not.toContain(name);
+  const side = await sidebar(page, info);
+  await expect(viewRow(side, renamed)).toBeVisible();
+  await expect(viewRow(side, name)).toHaveCount(0);
   // 未保存の変更は、名前を変えたあとも残る。
   await expect(mark(page)).toBeVisible();
   await expect(filterOf(page)).toHaveValue("kind:task");
@@ -110,7 +109,7 @@ test("delete", async ({ page }, info) => {
   await dialog.getByRole("button", { name: "削除", exact: true }).click();
   await expect(page.getByRole("status").filter({ hasText: "ビューを削除しました" })).toBeVisible();
   await expect(page).not.toHaveURL(/\/views\//);
-  expect(await listNames(page)).not.toContain(name);
+  await expect(viewRow(await sidebar(page, info), name)).toHaveCount(0);
 
   // 削除したビューのアドレスを開いてもホームになる。
   await page.goto(tokenUrl(`/views/${id}`));

@@ -8,6 +8,7 @@
   import { isMac } from "../tab";
   import { itemDialog, sync, syncNow } from "../wire";
   import SidebarStore from "./SidebarStore.svelte";
+  import SidebarViews from "./SidebarViews.svelte";
 
   // サイドバー(04「サイドバー」)。名前と設定・「新規作成」・Store ごとのブロック・同期のカードを出す。
   interface Props {
@@ -94,6 +95,7 @@
 {#each stores as store (store.id)}
   <SidebarStore {store} {current} {links} {collapsed} ontoggle={toggle} />
 {/each}
+<SidebarViews {current} {links} />
 {#if card}
   <SyncCard
     {card}

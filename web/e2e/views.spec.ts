@@ -69,7 +69,7 @@ test("unsaved changes survive reload", async ({ page }, info) => {
   const view = await newView(page, info);
   await page.goto(tokenUrl(`/views/${view.id}`));
   await expect(page.getByRole("heading", { name: view.name })).toBeVisible();
-  await expect(page.getByText("保存したビュー", { exact: true })).toBeVisible();
+  await expect(page.getByRole("main").getByText("保存したビュー", { exact: true })).toBeVisible();
   await expect(filterOf(page)).toHaveValue("kind:bug");
   const mark = page.getByText("未保存の変更", { exact: true });
   const discard = page.getByRole("button", { name: "変更を破棄", exact: true });
