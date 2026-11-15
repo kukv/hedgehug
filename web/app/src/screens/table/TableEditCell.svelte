@@ -40,44 +40,57 @@
   );
   const category = $derived(row.status?.category as Category | undefined);
   const who = $derived(assigneeText(row.assignee));
+  // 保存できなかったら上げて、このセルの部品を作り直す(入力を保存済みの値に戻す)。ほかのセルは作り直さない。
+  let version = $state(0);
   let picked = $state("");
   // 選択肢の元の読み込みなどで editor が作り直されても、値そのものが変わるまでは選んだ表示を替えない。
+  // 保存に失敗して version が上がったときは、選んだ表示も保存済みの値に戻す。
   const planValue = $derived(editor.kind === "plan" ? editor.value : "");
   $effect(() => {
+    void version;
     picked = planValue;
   });
 
-  const save = (edit: CellEdit) => cells.save(row, edit, reload);
-  async function pickPlan(key: "sprint" | "release", id: string) {
-    // 保存できなかったら、選び直す前の表示に戻す。
-    if (!(await save({ kind: "plan", key, id })) && editor.kind === "plan") picked = editor.value;
+  async function save(edit: CellEdit) {
+    if (!(await cells.save(row, edit, reload))) version += 1;
   }
+  const pickPlan = (key: "sprint" | "release", id: string) => save({ kind: "plan", key, id });
 </script>
 
 {#if editor.kind === "property" && ctx}
   {@const field = editor.row}
   <td class:num>
-    <PropertyField
-      row={field}
-      project={row.projectId}
-      settings={ctx.settings}
-      disabled={row.readOnly}
-      onchange={(value) => void save({ kind: "property", propertyId: field.property.id, value })}
-      ontoggle={(valueId, on) =>
-        void save({ kind: "toggle", propertyId: field.property.id, valueId, on })}
-    />
+    {#key version}
+      <PropertyField
+        row={field}
+        itemId={row.itemId}
+        project={row.projectId}
+        settings={ctx.settings}
+        disabled={row.readOnly}
+        onchange={(value, at) => {
+          // 行はアイテムごとに作るので、ふだんは入力欄にフォーカスしたアイテムと今の行は同じ。
+          // セルが別の行に使い回されたときの備えで、違うアイテムには書かない。
+          if (at === undefined || at === row.itemId)
+            void save({ kind: "property", propertyId: field.property.id, value });
+        }}
+        ontoggle={(valueId, on) =>
+          void save({ kind: "toggle", propertyId: field.property.id, valueId, on })}
+      />
+    {/key}
   </td>
 {:else if editor.kind === "plan"}
   {@const plan = editor}
   <td>
-    <Select
-      label={column.name}
-      disabled={row.readOnly}
-      title={row.readOnly ? readOnlyNote : undefined}
-      options={plan.options}
-      bind:value={picked}
-      onchange={(id) => void pickPlan(plan.key, id)}
-    />
+    {#key version}
+      <Select
+        label={column.name}
+        disabled={row.readOnly}
+        title={row.readOnly ? readOnlyNote : undefined}
+        options={plan.options}
+        bind:value={picked}
+        onchange={(id) => void pickPlan(plan.key, id)}
+      />
+    {/key}
   </td>
 {:else if column.key === "status"}
   <td>

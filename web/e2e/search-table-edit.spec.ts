@@ -158,3 +158,111 @@ test("the status button follows the workflow", async ({ page }, info) => {
   await expect(row.getByRole("button", { name: "ステータス: Done" })).toBeVisible();
   await expect.poll(async () => (await item(page, storyId)).status).not.toBe(before);
 });
+
+test("read-only rows disable the cells", async ({ page }, info) => {
+  await openWith(page, info, "store:readonly ログイン画面");
+  const row = page.getByRole("row", { name: /HH-2/ });
+  for (const control of [
+    row.getByRole("button", { name: /^優先度: / }),
+    row.getByRole("button", { name: /^ステータス: / }),
+    row.getByRole("spinbutton", { name: "ポイント" }),
+  ]) {
+    await expect(control).toBeDisabled();
+    await expect(control).toHaveAttribute("title", "閲覧のみの Store です");
+  }
+  await expect(row.getByRole("checkbox")).toBeEnabled();
+  // 列見出しの並べ替えも使える。
+  const title = page.getByRole("main").getByRole("columnheader", { name: "タイトル", exact: true });
+  await title.getByRole("button").click();
+  await expect(title).toHaveAttribute("aria-sort", "ascending");
+});
+
+test("deleted rows show values without editors", async ({ page }, info) => {
+  const { mark, storyId } = await seed(page, info);
+  await send(page, "delete", `${base}/items/${storyId}`, undefined);
+  await openWith(page, info, `is:deleted ${mark}`);
+  const row = rowOf(page, `${mark} B`);
+  await expect(row).toBeVisible();
+  await expect(row.getByRole("button", { name: /^優先度/ })).toHaveCount(0);
+  await expect(row.getByRole("spinbutton")).toHaveCount(0);
+  await expect(row.getByRole("cell", { name: "Medium", exact: true })).toBeVisible();
+});
+
+test("a refused end date goes back to the saved value", async ({ page }, info) => {
+  const { mark } = await seed(page, info);
+  await openWith(page, info, mark);
+  await showColumns(page, ["終了日", "開始日", "終了日"]);
+  const row = rowOf(page, `${mark} B`);
+  const end = row.getByLabel("終了日", { exact: true });
+  // 開始日の保存と読み直しが終わってから終了日を入れる(保存が前後すると、断られる理由が変わる)。
+  await saved(page, async () => {
+    await row.getByLabel("開始日", { exact: true }).fill("2026-11-20");
+    await tabUntil(page, end);
+  });
+  await saved(page, async () => {
+    await end.fill("2026-11-10");
+    await tabUntil(page, row.getByRole("button", { name: /のメニュー$/ }));
+  });
+  await expect(page.getByText("終了日は開始日以降にしてください")).toBeVisible();
+  await expect(end).toHaveValue("");
+});
+
+test("editing the grouped column moves the row without carrying the menu", async ({
+  page,
+}, info) => {
+  const { mark } = await seed(page, info);
+  await openWith(page, info, mark);
+  await page.getByRole("combobox", { name: "グループ" }).selectOption({ label: "優先度" });
+  await expect(page.getByRole("row", { name: "Medium 2", exact: true })).toBeVisible();
+  const row = rowOf(page, `${mark} B`);
+  await row.getByRole("button", { name: /^優先度: Medium/ }).click();
+  await page
+    .getByRole("menu", { name: "優先度" })
+    .getByRole("menuitemcheckbox", { name: "High", exact: true })
+    .click();
+  await expect(page.getByRole("row", { name: "High 1", exact: true })).toBeVisible();
+  await expect(page.getByRole("menu", { name: "優先度" })).toBeHidden();
+  const a = rowOf(page, `${mark} A`);
+  await expect(a.getByRole("button", { name: /^優先度: Medium/ })).toBeVisible();
+  const b = rowOf(page, `${mark} B`);
+  await expect(b.getByRole("button", { name: /^優先度: High/ })).toBeVisible();
+});
+
+test("a row whose workspace was deleted elsewhere shows the save failure", async ({
+  page,
+}, info) => {
+  const { mark, workspaceId } = await seed(page, info);
+  await openWith(page, info, mark);
+  const row = rowOf(page, `${mark} B`);
+  const points = row.getByRole("spinbutton", { name: "ポイント" });
+  await expect(points).toBeVisible();
+  await send(page, "delete", `${base}/workspaces/${workspaceId}`, undefined);
+  await points.fill("5");
+  await points.press("Enter");
+  await expect(toast(page)).toBeVisible();
+  await expect(row).toHaveCount(0);
+});
+
+test("saving a cell of a row deleted elsewhere restores it and shows the toast", async ({
+  page,
+}, info) => {
+  const { mark, storyId, prefix } = await seed(page, info);
+  await openWith(page, info, mark);
+  const row = rowOf(page, `${mark} B`);
+  const points = row.getByRole("spinbutton", { name: "ポイント" });
+  await expect(points).toBeVisible();
+  await send(page, "delete", `${base}/items/${storyId}`, undefined);
+  await saved(page, async () => {
+    await points.fill("7");
+    await points.press("Enter");
+  });
+  await expect(
+    page.getByText(
+      `${prefix}-2 は別の画面で削除されていましたが、変更を保存したため、削除を取り消しました`,
+    ),
+  ).toBeVisible();
+  await expect(toast(page)).toBeHidden();
+  await expect(row).toBeVisible();
+  await expect(row.getByText("削除済み")).toHaveCount(0);
+  await expect.poll(async () => (await item(page, storyId)).points).toBe(7);
+});

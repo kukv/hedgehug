@@ -1,5 +1,6 @@
 <script lang="ts">
   import {
+    groupKeys,
     isSelected,
     type RowSelection,
     type SearchColumn,
@@ -30,6 +31,8 @@
   }
 
   let { rows, columns, groups, sort, onsort, selection, onmenu, cells, reload }: Props = $props();
+  // グループは見出しの文字で見分ける(同じ見出しは #2 から)。行はグループの中でアイテムで見分ける。
+  const keys = $derived(groupKeys(groups));
   const picked = $derived(selection.rows);
   // 終了日の「期限切れ」「今日」と相対時間は、結果が届いたときと日付が替わったときの時刻で決める(読み直した行の
   // 「N 分前」がずれない。E4a-16)。
@@ -61,8 +64,8 @@
 <table class="table">
   <TableHead {rows} {selection} {columns} {sort} {onsort} />
   {#if groups.length > 0}
-    <!-- 同じアイテムが複数のグループに出るので、グループの位置と行の位置で見分ける -->
-    {#each groups as group, g (g)}
+    <!-- 同じアイテムが複数のグループに出るので、グループと Store とアイテムの内部 ID で見分ける -->
+    {#each groups as group, g (keys[g])}
       <tbody>
         <tr class="group">
           <!-- 先頭のチェックと末尾の「⋯」の列も含める -->
@@ -71,7 +74,7 @@
             <span class="count">{group.rows.length}</span>
           </th>
         </tr>
-        {#each group.rows as index (`${g}/${index}`)}
+        {#each group.rows as index (`${keys[g]}/${rows[index]?.storeId}/${rows[index]?.itemId}`)}
           {@const row = rows[index]}
           {#if row}
             {@render line(row)}
