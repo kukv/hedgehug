@@ -1,71 +1,10 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import { NotFound } from "../../model/errors";
-import type { Item } from "../../model/item";
 import type { MoveCandidate } from "../../model/itemAction";
-import { flush, gate, item } from "./fixtures.test-util";
+import { flush, gate } from "./fixtures.test-util";
 import { moveFailedMessage } from "./move";
 import { settings } from "./settings.test-util";
-import { visibleNeighbors } from "./siblings";
-import { createTreeWrites, type TreeWritesDeps } from "./treeWrites";
-
-// 木: HH-1(Epic) ─ HH-2・HH-3・HH-4・HH-5(Task) / HH-6(Epic)。並べ替えのたびに読み直した並びを rows に入れる。
-const e1 = item("S1", "P1", 1, "Epic", null);
-const e6 = item("S1", "P1", 6, "Epic", null);
-const kids: Item[] = [2, 3, 4, 5].map((n) => item("S1", "P1", n, "Task", e1.id));
-const [a, b, c, d] = kids as [Item, Item, Item, Item];
-
-const candidate = (it: Item): MoveCandidate => ({
-  kind: "item",
-  id: it.id,
-  display: `HH-${it.number}`,
-  title: it.title,
-  projectId: it.projectId,
-  projectTitle: "ログイン",
-});
-
-// setup の reorder は、itemMenuHost.reorder と同じ約束の偽物: 見えている兄弟を基準に 1 件だけ動かし、読み直して、
-// 動かせたら true(基準の兄弟がない・閲覧のみは false)。
-function setup(over: Partial<TreeWritesDeps> = {}, readOnly = false) {
-  let order = [...kids];
-  let rows: Item[] = [e1, ...order, e6];
-  const log: string[] = [];
-  const toasts = { show: vi.fn() };
-  const deps: TreeWritesDeps = {
-    screen: () => ({ storeId: "S1", readOnly, settings, rows }),
-    reorder: async (it, seen, dir) => {
-      const { prev, next } = visibleNeighbors(seen, it.id);
-      const anchor = dir === "up" ? prev : next;
-      if (!anchor) return false;
-      log.push(`reorder ${it.id} ${anchor.id} ${dir === "down"}`);
-      order = order.filter((i) => i.id !== it.id);
-      order.splice(order.findIndex((i) => i.id === anchor.id) + (dir === "down" ? 1 : 0), 0, it);
-      rows = [e1, ...order, e6];
-      log.push("refresh");
-      return true;
-    },
-    moveCandidates: async (_s, id) => {
-      log.push(`candidates ${id}`);
-      return [candidate(e6)];
-    },
-    moveTo: async (it, cand) => {
-      log.push(`moveTo ${it.id} ${cand.id}`);
-      return true;
-    },
-    setStatus: async (it, status) => {
-      log.push(`status ${it.id} ${status}`);
-    },
-    afterChange: async () => {
-      log.push("refresh");
-    },
-    settled: async () => {},
-    expand: (id) => {
-      log.push(`expand ${id}`);
-    },
-    toasts,
-    ...over,
-  };
-  return { writes: createTreeWrites(deps), log, toasts, order: () => order.map((i) => i.id) };
-}
+import { a, b, c, candidate, d, e1, e6, setup } from "./treeWrites.test-util";
 
 describe("Alt+↑↓ (moveSibling)", () => {
   it("does not start the next step before the previous one is saved and reloaded", async () => {
@@ -260,93 +199,5 @@ describe("Alt+Shift+↑↓ (changeParent)", () => {
     await flush();
     expect(gone.log).toEqual(["refresh"]);
     expect(gone.toasts.show).not.toHaveBeenCalled();
-  });
-});
-
-// 検索のツリーでは、Store をまたいで同じ内部 ID のアイテムが並ぶ。積んだときの Store と違う画面では、待っている分を実行しない。
-describe("the store at the time of the key", () => {
-  // switching は、画面の Store を S1 から始め、over の書き込みの偽物が toS2 を呼ぶと S2(同じ ID の行)へ移す。
-  function switching(over: (toS2: () => void) => Partial<TreeWritesDeps>) {
-    let storeId = "S1";
-    return setup({
-      screen: () => ({ storeId, readOnly: false, settings, rows: [e1, ...kids, e6] }),
-      ...over(() => {
-        storeId = "S2";
-      }),
-    });
-  }
-
-  it("moveSibling does not run a waiting step on the same ID in another store", async () => {
-    const calls: string[] = [];
-    const { writes } = switching((toS2) => ({
-      reorder: async (it) => {
-        calls.push(it.id);
-        // 次のキーを積んだあとで、読み直した画面が別の Store になる。
-        await Promise.resolve();
-        toS2();
-        return true;
-      },
-    }));
-    writes.moveSibling(a.id, "down");
-    writes.moveSibling(a.id, "down");
-    await flush();
-    expect(calls).toEqual([a.id]);
-  });
-
-  it("changeParent does not run a waiting step, nor move after the screen changed store", async () => {
-    const moved: string[] = [];
-    const { writes, log } = switching((toS2) => ({
-      moveTo: async (it) => {
-        moved.push(it.id);
-        toS2();
-        return true;
-      },
-    }));
-    writes.changeParent(c.id, "down");
-    writes.changeParent(c.id, "down");
-    await flush();
-    expect(moved).toEqual([c.id]);
-    expect(log.filter((l) => l.startsWith("candidates"))).toEqual([`candidates ${c.id}`]);
-
-    const late = switching((toS2) => ({
-      moveCandidates: async () => {
-        toS2();
-        return [candidate(e6)];
-      },
-    }));
-    late.writes.changeParent(c.id, "down");
-    await flush();
-    expect(late.log).toEqual([]);
-  });
-});
-
-describe("Space (toggleDone)", () => {
-  it("goes to the default done status, and back to the default todo status", async () => {
-    const { writes, log } = setup();
-    await writes.toggleDone(a.id);
-    expect(log).toEqual([`status ${a.id} st3`]);
-    const doneRow: Item = { ...a, status: "st3" };
-    const again = setup({
-      screen: () => ({ storeId: "S1", readOnly: false, settings, rows: [doneRow] }),
-    });
-    await again.writes.toggleDone(a.id);
-    expect(again.log).toEqual([`status ${a.id} st1`]);
-  });
-
-  it("does nothing in a read-only store, for a row that is not visible, or without a default", async () => {
-    const ro = setup({}, true);
-    await ro.writes.toggleDone(a.id);
-    const missing = setup();
-    await missing.writes.toggleDone("nope");
-    const bare = setup({
-      screen: () => ({
-        storeId: "S1",
-        readOnly: false,
-        settings: { ...settings, categoryDefaults: {} },
-        rows: [a],
-      }),
-    });
-    await bare.writes.toggleDone(a.id);
-    expect([ro.log, missing.log, bare.log]).toEqual([[], [], []]);
   });
 });
