@@ -89,16 +89,16 @@ export interface Search {
   replaceQuery(text: string): Promise<void>;
   // prepareQuery は、ほかの画面から検索の画面を開くときに、絞り込みと「テーブルにする」の印だけを付ける(書かず、
   // 検索もしない)。移れて呼ばれる次の open が、読んだ値の絞り込みを置き換えてテーブルにし、1 回書いて 1 回検索する
-  // (E3a-22・E3a-23)。
+  // (E3a-22・E3a-23)。このタブでまだ読んでいなければ、絞り込みを欄に出すだけはする(書かない)。
   prepareQuery(text: string): void;
   // setLayout は、レイアウトを書くだけで検索しない。テーブル以外にするときは選択を解除する(E3a-10)。
   setLayout(layout: SearchLayout): void;
-  // showTable は、テーブルで開く入口(E3a-9)が呼ぶ。すでにテーブルなら何も書かない。
+  // showTable は、テーブルで開く入口(E3a-9)が呼ぶ。読んだあとですでにテーブルなら書かない。
   showTable(): void;
   // setCollapsed は、ツリーの閉じている行の鍵を書くだけ(E3a-11)。
   setCollapsed(collapsed: string[]): void;
   // cancelPrepare は、prepareQuery の印を消す(検索の画面へ移れなかったとき)。画面の状態は前のまま。
-  // settled を待つものを解く。
+  // 読む前なら、欄に出した絞り込みを初めの値に戻す。settled を待つものを解く。
   cancelPrepare(): void;
   // reload は、Store が変わった知らせ(reloads)で、いまの絞り込みのまま読み直す。
   reload(): Promise<void>;

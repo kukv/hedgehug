@@ -53,6 +53,10 @@ describe("createSearch with the table settings (E2a)", () => {
     await t.s.replaceQuery("b");
     t.s.prepareQuery("c");
     expect(get(t.s.state).table.group).toBe("kind");
+    await t.s.open();
+    expect(get(t.s.state)).toMatchObject({ query: "c", layout: "table" });
+    expect(get(t.s.state).table.group).toBe("kind");
+    expect(JSON.parse(String(vi.mocked(t.sp.put).mock.lastCall?.[1])).table.group).toBe("kind");
   });
 
   it("prunes the selection with each result", async () => {

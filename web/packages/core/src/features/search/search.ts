@@ -163,6 +163,7 @@ export function createSearch(deps: SearchDeps): Search {
       cancel();
       prepared = true;
       queued = text;
+      if (!loaded) state.update((s) => ({ ...s, query: text }));
     },
     setLayout,
     showTable() {
@@ -174,6 +175,7 @@ export function createSearch(deps: SearchDeps): Search {
     cancelPrepare() {
       prepared = false;
       queued = null;
+      if (!loaded) state.update((s) => ({ ...s, query: initialSearchState().query }));
       release();
     },
     reload() {
