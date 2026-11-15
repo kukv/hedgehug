@@ -578,13 +578,19 @@ git commit -m "docs: 保存したビューに合わせて仕様と計画を直�
 
 ## 実装で計画から変えたこと
 
-(実装のあとに書く)
+- 値の型(`Sort`・`Table`・`Content`・`View`)は `internal/domain/savedview` に置き、`internal/app/views` は別名で公開した(infra は port と domain だけを読む規則のため)。
+- `routes.go` の `NewAPI` が関数の行数の上限を超えたので、検索とビューの登録を `registerSearch` に分けた。API の本文の型名は既存の型とぶつからないように `CreateViewBody`・`SaveViewBody`・`RenameViewBody` にした。
+- core の `Views.create` は `SavedView | string | null`(`null` は断り以外の失敗で、エラーのトーストを出し済み)。`rename` の `null` は、成功と、トーストを出し済みの失敗の両方。
+- `views`・`viewsPort` は `web/app/src/wireBase.ts` で作り、`web/app/src/views.ts` から再公開した(`wire.ts` との循環を避けるため)。一覧は `wire.ts` の起動で `Promise.all([catalog.load(), views.load()])` のあとに `screen.start()`。
+- 名前の変更・削除のサイドバーでの確かめは Task 8 で足した。サイドバーの e2e は、自分のサーバーを使う `web/e2e/views-sidebar.spec.ts` に置いた。
+- 削除は `replace` なので、「戻る」の確かめは、削除したアドレスを開き直してホームになることで見た。
+- 別のタブへの反映の e2e(`web/e2e/views-tabs.spec.ts`)では、絞り込み欄にフォーカスがあるタブは画面への反映を待つ(06)ので、変更したタブの絞り込み欄からフォーカスを外してから、もう一方のタブで保存した。
 
 ## E5・E6・G に渡すもの
 
 ### E5(カンバン)
 
-- ビューの内容(`views.Content`・core の `ViewContent`・API の `ViewContent`)に、カンバンの設定(列の分け方・スイムレーン・列ごとの WIP 制限)を足す。`viewDirty` の比べにも入れる(04 の 373・409 行)。`layout` の値 `kanban` を API の enum と `layoutChoices` に足す。
+- ビューの内容(`internal/domain/savedview.Content`(`internal/app/views.Content` はその別名)・core の `ViewContent`・API の `ViewContent`)に、カンバンの設定(列の分け方・スイムレーン・列ごとの WIP 制限)を足す。`viewDirty` の比べにも入れる(04 の 373・409 行)。`layout` の値 `kanban` を API の enum と `layoutChoices` に足す。
 - WIP 上限は列の名前で持つので、ステータスの改名にこのマシンの保存したビューの上限を付け替える(03 の 285〜289 行)。削除されたステータスの列の上限は、次の保存で取り除く(03 の 369 行。E3b-8 の列の取り除きと同じ所で行う)。
 
 ### E6(ガント)
