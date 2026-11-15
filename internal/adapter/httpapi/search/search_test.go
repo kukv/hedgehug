@@ -94,6 +94,7 @@ type searchBody struct {
 		ReadOnly                       bool
 		WorkspaceID, ProjectID, ItemID string
 		Display, Title, Kind, End      string
+		StatusID                       string
 		OldIDHit                       bool
 		Status                         *struct{ Name, Category string }
 		Assignee                       *struct {
@@ -289,6 +290,10 @@ func TestSearchAPISort(t *testing.T) {
 }
 
 func TestSearchAPIRowValues(t *testing.T) {
+	sgot, _ := searchOf(t, newAPI(t), "kind:bug")
+	if len(sgot.Rows) != 1 || sgot.Rows[0].StatusID != string(apptest.SampleStatusTodo) {
+		t.Errorf("statusId = %+v", sgot.Rows)
+	}
 	got, _ := tableOf(t, newAPI(t), map[string]string{"query": "kind:bug"})
 	if len(got.Rows) != 1 {
 		t.Fatalf("rows = %d", len(got.Rows))
@@ -321,5 +326,35 @@ func TestSearchAPIHasSort(t *testing.T) {
 		if got, _ := searchOf(t, api, text); got.HasSort != want {
 			t.Errorf("%q: HasSort = %v, want %v", text, got.HasSort, want)
 		}
+	}
+}
+
+func TestMyTasksAPI(t *testing.T) {
+	api, s := newAPIWithStores(t)
+	mine := item.Item{
+		ID: "01TESTIT000000000000000005", Place: item.Place{Workspace: apptest.SampleWorkspace, Project: apptest.SampleProject, Number: 5},
+		Kind: item.Task, Rank: "X", Title: "私の", Status: apptest.SampleStatusInProgress, Assignee: "taro",
+	}
+	op := port.Operation{Actor: change.User("taro"), Summary: "テスト"}
+	if err := s.Write(t.Context(), "S1", op, func(tx port.Tx) error {
+		return errors.Join(
+			tx.WriteItems().Append(mine.ID, item.Create(mine)),
+			tx.WriteWorkspaces().Append(mine.Place.Workspace, numbering.Draft(numbering.Items, 5)),
+		)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	res := api.Post("/api/my-tasks", map[string]string{"filter": ""})
+	var got searchBody
+	if res.Code != 200 || json.Unmarshal(res.Body.Bytes(), &got) != nil {
+		t.Fatalf("%d %s", res.Code, res.Body)
+	}
+	if len(got.Rows) != 1 || got.Rows[0].StatusID != string(apptest.SampleStatusInProgress) {
+		t.Errorf("rows = %+v", got.Rows)
+	}
+	res = api.Post("/api/my-tasks", map[string]string{"filter": "status:"})
+	raw := res.Body.String()
+	if res.Code != 200 || !strings.Contains(raw, `"errors":["「status:」に値がありません"]`) || !strings.Contains(raw, `"rows":[]`) {
+		t.Errorf("status:: %d %s", res.Code, raw)
 	}
 }
