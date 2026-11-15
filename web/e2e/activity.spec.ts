@@ -53,11 +53,15 @@ test("lists saves and sync rows by day, with links and filters", async ({ page }
   await expect(renamed.getByRole("link", { name: id, exact: true })).toBeVisible();
   await expect(renamed.locator(".sha")).toHaveText(/^[0-9a-f]{7}$/);
 
-  // 種類「同期だけ」は、同期の行だけを出す。同期の行は SHA の欄が空。
+  // 画面を開いたまま同期の行を足すと、出来事 sync で読み直し、絞り込みを変えずに出す。
+  const synced = rowOf(page, "origin と同期 (送信 2 件・受信 1 件)");
+  await expect(synced).toHaveCount(0);
   await send(page.request, "post", "/e2e/sync-log", { store: e2eStore, sent: 2, received: 1 });
+  await expect(synced).toBeVisible();
+
+  // 種類「同期だけ」は、同期の行だけを出す。同期の行は SHA の欄が空。
   const kind = page.getByRole("combobox", { name: "種類" });
   await kind.selectOption({ label: "同期だけ" });
-  const synced = rowOf(page, "origin と同期 (送信 2 件・受信 1 件)");
   await expect(synced).toBeVisible();
   await expect(synced.getByText("同期", { exact: true })).toBeVisible();
   await expect(synced.locator(".sha")).toHaveText("");

@@ -124,6 +124,8 @@ func e2eStores(ctx context.Context, ids port.IDs) (*apptest.Stores, error) {
 // e2eSync は、e2e と readonly の Store を偽の remote と同期する(手での同期の確かめに使う)。team の Store は remote が
 // ない。移動先への保存(Deliver)は written(コミットを覚える包み)に書く(remote があれば偽の Replicator が stores に書く)。written は、ほかの機能と
 // 同じく NotifyWrites で包まない(e2e のビルドは自動の同期を動かさず、画面への知らせは Watch が出す)。
+// 偽の Replicator が受け取ったものとして stores に直に書く保存は、CommitLog を通らないのでコミットにならず、
+// アクティビティに出ない(本物の同期で受け取った保存は git のコミットなので出る)。
 func e2eSync(hub *events.Hub, stores *apptest.Stores, written port.Stores, syncLog port.SyncLog) *syncing.Service {
 	return &syncing.Service{
 		Targets: &apptest.SyncTargets{Targets: []port.SyncTarget{

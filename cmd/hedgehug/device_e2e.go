@@ -136,5 +136,5 @@ func (d *e2eDevice) handler(token string, next http.Handler) http.Handler {
 func wrap(token string, deps httpapi.Deps, judged port.JudgedSaves, h http.Handler) http.Handler {
 	h = githubReadHandler(token, deps.Links, pullsHandler(token, githubHandler(token, e2eDeviceFlow.handler(token, h))))
 	h = receiveHandler(token, deps.Stores, judged, deps.IDs, deps.Clock, h)
-	return noticeHandler(token, deps.Inbox, syncLogHandler(token, deps.SyncLog, deps.Clock, h))
+	return noticeHandler(token, deps.Inbox, syncLogHandler(token, deps.SyncLog, deps.Clock, deps.Events, h))
 }

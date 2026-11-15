@@ -6,15 +6,18 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/kukv/hedgehug/internal/adapter/httpapi"
 	"github.com/kukv/hedgehug/internal/app/apptest"
+	"github.com/kukv/hedgehug/internal/app/port"
 )
 
 // /e2e/sync-log は、トークンが違えば 401、POST でなければ 405、本文が読めなければ 400。足せたら 204 で、同期の行が 1 つ。
+// 足せたときだけ、本物の同期と同じく、その Store の出来事 sync を出す(画面のアクティビティが読み直す)。
 func TestSyncLogHandler(t *testing.T) {
 	state, err := e2eReads(t.Context())
 	if err != nil {
@@ -22,7 +25,8 @@ func TestSyncLogHandler(t *testing.T) {
 	}
 	log := state.SyncLog()
 	next := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusTeapot) })
-	h := syncLogHandler("tok", log, apptest.NewClock(time.Date(2026, 11, 15, 9, 0, 0, 0, time.UTC)), next)
+	events := &apptest.Events{}
+	h := syncLogHandler("tok", log, apptest.NewClock(time.Date(2026, 11, 15, 9, 0, 0, 0, time.UTC)), events, next)
 	const body = `{"store":"` + e2eStore + `","sent":2,"received":1}`
 	for _, tc := range []struct {
 		name, method, target, auth, body string
@@ -49,6 +53,9 @@ func TestSyncLogHandler(t *testing.T) {
 	if err != nil || len(lines) != 1 || lines[0].Sent != 2 || lines[0].Received != 1 {
 		t.Errorf("lines = %+v, %v", lines, err)
 	}
+	if got, want := events.List(), []port.Event{{Kind: port.EventSync, Store: e2eStore}}; !slices.Equal(got, want) {
+		t.Errorf("events = %+v, want %+v", got, want)
+	}
 }
 
 // e2e の組み立てでは、API からの保存と /e2e/sync-log の行が、GET /api/activity に出る。
@@ -56,7 +63,10 @@ func TestE2EWireActivity(t *testing.T) {
 	deps := e2eDeps(t)
 	mux := http.NewServeMux()
 	httpapi.NewAPI(mux, deps)
-	h := syncLogHandler("secret", deps.SyncLog, deps.Clock, mux)
+	if deps.Versions == nil {
+		t.Fatal("deps.Versions is nil; the activity would rebuild every row on each request")
+	}
+	h := syncLogHandler("secret", deps.SyncLog, deps.Clock, deps.Events, mux)
 	do := func(method, path, body string) *httptest.ResponseRecorder {
 		r := httptest.NewRequest(method, path, strings.NewReader(body))
 		r.Header.Set("Authorization", "Bearer secret")

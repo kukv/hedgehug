@@ -12,8 +12,9 @@ import (
 
 // syncLogHandler は、POST /e2e/sync-log を受け、本文 {store, sent, received} の同期の行を、いまの時刻で記録する
 // (C4d-17)。同期は e2e のビルドで再現できないので、通しのテストは同期の行をここから入れる。ほかの要求は next に渡す。
-// API と同じトークンを求める。
-func syncLogHandler(token string, log port.SyncLog, clock port.Clock, next http.Handler) http.Handler {
+// API と同じトークンを求める。足したあとは、本物の同期と同じく、その Store の出来事 sync を出す(開いている画面の
+// アクティビティが読み直す)。
+func syncLogHandler(token string, log port.SyncLog, clock port.Clock, events port.Events, next http.Handler) http.Handler {
 	want := []byte("Bearer " + token)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/e2e/sync-log" {
@@ -41,6 +42,7 @@ func syncLogHandler(token string, log port.SyncLog, clock port.Clock, next http.
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
+		events.Publish(port.Event{Kind: port.EventSync, Store: b.Store})
 		w.WriteHeader(http.StatusNoContent)
 	})
 }
