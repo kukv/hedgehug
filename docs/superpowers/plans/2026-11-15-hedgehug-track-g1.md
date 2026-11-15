@@ -54,17 +54,17 @@
 | G1-3 | config.yaml を書き直すとき、手で書いたコメントと知らない鍵は残さない(いまの書き方のまま)。D2-14 の申し送りはこれで閉じる | config.yaml を書くのは画面の操作だけで、手で書くのは `hosts` の client ID ぐらい。その値は残る。コメントを残す書き方(yaml.Node の部分の書き換え)は、鍵ごとの書き換えの処理が要り、得るものに比べて大きい |
 | G1-4 | 土台の決定 1 の `MachineSettings` は口として作らない。ログイン名の書き口は `port.StoreGitHub.SetMachineLogin`、同期のタイミングの書き口は `port.SyncSettings.SetTiming` に足す | `port`・`apptest` は 20 ファイルで満杯。読み口がすでにその 2 つにある |
 | G1-5 | `port.Identity` の本物は `app/stores.Identity{GitHub port.StoreGitHub, Accounts port.Accounts}`。Store に割り当てたアカウントがあり、そのアカウントが登録されていればそのログイン名、なければマシンのログイン名。どちらもなければ `ErrNoLogin`(「このマシンのログイン名が未設定です」)。Store が一覧にないときは `port.ErrStoreNotFound` | 01 `:85-88`。割り当てたアカウントが消えているのは手で書き換えたときだけで、07 のアカウントの削除は割り当てを「なし」にする。トラック C `:2058` の制約を守る |
-| G1-6 | 「あなた」の追加は `members.JoinOnWrite(stores port.Stores, list port.StoreGitHub) port.Stores` が `Write` を包んで行う。実行者が人(`change.ActorUser`)で、その Store が閲覧のみでなく、`tx.Members().List()` にそのログイン名(大文字と小文字を区別しない)がいないとき、利用者の `fn` を呼ぶ前に `member.Join(login)` を足す。`fn` が何も書かなかったら、足した追加も取り消す(保存しない)。保存できたときだけ、ctx の入れ物(`port.WithJoined`・`port.Joined`)に記録する | 01 `:88`「その書き込みと一緒に追加する」。何も書かない操作はそもそも書き込みでない。保存に失敗したらトーストを出さない(`restoredHeader` と同じく 2xx のときだけ)。担当者・オーナーの候補はメンバーの一覧から出す(`projects/setowner.go` の `memberOf` は `Write` の前に `Stores.Read` で確かめる)ので、メンバーにいない「あなた」は、次の書き込みで足されるまで候補に出ない。01 の「次に書き込むときに」のとおりで、変えない |
+| G1-6 | 「あなた」の追加は `members.JoinOnWrite(stores port.Stores, list port.StoreGitHub) port.Stores` が `Write` を包んで行う。実行者が人(`change.ActorUser`)で、その Store が閲覧のみでなく、`tx.Members().List()` にそのログイン名(大文字と小文字を区別しない)がいないとき、利用者の `fn` を呼ぶ前に `member.Join(login)` を足す。`fn` が何も書かなかったら、足した追加も取り消す(保存しない)。保存できたときだけ、ctx の入れ物(`port.WithJoined`・`port.Joined`)に記録する。remote のある Store への移動先の保存は `Replicator.SyncSave` を通るので、`members.JoinOnSyncSave(r port.Replicator, list port.StoreGitHub) port.Replicator` が同じ判定で `SyncSave` の `fn` を包む(メンバーかは試みごとに決め直す。何も書かなかったら保存も送信もせず成功を返し、結果の `Seen` は `remote.Seen` のまま) | 01 `:88`「その書き込みと一緒に追加する」。何も書かない操作はそもそも書き込みでない。保存に失敗したらトーストを出さない(`restoredHeader` と同じく 2xx のときだけ)。担当者・オーナーの候補はメンバーの一覧から出す(`projects/setowner.go` の `memberOf` は `Write` の前に `Stores.Read` で確かめる)ので、メンバーにいない「あなた」は、次の書き込みで足されるまで候補に出ない。01 の「次に書き込むときに」のとおりで、変えない |
 | G1-7 | 閲覧のみの Store への書き込みを、サーバーは今までどおり断らない(track-a2 `:837`)。「あなた」の追加だけは行わない | 01 `:90`「閲覧のみの Store では追加しない」。画面は書く操作を無効にしている(01 `:118`) |
 | G1-8 | 応答のヘッダー `Hedgehug-Joined: <ログイン名>`(複数の Store に足したときは 1 つにまとめ、`, ` で区切る)。画面の `fetcher` が `onJoined` の受け手に渡し、`wire.ts` がログイン名ごとにトースト「{ログイン名} をメンバーに追加しました」を出す | 既存の `Hedgehug-Restored` と同じ形(`server.go`)。ログイン名は英数字・ハイフン・アンダースコアなのでエスケープは要らない |
 | G1-9 | `SyncTargets.List` は、remote が SSH の形(`git@github.com:owner/name(.git)`)なら `https://github.com/owner/name.git` に直して返す。ミラーも同じ。HTTPS の形はそのまま返す | トラック C `:5286`。07 は SSH 鍵を使わない。通信はトークンの HTTPS |
 | G1-10 | `gitstore.Replicator.Sync` の通信(受け取りと送り)を Store のロックの外で行う。手順は Task 5。同じ Store の `Sync`・`SyncSave` は、Replicator の中の Store ごとの mutex で 1 つずつにする(通信どうしは重ねない)。判定(`finish` の `judge`)と結果の数え方は、ロックの中で、送った先端(閲覧のみなら受け取った先端)を基準にする(いまの先端ではない)。`SyncSave`(移動の送り届け)は今のまま、通信のあいだもロックを持つ | トラック C `:5285`。通信は 1 回最大 60 秒・3 回まで。そのあいだ画面の保存が待たされる。オブジェクトは中身で決まる名前なので、受け取りと送りはロックなしで足してよい。送ったあとにできた保存は次の同期で送る。判定は作業ツリーを読むので、保存の途中を読まないようロックの中で行い、送っていない自分の保存を判定済みにしないよう送った先端までにする。`SyncSave` は送れなかったら保存を捨てる(先端を戻す)ので、そのあいだに別の保存が入ってはいけない。`refs/hedgehug/remote/…` は受け取りが書き換えるので、通信どうしは重ねない |
-| G1-11 | `Auto` は Store ごとに最後に試みた時刻をメモリに持ち、`due` には state.db の記録とメモリの新しい方を渡す | トラック C `:5289`。記録に失敗すると毎秒「時間が来た」と判定され続ける |
+| G1-11 | `Auto` は Store ごとに最後に試みた時刻をメモリに持ち、`due` には state.db の記録とメモリの新しい方を渡す。保存の時刻は、その新しい方の試みより後のものだけを書き込み後の契機として渡す(記録に失敗して保存の時刻が消えずに残っても、毎秒同期しない) | トラック C `:5289`。記録に失敗すると毎秒「時間が来た」と判定され続ける |
 | G1-12 | オフラインの知らせが期限で消えたタブは「期限切れのオフライン」として覚え、そのタブから `online: true` が来たらオンライン復帰の契機にする。画面は `online: true` の知らせの送信に失敗したら、次の `check` で送り直す(成功するまで)。見えないタブのタイマーの間引きは、今の形で足りる(待つ条件は見えているタブだけが送り、オフラインの期限は 2 分)ので変えない | C2 画面 `:2863`・トラック C `:5290` |
 | G1-13 | 設定のタブは G1 では増やさない(「一般」「アカウントとメンバー」のまま)。サイドバーの歯車と、パレットの「設定を開く」と、`/settings`(タブなし)の開く先を「一般」に変える。パレットの設定の群には「設定: 一般」を足さない | 分け方の G-3。トラック C `:2065`・C5d-1。C5d-2 が「アカウントとメンバー」にしていた理由(一般が空)はなくなる。パレットの設定の群(02 `:634`)に「一般」はない |
 | G1-14 | サイドバーのワークスペースの開閉は、画面の状態(state.db の `screen_states`)の画面 `sidebar` に `{"collapsed": [ワークスペースの内部 ID…]}` で残す | track-a2 `:65`。保存形式 `:286` は画面の状態を state.db に置く。01 `:73` の「折りたたみ」 |
 | G1-15 | ログイン名の確定: 前後の空白を取り除いてから比べる。同じなら何もしない(Enter のあとのフォーカスの外れで 2 回確定しても 2 回目は何もしない。確定の処理中は次の確定を受けない)。大文字と小文字だけが違うときは確認を出さずに保存する | 08 `:19`。「あなた」はメンバーと大文字と小文字を区別せずに照合する(01 `:87`)ので変わらない。アカウントの編集の確認(`account.EditLines`)も同じく出さない |
-| G1-16 | 確認ダイアログの対象は、アカウントが「なし」の Store(非表示・閲覧のみを含む)。旧ログイン名はいまのマシンのログイン名。旧ログイン名が空なら確認を出さない(言える旧い名前がない)。ダイアログのタイトルは「ログイン名を変更」 | 08 `:21`。タイトルは仕様にないので、操作の名前にした(アカウントの確認と同じ作り) |
+| G1-16 | 確認ダイアログの対象は、「あなた」がマシンのログイン名になる Store(非表示・閲覧のみを含む): アカウントが「なし」か、割り当てたアカウントが登録にない(G1-5 の Identity と同じ判定)。旧ログイン名はいまのマシンのログイン名。旧ログイン名が空なら確認を出さない(言える旧い名前がない)。ダイアログのタイトルは「ログイン名を変更」 | 08 `:21`。タイトルは仕様にないので、操作の名前にした(アカウントの確認と同じ作り) |
 | G1-17 | ログイン名を変えたら、「あなた」が変わった Store ごとに `port.Event{Kind: EventStore, Store: id}` を出す(画面はマイタスクや「あなた」の印を読み直す)。同期のタイミングを変えたら `EventSync` を出す | 06「画面への反映」。ほかのタブにも反映する |
 | G1-18 | 同期のタイミングの値が選択肢にない(手で書き換えた)ときは、その項目を初期値として扱う(同期もそれで動き、画面もその値を出す) | 08 `:27-32` の選択肢だけを認める。画面に出す値と動く値を同じにする |
 | G1-19 | Store の色が空か 7 色にないとき、`StoreList` は「前の行がまだ使っていない最初の色、なければ teal」を返す | 08 `:73` の既定の決め方を読むときにも当てる(手で書き換えたときだけ起きる) |
@@ -94,7 +94,7 @@
     - `port.StoreList`: 開けた・非表示でない行を、config の並びで `port.StoreInfo{ID, Name, Color, ReadOnly}`(色は G1-19)
     - `port.SyncTargets`: 開けた行すべて(非表示・閲覧のみ・remote なしを含む)を `port.SyncTarget`(remote とミラーは G1-9 で直す)
     - `port.StoreGitHub`: `List`(開けた行すべて、`Remote` は remote があるか)、`Unassign`(その `account` の行を空にして書く)、`MachineLogin`(`login`)
-  - `func (f *File) StoreEntries() ([]StoreEntry, error)` — `type StoreEntry struct{ ID port.StoreID; Path string }`。wire が起動のときに開くために使う(`id` か `path` が空の行は返さない)
+  - `func (f *File) StoreEntries() ([]StoreEntry, error)` — `type StoreEntry struct{ ID port.StoreID; Path string }`。wire が起動のときに開くために使う(`id`・`path` が空の行も返す。判定は wire が行う。G1-2)
 
 - [ ] **Step 1: 失敗するテストを書く**(`stores_test.go`。config.yaml を一時フォルダに書いて読む)
   - `TestStoreListOrderAndHidden`: 3 行(2 行目 `hidden: true`)→ `List` は 1・3 行目だけ、config の並び
@@ -239,7 +239,7 @@
 **Interfaces:**
 - Produces:
   - `func account.LoginLines(from, to string, uses []StoreUse) []string` — いまの `identityLines` を出したもの(G1-15・G1-16)
-  - `type stores.Login struct{ GitHub port.StoreGitHub; Events port.Events }` と
+  - `type stores.Login struct{ GitHub port.StoreGitHub; Accounts port.Accounts; Events port.Events }` と
     - `Get(ctx) (string, error)`
     - `Preview(ctx, login string) ([]string, error)` — 確かめて、確認の本文の行(空なら確認なし)。使えなければ `refusal` の断り(文言は Global Constraints)
     - `Set(ctx, login string) error` — 前後の空白を除き、`Preview` と同じ検査で断る(画面を通らない呼び出しでも、使えない名前を保存しない。保存すると以後のすべての保存が `port.Operation` の検査で失敗する)。同じなら何もしない。保存したら G1-17 の出来事
