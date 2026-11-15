@@ -141,6 +141,49 @@ describe("createRenameProjectDialog", () => {
     expect(asked).toEqual(["", "新しい名前"]);
   });
 
+  it("ignores a second save while the first is waiting, so a refusal cannot reopen it", async () => {
+    let release: (m: string | null) => void = () => {};
+    let calls = 0;
+    const d = createRenameProjectDialog({
+      rename: (_p, _t) => {
+        calls += 1;
+        // 1 回目は返事を止める。2 回目(あれば)は、同じ値は送り済みとして null で終わる。
+        if (calls > 1) return Promise.resolve(null);
+        return new Promise<string | null>((r) => {
+          release = r;
+        });
+      },
+    });
+    d.open(p);
+    const first = d.save("x");
+    await d.save("x");
+    expect(calls).toBe(1);
+    expect(get(d.state)).not.toBeNull();
+    release("断られました");
+    await first;
+    expect(get(d.state)).toEqual({ project: p, error: "断られました" });
+  });
+
+  it("does not change the state with a reply that arrives after close or reopen", async () => {
+    const pending: ((m: string | null) => void)[] = [];
+    const d = createRenameProjectDialog({
+      rename: () => new Promise<string | null>((r) => pending.push(r)),
+    });
+    d.open(p);
+    const closed = d.save("a");
+    d.close();
+    pending[0]?.("断られました");
+    await closed;
+    expect(get(d.state)).toBeNull();
+
+    d.open(p);
+    const reopened = d.save("b");
+    d.open(p);
+    pending[1]?.("断られました");
+    await reopened;
+    expect(get(d.state)).toEqual({ project: p, error: null });
+  });
+
   it("close closes", () => {
     const d = createRenameProjectDialog({ rename: async () => "x" });
     d.open(p);

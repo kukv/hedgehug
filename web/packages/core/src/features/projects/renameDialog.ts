@@ -27,6 +27,9 @@ export function createRenameProjectDialog(deps: RenameProjectDialogDeps): Rename
   // 開く・閉じるの世代。保存の返事を待つあいだに閉じた・開き直したときは、その返事で状態を変えない。
   let seq = 0;
   let current: Project | null = null;
+  // 保存の返事を待っている世代。そのあいだの save は何もしない(2 回目の Enter が、同じ値を「送り済み」と見て先に閉じ、
+  // 1 回目が断られたときに閉じたダイアログが開き直るのを防ぐ)。
+  let saving = -1;
   return {
     state: readonly(state),
     open(project) {
@@ -36,9 +39,15 @@ export function createRenameProjectDialog(deps: RenameProjectDialogDeps): Rename
     },
     async save(title) {
       const project = current;
-      if (!project) return;
+      if (!project || saving === seq) return;
       const mine = seq;
-      const message = await deps.rename(project, title);
+      saving = mine;
+      let message: string | null;
+      try {
+        message = await deps.rename(project, title);
+      } finally {
+        if (saving === mine) saving = -1;
+      }
       if (mine !== seq) return;
       state.set(message === null ? null : { project, error: message });
     },

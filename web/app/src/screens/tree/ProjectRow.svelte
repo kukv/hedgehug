@@ -64,11 +64,11 @@
     <span class="twisty-space"></span>
   {/if}
   <i
-    class="store-dot"
+    class="sdot"
+    style:background="var(--t-{store.color}-fg)"
     role="img"
     aria-label={store.name}
     title={store.name}
-    style="--c: var(--t-{store.color}-fg)"
   ></i>
   <KindIcon kind="Project" />
   <a class="row-title" {href} onclick={onopen} onauxclick={onopen}>{project.title}</a>
@@ -113,11 +113,10 @@
   .twisty.open {
     transform: rotate(90deg);
   }
-  .store-dot {
+  .sdot {
     width: 8px;
     height: 8px;
     border-radius: 50%;
-    background: var(--c);
     flex: none;
   }
   .row-title {
