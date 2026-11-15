@@ -225,6 +225,7 @@ describe("createSearch layout (E3a-2・9・10・22)", () => {
     const want = { query: "kind:bug", layout: "table", table, tree: { collapsed: ["s/1"] } };
     expect(get(t.s.state)).toMatchObject(want);
     expect(written(t)).toEqual(want);
+    expect(t.sp.put).toHaveBeenCalledTimes(1);
   });
 
   it("showTable while open is reading switches to table after the read", async () => {
@@ -256,8 +257,19 @@ describe("createSearch layout (E3a-2・9・10・22)", () => {
     const want = { query: "kind:bug", layout: "table", table, tree: { collapsed: ["s/1"] } };
     expect(get(t.s.state)).toMatchObject(want);
     expect(written(t)).toEqual(want);
+    expect(t.sp.put).toHaveBeenCalledTimes(1);
     expect(t.search).toHaveBeenCalledTimes(1);
     expect(t.search).toHaveBeenCalledWith("kind:bug", { sort: table.sort, group: "kind" });
+  });
+
+  it("prepareQuery then cancelPrepare before open releases settled and keeps the query for the next open", async () => {
+    const t = setup(savedTree("a", { columns: ["id", "title"], group: "none", sort: null }));
+    t.s.prepareQuery("kind:bug");
+    t.s.cancelPrepare();
+    await t.s.settled();
+    expect(t.sp.put).not.toHaveBeenCalled();
+    await t.s.open();
+    expect(written(t)).toMatchObject({ query: "kind:bug", layout: "table" });
   });
 
   it("prepareQuery while open is reading replaces the query after the read", async () => {
@@ -268,6 +280,7 @@ describe("createSearch layout (E3a-2・9・10・22)", () => {
     await opening;
     const want = { query: "kind:bug", layout: "table", table, tree: { collapsed: ["s/1"] } };
     expect(written(t)).toEqual(want);
+    expect(t.sp.put).toHaveBeenCalledTimes(1);
     expect(t.search).toHaveBeenCalledTimes(1);
     expect(t.search).toHaveBeenCalledWith("kind:bug", noTable);
     await t.s.settled();
