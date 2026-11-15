@@ -29,12 +29,21 @@ func TestCommitsDoesNotHoldLock(t *testing.T) {
 	m := localMachine(t)
 	rename(t, m, "一つ目")
 	wrote := make(chan error, 1)
+	var pending bool
+	// 終わらなかったときも、Write の goroutine を待ってからテストを終える。
+	t.Cleanup(func() {
+		if pending {
+			<-wrote
+		}
+	})
 	m.stores.duringCommits = func() {
+		pending = true
 		go func() {
 			wrote <- m.stores.Write(t.Context(), m.id, port.Operation{Actor: change.User("taro"), Summary: "辿っている間の保存"}, set("title", "一つ目", "二つ目"))
 		}()
 		select {
 		case err := <-wrote:
+			pending = false
 			if err != nil {
 				t.Errorf("Write during Commits: %v", err)
 			}

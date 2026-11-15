@@ -26,7 +26,9 @@ func shas(cs []port.Commit) []string {
 
 func history(t *testing.T, r *testRepo, from plumbing.Hash, seen map[plumbing.Hash]port.Commit) []port.Commit {
 	t.Helper()
-	got, err := History(r.repo, from, seen)
+	recall := func(h plumbing.Hash) (port.Commit, bool) { c, ok := seen[h]; return c, ok }
+	remember := func(h plumbing.Hash, c port.Commit) { seen[h] = c }
+	got, err := History(r.repo, from, recall, remember)
 	if err != nil {
 		t.Fatal(err)
 	}

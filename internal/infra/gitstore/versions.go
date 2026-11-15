@@ -47,17 +47,18 @@ func (s *Stores) Commits(_ context.Context, id port.StoreID) ([]port.Commit, err
 	if s.duringCommits != nil {
 		s.duringCommits()
 	}
-	s.mu.Lock()
-	seen := maps.Clone(s.commits)
-	s.mu.Unlock()
-	out, err := saves.History(repo, head, seen)
-	if err != nil {
-		return nil, err
+	recall := func(h plumbing.Hash) (port.Commit, bool) {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		c, ok := s.commits[h]
+		return c, ok
 	}
-	s.mu.Lock()
-	maps.Copy(s.commits, seen)
-	s.mu.Unlock()
-	return out, nil
+	remember := func(h plumbing.Hash, c port.Commit) {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		s.commits[h] = c
+	}
+	return saves.History(repo, head, recall, remember)
 }
 
 // openHead は、Store のロックを取って先端を読み、すぐに手放す。途中で止まった保存が残っていれば、先に戻す。

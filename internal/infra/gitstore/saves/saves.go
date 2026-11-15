@@ -161,24 +161,15 @@ func parentDepth(nodes map[plumbing.Hash]node, depth map[plumbing.Hash]int, h pl
 
 // entities は、保存 c が、最初の親から変えたエンティティごとの、足した行と説明。Ref の順。
 func entities(c *object.Commit) ([]port.EntityRows, error) {
-	tree, err := c.Tree()
+	tree, changes, err := diffOf(c)
 	if err != nil {
 		return nil, err
 	}
-	var parent *object.Tree
-	if c.NumParents() > 0 {
-		p, err := c.Parent(0)
-		if err != nil {
-			return nil, err
-		}
-		if parent, err = p.Tree(); err != nil {
-			return nil, err
-		}
-	}
-	changes, err := object.DiffTree(parent, tree)
-	if err != nil {
-		return nil, err
-	}
+	return entitiesOf(tree, changes)
+}
+
+// entitiesOf は、c の木 tree と、最初の親との差分 changes から、エンティティごとの足した行と説明を作る。
+func entitiesOf(tree *object.Tree, changes object.Changes) ([]port.EntityRows, error) {
 	byRef := map[change.Ref]*port.EntityRows{}
 	for _, ch := range changes {
 		if err := addChange(byRef, tree, ch); err != nil {
