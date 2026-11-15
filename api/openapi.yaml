@@ -3285,6 +3285,9 @@ components:
         updated:
           description: 更新の時刻(RFC 3339)
           type: string
+        values:
+          $ref: "#/components/schemas/SearchValues"
+          description: セルの編集に要る、内部 ID のままの値
         workspaceId:
           type: string
       required:
@@ -3318,6 +3321,7 @@ components:
         - unused
         - removed
         - custom
+        - values
       type: object
     SearchSort:
       additionalProperties: false
@@ -3342,6 +3346,43 @@ components:
       required:
         - name
         - category
+      type: object
+    SearchValues:
+      additionalProperties: false
+      properties:
+        choices:
+          additionalProperties:
+            items:
+              type: string
+            nullable: true
+            type: array
+          description: 選択式の追加プロパティの値(プロパティの内部 ID → 値の内部 ID)
+          type: object
+        fields:
+          additionalProperties: {}
+          description: 追加プロパティの値(プロパティの内部 ID → 値)。型は設定で読む
+          type: object
+        priority:
+          description: 優先度の内部 ID。空は値なし
+          type: string
+        release:
+          description: リリースの内部 ID。空は「なし」
+          type: string
+        sprint:
+          description: スプリントの内部 ID。空はバックログ
+          type: string
+        systems:
+          description: 関連システムの内部 ID
+          items:
+            type: string
+          type: array
+      required:
+        - priority
+        - systems
+        - choices
+        - fields
+        - sprint
+        - release
       type: object
     SetAutomationRuleEnabled:
       additionalProperties: false

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { cellView } from "./cells";
-import type { SearchColumn, SearchRow } from "./types";
+import { emptyValues, type SearchColumn, type SearchRow } from "./types";
 
 const now = new Date(2026, 10, 15, 12, 0, 0);
 
@@ -36,6 +36,7 @@ function row(over: Partial<SearchRow> = {}): SearchRow {
     unused: [],
     removed: [],
     custom: {},
+    values: emptyValues,
     ...over,
   };
 }

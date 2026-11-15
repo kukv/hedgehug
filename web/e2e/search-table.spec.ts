@@ -92,7 +92,7 @@ test("groups by the group setting, or by group: when the setting is none", async
   await expect(page.getByText("2 件", { exact: true })).toBeVisible();
 });
 
-test("leaves the systems cell empty, and shows — for a property the kind does not use", async ({
+test("shows なし in the systems cell, and shows — for a property the kind does not use", async ({
   page,
 }, info) => {
   const { mark, workspaceId } = await seed(page, info);
@@ -114,7 +114,7 @@ test("leaves the systems cell empty, and shows — for a property the kind does 
   const priority = names.findIndex((n) => n.trim() === "優先度");
   const epic = rowOf(page, `${mark} A`);
   const story = rowOf(page, `${mark} B`);
-  await expect(epic.getByRole("cell").nth(systems)).toHaveText("");
+  await expect(epic.getByRole("cell").nth(systems)).toHaveText("なし");
   await expect(epic.getByRole("cell").nth(priority)).toHaveText("—");
   await expect(story.getByRole("cell").nth(priority)).not.toHaveText("—");
 });

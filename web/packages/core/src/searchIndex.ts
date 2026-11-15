@@ -10,6 +10,7 @@ export {
   filterCandidates,
 } from "./features/search/candidates";
 export { type CaretTerm, caretTerm } from "./features/search/caret";
+export { type CellEditor, cellEditor, groupKeys, rowValues } from "./features/search/cellEdit";
 export { type CellView, cellView, updatedHint } from "./features/search/cells";
 export { type ChangeAllDeps, createChangeAll } from "./features/search/changeAll";
 export { searchHelp } from "./features/search/help";
@@ -59,6 +60,12 @@ export {
   tableRequest,
   toggleColumn,
 } from "./features/search/table";
+export {
+  type CellEdit,
+  createTableCells,
+  type TableCells,
+  type TableCellsDeps,
+} from "./features/search/tableCells";
 export type {
   SearchAssignee,
   SearchColumn,

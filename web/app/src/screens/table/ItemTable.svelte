@@ -1,10 +1,12 @@
 <script lang="ts">
   import {
+    groupKeys,
     isSelected,
     type RowSelection,
     type SearchColumn,
     type SearchGroup,
     type SearchRow,
+    type TableCells,
     type TableSettings,
   } from "@hedgehug/core";
   import { today } from "../../clock";
@@ -23,9 +25,14 @@
     // selection は行のチェックと「すべて選択」(E2a-16)、onmenu は行末の「⋯」(E2a-17)。
     selection: RowSelection;
     onmenu: (row: SearchRow, rect: DOMRect) => void;
+    // cells はセルの編集の選択肢の元と保存、reload は保存のあとの読み直し(E2b)。
+    cells: TableCells;
+    reload: () => Promise<void>;
   }
 
-  let { rows, columns, groups, sort, onsort, selection, onmenu }: Props = $props();
+  let { rows, columns, groups, sort, onsort, selection, onmenu, cells, reload }: Props = $props();
+  // グループは見出しの文字で見分ける(同じ見出しは何回目かを付ける)。行はグループの中でアイテムで見分ける。
+  const keys = $derived(groupKeys(groups));
   const picked = $derived(selection.rows);
   // 終了日の「期限切れ」「今日」と相対時間は、結果が届いたときと日付が替わったときの時刻で決める(読み直した行の
   // 「N 分前」がずれない。E4a-16)。
@@ -33,6 +40,12 @@
     void rows;
     void $today;
     return new Date();
+  });
+  // 選択肢の元は、出している行のワークスペースの分を読む(行が変わるたびに、まだ読んでいない分を読み始める)。
+  $effect(() => {
+    const loading = rows;
+    cells.load(loading);
+    return () => cells.unload(loading);
   });
 </script>
 
@@ -49,14 +62,16 @@
         on,
       )}
     onmenu={(rect) => onmenu(row, rect)}
+    {cells}
+    {reload}
   />
 {/snippet}
 
 <table class="table">
   <TableHead {rows} {selection} {columns} {sort} {onsort} />
   {#if groups.length > 0}
-    <!-- 同じアイテムが複数のグループに出るので、グループの位置と行の位置で見分ける -->
-    {#each groups as group, g (g)}
+    <!-- 同じアイテムが複数のグループに出るので、グループと Store とアイテムの内部 ID で見分ける -->
+    {#each groups as group, g (keys[g])}
       <tbody>
         <tr class="group">
           <!-- 先頭のチェックと末尾の「⋯」の列も含める -->
@@ -65,7 +80,7 @@
             <span class="count">{group.rows.length}</span>
           </th>
         </tr>
-        {#each group.rows as index (`${g}/${index}`)}
+        {#each group.rows as index (`${keys[g]}/${rows[index]?.storeId}/${rows[index]?.itemId}`)}
           {@const row = rows[index]}
           {#if row}
             {@render line(row)}

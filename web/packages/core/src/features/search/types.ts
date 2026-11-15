@@ -21,6 +21,26 @@ export interface SearchDeleted {
   daysLeft: number;
 }
 
+// SearchValues は、セルの編集に要る、内部 ID のままの値(表示の名前でなく)。
+export interface SearchValues {
+  priority: string;
+  systems: string[];
+  choices: Record<string, string[]>;
+  fields: Record<string, string | number | boolean | null>;
+  sprint: string;
+  release: string;
+}
+
+// emptyValues は、テストの材料と画面の初めの値に使う、何も入っていない値。
+export const emptyValues: SearchValues = {
+  priority: "",
+  systems: [],
+  choices: {},
+  fields: {},
+  sprint: "",
+  release: "",
+};
+
 export interface SearchRow {
   storeId: string;
   storeName: string;
@@ -61,6 +81,7 @@ export interface SearchRow {
   removed: string[];
   // custom は追加プロパティの列の鍵 → 値。type は行のワークスペースでのプロパティの型。
   custom: Record<string, { text: string; type: string }>;
+  values: SearchValues;
 }
 
 // SearchColumn は、テーブルの列。type は追加プロパティの列だけが持つ(固定の列は空)。

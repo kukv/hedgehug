@@ -14,6 +14,7 @@
   import { Button, SelectionBar } from "@hedgehug/ui";
   import type { Snippet } from "svelte";
   import { openRowMenu, searchSelection } from "../../search";
+  import { searchCells } from "../../tableCells";
   import { itemDialog } from "../../wire";
   import { bulkChange, bulkDelete } from "../../wireActions";
   import ItemTable from "../table/ItemTable.svelte";
@@ -107,6 +108,8 @@
         onsort={(key) => search.setTable(nextSort($view.table, key))}
         selection={searchSelection}
         onmenu={(row, rect) => void openRowMenu(row, rect)}
+        cells={searchCells}
+        reload={() => search.reload()}
       />
     {/if}
   </div>

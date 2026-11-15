@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { setToken } from "./fetcher";
-import { createScreenStatesPort, createSearchPort } from "./search";
+import { createScreenStatesPort, createSearchPort, rowOf, type SearchRowDto } from "./search";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -50,7 +50,32 @@ const row = {
   unused: null,
   removed: null,
   custom: {},
+  values: { priority: "", systems: [], choices: {}, fields: {}, sprint: "", release: "" },
 };
+
+describe("rowOf", () => {
+  it("copies values and fills nulls", () => {
+    const x = {
+      ...row,
+      values: {
+        priority: "P",
+        systems: null,
+        choices: null,
+        fields: null,
+        sprint: "S",
+        release: "",
+      },
+    } as unknown as SearchRowDto;
+    expect(rowOf(x).values).toEqual({
+      priority: "P",
+      systems: [],
+      choices: {},
+      fields: {},
+      sprint: "S",
+      release: "",
+    });
+  });
+});
 
 describe("createSearchPort", () => {
   it("posts the query and maps the rows", async () => {

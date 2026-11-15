@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { searchHelp } from "./help";
-import type { SearchRow } from "./types";
+import { emptyValues, type SearchRow } from "./types";
 import { assigneeText, deletedNote, emptyText, readOnlyBands, treeEmptyText } from "./view";
 
 function row(storeName: string, readOnly: boolean): SearchRow {
@@ -35,6 +35,7 @@ function row(storeName: string, readOnly: boolean): SearchRow {
     unused: [],
     removed: [],
     custom: {},
+    values: emptyValues,
   };
 }
 

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { item } from "./fixtures.test-util";
 import {
   deletedValue,
+  propertyRow,
   propertyRows,
   statusOptions,
   // biome-ignore lint/suspicious/noShadowRestrictedNames: 仕様の名前(アイテムの値を読む)
@@ -175,5 +176,14 @@ describe("properties", () => {
       text: deletedValue,
       deleted: true,
     });
+  });
+});
+
+describe("propertyRow", () => {
+  it("propertyRow matches propertyRows for one property", () => {
+    const rows = propertyRows(settings, "Task", (p) => valueOf(task, p), people);
+    for (const r of rows) {
+      expect(propertyRow(settings, r.property, valueOf(task, r.property), people)).toEqual(r);
+    }
   });
 });
