@@ -38,3 +38,22 @@ test("the arrow hides and shows the projects of a workspace", async ({ page }, i
   await twisty.click();
   await expect(e2e.getByRole("link", { name: "ログイン" })).toBeVisible();
 });
+
+test("a closed workspace stays closed after a reload", async ({ page }, info) => {
+  await page.goto(tokenUrl());
+  const side = await sidebar(page, info);
+  const e2e = side.getByRole("region", { name: "e2e" });
+  const twisty = e2e
+    .locator(".ws-row")
+    .filter({ has: page.getByRole("link", { name: "Web", exact: true }) })
+    .getByRole("button", { name: "開閉" });
+  await twisty.click();
+  await expect(e2e.getByRole("link", { name: "ログイン" })).toBeHidden();
+  await page.reload();
+  await sidebar(page, info);
+  await expect(e2e.getByRole("link", { name: "Web", exact: true })).toBeVisible();
+  await expect(e2e.getByRole("link", { name: "ログイン" })).toBeHidden();
+  // 同じサーバーを使う後のテストのために、開き直す。
+  await twisty.click();
+  await expect(e2e.getByRole("link", { name: "ログイン" })).toBeVisible();
+});

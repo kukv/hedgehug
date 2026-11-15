@@ -1,10 +1,16 @@
 <script lang="ts">
-  import { type Resolved, type Route, type StoreNode, syncAllHint, syncCard } from "@hedgehug/core";
+  import {
+    createCollapsed,
+    type Resolved,
+    type Route,
+    type StoreNode,
+    syncAllHint,
+    syncCard,
+  } from "@hedgehug/core";
   import { Brand, Button, SyncCard } from "@hedgehug/ui";
-  import { SvelteSet } from "svelte/reactivity";
   import { inbox } from "../inbox";
   import type { Links } from "../links";
-  import { openSearchTable } from "../search";
+  import { openSearchTable, screenStates } from "../search";
   import { isMac } from "../tab";
   import { itemDialog, sync, syncNow } from "../wire";
   import SidebarStore from "./SidebarStore.svelte";
@@ -28,11 +34,19 @@
   const searchRoute: Route = { name: "search" };
   const unread = inbox.unread;
 
-  // 開閉は、このタブのあいだだけ覚える。
-  const collapsed = new SvelteSet<string>();
+  // 開閉は画面の状態に残す(G1-14)。has は version を読むので、切り替えと読み込みの完了で描き直される。
+  const saved = createCollapsed(screenStates);
+  let version = $state(0);
+  const collapsed = {
+    has: (id: string) => {
+      void version;
+      return saved.has(id);
+    },
+  };
+  void saved.ready.then(() => version++);
   function toggle(id: string) {
-    if (collapsed.has(id)) collapsed.delete(id);
-    else collapsed.add(id);
+    saved.toggle(id);
+    version++;
   }
 </script>
 

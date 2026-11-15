@@ -108,6 +108,7 @@ export {
 } from "./features/router/route";
 export { createScreen, type Screen } from "./features/screen/screen";
 export { focusesFilter } from "./features/search/focusKey";
+export { type Collapsed, createCollapsed } from "./features/shell/collapsed";
 export { createShell, type Shell } from "./features/shell/shell";
 export {
   clockWarning,
