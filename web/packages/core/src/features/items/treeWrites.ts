@@ -54,11 +54,14 @@ export interface TreeWrites {
 export function createTreeWrites(deps: TreeWritesDeps): TreeWrites {
   const queue = createKeyQueue();
 
-  // writableRow は、書ける画面(閲覧のみでない)と、そこにある行 id を返す。
-  function writableRow(id: string) {
+  // writableRow は、書ける画面(閲覧のみでない)と、そこにある行 id を返す。storeId を渡したら、その Store の画面のときだけ
+  // (検索のツリーでは Store をまたいで同じ内部 ID が並ぶ。積んだときの Store と違う画面では、待っている分を実行しない)。
+  // null は、積んだときに画面がなかった印で、どの画面とも合わない。
+  function writableRow(id: string, storeId?: string | null) {
     const s = deps.screen();
     const row = s?.rows.find((r) => r.id === id);
-    return s && row && !s.readOnly ? { s, row } : null;
+    const same = storeId === undefined || s?.storeId === storeId;
+    return s && row && same && !s.readOnly ? { s, row } : null;
   }
 
   // failed は、候補を読めなかったとき、断られた(Refused)なら断りの文言を、すでに消えているなら読み直しを、
@@ -68,15 +71,15 @@ export function createTreeWrites(deps: TreeWritesDeps): TreeWrites {
     else deps.toasts.show(e instanceof Refused ? e.message : moveFailedMessage, { error: true });
   }
 
-  async function siblingStep(id: string, dir: Dir): Promise<boolean> {
-    const w = writableRow(id);
+  async function siblingStep(id: string, storeId: string | null, dir: Dir): Promise<boolean> {
+    const w = writableRow(id, storeId);
     if (!w || !(await deps.reorder(w.row, w.s.rows, dir))) return false;
     await deps.settled();
     return true;
   }
 
-  async function parentStep(id: string, dir: Dir): Promise<boolean> {
-    const w = writableRow(id);
+  async function parentStep(id: string, storeId: string | null, dir: Dir): Promise<boolean> {
+    const w = writableRow(id, storeId);
     // プロジェクトの行のない画面(order なし。プロジェクトの画面)では、Epic の新しい親がないので何もしない(E3a-17)。
     if (!w || (w.row.kind === "Epic" && !w.s.order)) return false;
     let candidates: MoveCandidate[];
@@ -86,7 +89,7 @@ export function createTreeWrites(deps: TreeWritesDeps): TreeWrites {
       await failed(e);
       return false;
     }
-    const now = writableRow(id);
+    const now = writableRow(id, storeId);
     const target = now && reparentTarget(now.s.order ?? now.s.rows, id, dir, candidates);
     if (!now || !target) return false;
     // 新しい親が閉じていれば、移す前に開く(移した行が見えなくなって、フォーカスが次の行へ移るのを避ける)。
@@ -102,8 +105,15 @@ export function createTreeWrites(deps: TreeWritesDeps): TreeWrites {
       const status = w && doneToggleTarget(w.s.settings, w.row.status);
       if (w && status && status !== w.row.status) await deps.setStatus(w.row, status);
     },
-    moveSibling: (id, dir) => queue.push(() => siblingStep(id, dir)),
-    changeParent: (id, dir) => queue.push(() => parentStep(id, dir)),
+    // 積んだときの画面の Store を取っておく(実行の時点で別の Store の画面なら何もしない)。
+    moveSibling(id, dir) {
+      const storeId = deps.screen()?.storeId ?? null;
+      queue.push(() => siblingStep(id, storeId, dir));
+    },
+    changeParent(id, dir) {
+      const storeId = deps.screen()?.storeId ?? null;
+      queue.push(() => parentStep(id, storeId, dir));
+    },
     clear: () => queue.clear(),
   };
 }

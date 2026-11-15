@@ -263,6 +263,63 @@ describe("Alt+Shift+↑↓ (changeParent)", () => {
   });
 });
 
+// 検索のツリーでは、Store をまたいで同じ内部 ID のアイテムが並ぶ。積んだときの Store と違う画面では、待っている分を実行しない。
+describe("the store at the time of the key", () => {
+  // switching は、画面の Store を S1 から始め、over の書き込みの偽物が toS2 を呼ぶと S2(同じ ID の行)へ移す。
+  function switching(over: (toS2: () => void) => Partial<TreeWritesDeps>) {
+    let storeId = "S1";
+    return setup({
+      screen: () => ({ storeId, readOnly: false, settings, rows: [e1, ...kids, e6] }),
+      ...over(() => {
+        storeId = "S2";
+      }),
+    });
+  }
+
+  it("moveSibling does not run a waiting step on the same ID in another store", async () => {
+    const calls: string[] = [];
+    const { writes } = switching((toS2) => ({
+      reorder: async (it) => {
+        calls.push(it.id);
+        // 次のキーを積んだあとで、読み直した画面が別の Store になる。
+        await Promise.resolve();
+        toS2();
+        return true;
+      },
+    }));
+    writes.moveSibling(a.id, "down");
+    writes.moveSibling(a.id, "down");
+    await flush();
+    expect(calls).toEqual([a.id]);
+  });
+
+  it("changeParent does not run a waiting step, nor move after the screen changed store", async () => {
+    const moved: string[] = [];
+    const { writes, log } = switching((toS2) => ({
+      moveTo: async (it) => {
+        moved.push(it.id);
+        toS2();
+        return true;
+      },
+    }));
+    writes.changeParent(c.id, "down");
+    writes.changeParent(c.id, "down");
+    await flush();
+    expect(moved).toEqual([c.id]);
+    expect(log.filter((l) => l.startsWith("candidates"))).toEqual([`candidates ${c.id}`]);
+
+    const late = switching((toS2) => ({
+      moveCandidates: async () => {
+        toS2();
+        return [candidate(e6)];
+      },
+    }));
+    late.writes.changeParent(c.id, "down");
+    await flush();
+    expect(late.log).toEqual([]);
+  });
+});
+
 describe("Space (toggleDone)", () => {
   it("goes to the default done status, and back to the default todo status", async () => {
     const { writes, log } = setup();
