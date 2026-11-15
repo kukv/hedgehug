@@ -1,7 +1,6 @@
 package apptest_test
 
 import (
-	"context"
 	"errors"
 	"testing"
 	"time"
@@ -27,26 +26,11 @@ func TestFakeCommitLog(t *testing.T) {
 	})
 }
 
-// retentionStores は、内側の Write のあとで保持日数を変える(Write の中からは、偽物が同じロックを取るので変えられない)。
-type retentionStores struct {
-	port.Stores
-	base *apptest.Stores
-	days int
-}
-
-func (r retentionStores) Write(ctx context.Context, id port.StoreID, op port.Operation, fn func(tx port.Tx) error) error {
-	if err := r.Stores.Write(ctx, id, op, fn); err != nil {
-		return err
-	}
-	r.base.SetRetentionDays(id, r.days)
-	return nil
-}
-
 // 保持日数を変えた Write だけが StoreLog のコミットになり、前の Write で変えた分は関係のない保存に乗らない。
 func TestCommitLogStoreLog(t *testing.T) {
 	s, _ := newCommitLog()
 	clock := apptest.NewClock(time.Date(2026, 11, 15, 9, 0, 0, 0, time.UTC))
-	c := apptest.NewCommitLog(retentionStores{Stores: s, base: s, days: 7}, clock)
+	c := apptest.NewCommitLog(apptest.RetentionAfterWrite{Stores: s, Days: 7}, clock)
 	op := port.Operation{Actor: change.User("taro"), Summary: "メンバーを追加"}
 	join := func(tx port.Tx) error { return tx.WriteMembers().Append(member.Init(), member.Join("taro")) }
 	if err := c.Write(t.Context(), "S1", op, join); err != nil {

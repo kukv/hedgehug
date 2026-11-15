@@ -1,7 +1,6 @@
 package activity
 
 import (
-	"context"
 	"errors"
 	"slices"
 	"testing"
@@ -297,13 +296,49 @@ func TestRowsRepairWithoutOpRows(t *testing.T) {
 // 行のない、bot が作者のコミット(のせ直しの修復)は、実行者「同期」で、重なりの鍵は件名で決まる。
 func TestRowsBotWithoutRows(t *testing.T) {
 	f := newFixture(t)
-	c := port.Commit{SHA: "abcdef0123456789", Summary: "スプリント「Sprint 25」を計画中に戻す", Author: change.BotLogin, At: time.Now()}
+	c := port.Commit{SHA: "abcdef0123456789", Summary: "スプリント「Sprint 25」を計画中に戻す", Author: change.BotLogin, At: f.clock.Now()}
 	d := c
 	d.SHA = "0123456789abcdef"
 	a, b := f.rowsOf(t, c), f.rowsOf(t, d)
 	if len(a) != 1 || a[0].Actor != ActorSync || a[0].Who != "同期" || a[0].dedup == "" || a[0].dedup != b[0].dedup {
 		t.Errorf("rows = %+v, %+v", a, b)
 	}
+}
+
+func TestRowsGitHub(t *testing.T) {
+	f := newFixture(t)
+	f.write(t, change.Actor{Kind: change.ActorGitHub}, "HH-1 の org/web#1 の状態を Merged に変更", func(tx port.Tx) error {
+		return tx.WriteItems().Append(apptest.SampleEpic, change.NewSet("title", "認証", "二段階認証"))
+	})
+	rows := f.rows(t, "HH-1 の org/web#1 の状態を Merged に変更")
+	if len(rows) != 1 || rows[0].Actor != ActorGitHub || rows[0].Who != "GitHub" || rows[0].Avatar != "" || rows[0].dedup == "" {
+		t.Fatalf("rows = %+v", rows)
+	}
+	assertTarget(t, "Item", rows[0].Item, &Target{Display: "HH-1", Link: "current"})
+}
+
+// 実行者のない保存(保持日数を過ぎたものの完全な削除)は、名前を出さず、Store 全体の行になる。偽物は、行を足さない
+// Write の作者を bot にするので(C4d-5 で「同期」になる)、実行者 none の行を持つコミットを手で作る。
+func TestRowsNone(t *testing.T) {
+	f := newFixture(t)
+	if err := f.log.Write(t.Context(), s1, port.Operation{Actor: change.Actor{Kind: change.ActorNone}, Summary: "完全に削除"}, func(tx port.Tx) error {
+		return tx.WriteItems().Remove(apptest.SampleTask)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	f.stores.AddPurged(s1, port.Purged{Entity: "item", Target: apptest.SampleTask, Display: "HH-2"})
+	ref := change.Ref{Kind: change.KindItem, ID: apptest.SampleTask}
+	const op change.ID = "01ACTPURGEOP00000000000001"
+	c := port.Commit{
+		SHA: "fedcba9876543210", Summary: "保持日数を過ぎた削除済み 1 件を完全に削除", Op: op, Author: change.BotLogin, At: f.clock.Now(),
+		Changes: []port.EntityRows{{Ref: ref, Rows: []change.Record{{ID: "01ACTPURGEROW0000000000001", Op: op, By: change.BotLogin, Actor: change.Actor{Kind: change.ActorNone}, T: change.Delete, F: change.DeletedField}}}},
+		Removed: []change.Ref{ref},
+	}
+	rows := f.rowsOf(t, c)
+	if len(rows) != 1 || rows[0].Actor != ActorNone || rows[0].Who != "" || rows[0].Avatar != "" || !rows[0].Storewide || len(rows[0].Workspaces) != 0 || rows[0].dedup == "" {
+		t.Fatalf("rows = %+v", rows)
+	}
+	assertTarget(t, "Item", rows[0].Item, &Target{Display: "HH-2"})
 }
 
 func TestRowsMovedOut(t *testing.T) {
@@ -389,24 +424,9 @@ func TestRowsDeletedItem(t *testing.T) {
 	}
 }
 
-// retentionStores は、内側の Write のあとで保持日数を変える(Write の中からは、偽物が同じロックを取るので変えられない)。
-type retentionStores struct {
-	port.Stores
-	base *apptest.Stores
-	days int
-}
-
-func (r retentionStores) Write(ctx context.Context, id port.StoreID, op port.Operation, fn func(tx port.Tx) error) error {
-	if err := r.Stores.Write(ctx, id, op, fn); err != nil {
-		return err
-	}
-	r.base.SetRetentionDays(id, r.days)
-	return nil
-}
-
 func TestRowsRetention(t *testing.T) {
 	f := newFixture(t)
-	log := apptest.NewCommitLog(retentionStores{Stores: f.stores, base: f.stores, days: 7}, f.clock)
+	log := apptest.NewCommitLog(apptest.RetentionAfterWrite{Stores: f.stores, Days: 7}, f.clock)
 	op := port.Operation{Actor: change.User("taro"), Summary: "削除済みの保持日数を 7 日に変更"}
 	if err := log.Write(t.Context(), s1, op, func(port.Tx) error { return nil }); err != nil {
 		t.Fatal(err)

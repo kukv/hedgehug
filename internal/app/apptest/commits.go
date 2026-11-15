@@ -208,3 +208,18 @@ func (c *CommitLog) fill(commit *port.Commit, op port.Operation, added []change.
 		commit.At = c.Clock.Now()
 	}
 }
+
+// RetentionAfterWrite は、包んだ Stores の Write のあとで、保持日数を Days にする(テスト用)。偽物の Write の中からは、
+// 同じロックを取るので保持日数を変えられない。CommitLog で包むと、その Write が StoreLog のコミットになる。
+type RetentionAfterWrite struct {
+	*Stores
+	Days int
+}
+
+func (r RetentionAfterWrite) Write(ctx context.Context, id port.StoreID, op port.Operation, fn func(tx port.Tx) error) error {
+	if err := r.Stores.Write(ctx, id, op, fn); err != nil {
+		return err
+	}
+	r.SetRetentionDays(id, r.Days)
+	return nil
+}
