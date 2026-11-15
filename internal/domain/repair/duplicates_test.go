@@ -2,6 +2,7 @@ package repair_test
 
 import (
 	"encoding/json"
+	"slices"
 	"testing"
 	"time"
 
@@ -41,8 +42,9 @@ func TestNameRenames(t *testing.T) {
 	// 名前を決めた行の一方が自分の側 → 自分の側のものが直る。
 	assertRenames(t, repair.NameRenames(all, facts([]change.ID{"rb"}, []change.ID{"ra"}), false), map[string]string{"b": "開発 (2)"})
 	assertRenames(t, repair.NameRenames(all, facts([]change.ID{"ra"}, []change.ID{"rb"}), false), map[string]string{"a": "開発 (2)"})
-	// Facts が空 → at があとの方が直る。
-	assertRenames(t, repair.NameRenames(all, repair.Facts{}, false), map[string]string{"b": "開発 (2)"})
+	// Facts が空 → at があとの方が直る(内部 ID の順とは逆)。
+	later := []repair.Named{named("a", "開発", "ra", 1), named("b", "開発", "rb", 0)}
+	assertRenames(t, repair.NameRenames(later, repair.Facts{}, false), map[string]string{"a": "開発 (2)"})
 	// 重ならなければ空。
 	if got := repair.NameRenames([]repair.Named{named("a", "x", "ra", 0), named("b", "y", "rb", 1)}, repair.Facts{}, false); len(got) != 0 {
 		t.Fatalf("got %v", got)
@@ -55,6 +57,35 @@ func TestNameRenamesSkipTaken(t *testing.T) {
 
 	three := []repair.Named{named("a", "開発", "ra", 0), named("c", "開発", "rc", 2), named("b", "開発", "rb", 1)}
 	assertRenames(t, repair.NameRenames(three, repair.Facts{}, false), map[string]string{"b": "開発 (2)", "c": "開発 (3)"})
+}
+
+// at が同じとき、名前は行の ID で残す 1 件を決める(内部 ID の順とは逆にしてある)。
+func TestNameRenamesTieByRowID(t *testing.T) {
+	all := []repair.Named{named("a", "開発", "rb", 0), named("b", "開発", "ra", 0)}
+	assertRenames(t, repair.NameRenames(all, repair.Facts{}, false), map[string]string{"a": "開発 (2)"})
+}
+
+// 2 つの組と順序: 組は値の辞書順、組の中は内部 ID の順。先の組で選んだ新しい値が、あとの組の候補と重なれば次の番号にする。
+func TestRenamesOrderAndCollision(t *testing.T) {
+	all := []repair.Named{
+		named("d", "ABCDEFGHIB", "r4", 3), named("c", "ABCDEFGHIB", "r3", 2),
+		named("b", "ABCDEFGHIA", "r2", 1), named("a", "ABCDEFGHIA", "r1", 0),
+	}
+	got := repair.PrefixRenames(all, repair.Facts{})
+	want := []string{"b=ABCDEFGHI2", "d=ABCDEFGHI3"}
+	var have []string
+	for _, r := range got {
+		have = append(have, string(r.Ref.ID)+"="+r.To)
+	}
+	if !slices.Equal(have, want) {
+		t.Fatalf("renames = %v, want %v", have, want)
+	}
+
+	three := []repair.Named{named("a", "開発", "ra", 0), named("c", "開発", "rc", 2), named("b", "開発", "rb", 1)}
+	got = repair.NameRenames(three, repair.Facts{}, false)
+	if len(got) != 2 || got[0].Ref.ID != "b" || got[1].Ref.ID != "c" {
+		t.Fatalf("renames = %v, want b then c", got)
+	}
 }
 
 func TestNameRenamesFold(t *testing.T) {

@@ -4,9 +4,21 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"unicode"
 
 	"github.com/kukv/hedgehug/internal/domain/change"
 )
+
+// foldKey は、strings.EqualFold で等しい文字列に同じ値を返す。各文字を SimpleFold の輪の最小の文字にそろえる。
+func foldKey(s string) string {
+	return strings.Map(func(r rune) rune {
+		m := r
+		for c := unicode.SimpleFold(r); c != r; c = unicode.SimpleFold(c) {
+			m = min(m, c)
+		}
+		return m
+	}, s)
+}
 
 // prefixMax は、接頭辞の最大の長さ(workspace.ValidPrefix と同じ)。
 const prefixMax = 10
@@ -41,15 +53,15 @@ func NamingRow(log []change.Record, f string) (change.Record, bool) {
 }
 
 // keeper は、重なった g のうち、残す 1 件を返す(決定 C5c1-4、C3a-13)。row は、残す 1 件を決める行。
-// 自分の側(Facts.Side == 1)で足していない行のものの中で、行の at が最も古いもの(同じなら行の ID が小さいもの)。
+// 自分の側(Facts.Side == 1)で足していない行のものの中で、行の at が最も古いもの(同じなら tie の文字列が小さいもの)。
+// tie は、番号なら内部 ID(C3a-13)、名前なら名前を決めた行の ID(C5c1-4)。
 // どれも自分の側なら、g 全体で最も古いもの。g は空でないこと。
-func keeper[T any](g []T, row func(T) change.Record, f Facts) T {
+func keeper[T any](g []T, row func(T) change.Record, tie func(T) string, f Facts) T {
 	older := func(a, b T) int {
-		ra, rb := row(a), row(b)
-		if c := ra.At.Compare(rb.At); c != 0 {
+		if c := row(a).At.Compare(row(b).At); c != 0 {
 			return c
 		}
-		return strings.Compare(string(ra.ID), string(rb.ID))
+		return strings.Compare(tie(a), tie(b))
 	}
 	pool := slices.DeleteFunc(slices.Clone(g), func(n T) bool { return f.Side(row(n).ID) == 1 })
 	if len(pool) == 0 {
@@ -63,7 +75,7 @@ func keeper[T any](g []T, row func(T) change.Record, f Facts) T {
 func NameRenames(all []Named, f Facts, fold bool) []Rename {
 	same := func(v string) string { return v }
 	if fold {
-		same = strings.ToLower
+		same = foldKey
 	}
 	return renames(all, f, same, func(v string, n int) string { return v + " (" + strconv.Itoa(n) + ")" })
 }
@@ -101,7 +113,7 @@ func renames(all []Named, f Facts, same func(string) string, candidate func(v st
 	var out []Rename
 	for _, k := range keys {
 		g := groups[k]
-		keep := keeper(g, func(n Named) change.Record { return n.Naming }, f)
+		keep := keeper(g, func(n Named) change.Record { return n.Naming }, func(n Named) string { return string(n.Naming.ID) }, f)
 		rest := slices.DeleteFunc(slices.Clone(g), func(n Named) bool { return n.Ref == keep.Ref })
 		slices.SortFunc(rest, func(a, b Named) int { return strings.Compare(string(a.Ref.ID), string(b.Ref.ID)) })
 		for _, n := range rest {

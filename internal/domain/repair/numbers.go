@@ -48,7 +48,7 @@ func Renumbers(all []Numbered, f Facts, next int) []Renumber {
 
 // moved は、番号が重なった g のうち、振り直すものを、振り直す順で返す。
 func moved(g []Numbered, f Facts) []Numbered {
-	keep := keeper(g, func(n Numbered) change.Record { return n.Create }, f)
+	keep := keeper(g, func(n Numbered) change.Record { return n.Create }, func(n Numbered) string { return string(n.ID) }, f)
 	var out []Numbered
 	for _, n := range g {
 		if n.ID != keep.ID {
