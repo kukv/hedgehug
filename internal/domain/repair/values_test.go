@@ -202,6 +202,18 @@ func TestValueRestoresEmptyCategoryTieByID(t *testing.T) {
 	}
 }
 
+// 自分の側に削除がなければ、共通の祖先にある前からの削除(at があとでも)ではなく、remote の側の削除を取り消す。
+func TestValueRestoresEmptyCategoryTheirsBeforeOld(t *testing.T) {
+	log := put(valueLog(), "a1", day, "taro", status("s-done2", "Closed", workspace.CategoryDone)...)
+	log = put(log, "a2", day, "taro", change.NewSet("category_default/done", "s-done", "s-todo"))
+	log = put(log, "e2", day.Add(2*time.Hour), "jiro", change.NewDelete("statuses/s-done2"))
+	log = put(log, "t1", day.Add(time.Hour), "hanako", change.NewDelete("statuses/s-done"))
+	want := []repair.Overlap{{Op: "t1", F: "statuses/s-done"}}
+	if got := repair.ValueRestores(log, facts(nil, opRows(log, "t1"))); !reflect.DeepEqual(got, want) {
+		t.Fatalf("got %+v, want %+v", got, want)
+	}
+}
+
 func TestValueRestoresEachCategory(t *testing.T) {
 	log := put(valueLog(), "d1", day, "hanako", change.NewDelete("statuses/s-done"))
 	log = put(log, "d2", day, "jiro", change.NewSet("category_default/done", "s-done", "s-todo"))
