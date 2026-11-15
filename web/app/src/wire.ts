@@ -33,6 +33,7 @@ import {
   createWorkspaceMover,
   createWorkspaceSettings,
   get,
+  onDayChange,
   openMoved,
   readonly,
   routeOfProject,
@@ -41,6 +42,7 @@ import {
   type SyncEventKind,
   writable,
 } from "@hedgehug/core";
+import { syncNow, tickClock, today } from "./clock";
 import { drafts, leaveItem } from "./drafts";
 import { hereOf } from "./here";
 import { browserHistory } from "./history";
@@ -254,9 +256,9 @@ const signals = createTabSignals({
   now: () => Date.now(),
 });
 
-// syncNow は、相対時間と 24 時間の判定に使う時刻。30 秒ごとに進める(決定 S7)。
-const now = writable(new Date());
-export const syncNow = readonly(now);
+// syncNow は、相対時間と 24 時間の判定に使う時刻(実体は clock.ts)。
+export { syncNow };
+
 const onlineState = writable(isOnline());
 export const online = readonly(onlineState);
 
@@ -281,9 +283,11 @@ function startSync() {
   const recheck = () => {
     signals.check();
     reflection.wake();
+    tickClock();
   };
   setInterval(() => signals.check(), 1000);
-  setInterval(() => now.set(new Date()), 30_000);
+  // 日付が替わったら、日付で決まる結果(マイタスクほか)を読み直す(E4a-16)。
+  onDayChange(today, () => reflection.queue("store"));
   document.addEventListener("visibilitychange", recheck);
   document.addEventListener("focusout", () => setTimeout(recheck, 0));
   document.addEventListener("focusin", () => signals.check());

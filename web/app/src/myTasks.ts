@@ -2,7 +2,6 @@ import { createMyTasksPort } from "@hedgehug/api";
 import {
   createMyTaskBase,
   createMyTasks,
-  createToday,
   get,
   readonly,
   type SearchRow,
@@ -11,7 +10,7 @@ import {
 } from "@hedgehug/core";
 import { itemChanges, reloads } from "./reloads";
 import { reloadCandidates, screenStates } from "./search";
-import { screen, syncNow, workspacesPort } from "./wire";
+import { screen, workspacesPort } from "./wire";
 import { timer, toasts } from "./wireBase";
 
 // マイタスクの画面(04「マイタスク」、E4a)の組み立て。wire.ts が 300 行なので、ここで作る。
@@ -20,8 +19,6 @@ const port = createMyTasksPort();
 export const myTasks = createMyTasks({ port, screenStates, timer, toasts });
 // myTaskBase は、絞り込みなしのマイタスク(空の表示の見分けと、候補の範囲に使う)。
 export const myTaskBase = createMyTaskBase({ port });
-// myTaskToday は、まとめ方と期限の表示に使う今日。
-export const myTaskToday = createToday(syncNow);
 
 // 行のワークスペースの設定(ステータスのボタンに使う)。ワークスペースごとに 1 回だけ読み、失敗したら次に読み直す。
 // settings は読み込み(飛んでいるものも)、loaded は読めたもの。読み直すときは settings だけを捨て、読めるまでは前の設定で

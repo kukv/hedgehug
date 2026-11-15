@@ -1,6 +1,7 @@
 <script lang="ts">
   import { type Item, projectProgress, rowKey, type SearchTreeView } from "@hedgehug/core";
   import { StoreBadge } from "@hedgehug/ui";
+  import { today } from "../../clock";
   import { openProjectMenu } from "../../projectRows";
   import { addChild, addEpic, itemNodes, itemRoute, projectRoute } from "../../searchTree";
   import { detail, links } from "../../wire";
@@ -23,8 +24,7 @@
 
   let { view, collapsed, focusedId, dim, ontoggle, onstatus, onmenu }: Props = $props();
 
-  // 期限の判定に使う今日は、画面を出したときの日付(プロジェクトの画面のツリーと同じ)。
-  const today = new Date();
+  // 期限の判定に使う今日は、app の時計の日付(プロジェクトの画面のツリーと同じ)。
   const rectOf = (e: MouseEvent) => (e.currentTarget as HTMLElement).getBoundingClientRect();
 </script>
 
@@ -72,7 +72,7 @@
           settings={p.data.settings}
           members={p.data.members}
           items={p.data.items}
-          {today}
+          today={$today}
           {onstatus}
           onmenu={(e, it) => onmenu(rowKey(sec.store.id, it.id), rectOf(e))}
           rowKey={(it) => rowKey(sec.store.id, it.id)}

@@ -1,7 +1,8 @@
 <script lang="ts">
   import { dayOf, groupMyTasks, myTasksEmpty } from "@hedgehug/core";
   import { StoreBadge } from "@hedgehug/ui";
-  import { myTaskBase, myTasks, myTaskToday } from "../../myTasks";
+  import { today } from "../../clock";
+  import { myTaskBase, myTasks } from "../../myTasks";
   import { catalog } from "../../wire";
   import MyTaskRow from "./MyTaskRow.svelte";
 
@@ -10,7 +11,7 @@
   const view = myTasks.state;
   const base = myTaskBase.rows;
   const stores = catalog.stores;
-  const groups = $derived(groupMyTasks($view.rows, $view.groupBy, dayOf($myTaskToday), $stores));
+  const groups = $derived(groupMyTasks($view.rows, $view.groupBy, dayOf($today), $stores));
   const empty = $derived(
     $view.rows.length === 0 && $view.loaded && $base !== null ? myTasksEmpty($base.length) : null,
   );

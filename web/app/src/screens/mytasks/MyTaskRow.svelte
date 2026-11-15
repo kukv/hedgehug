@@ -7,13 +7,8 @@
     setRowStatus,
   } from "@hedgehug/core";
   import { KindIcon, type KindName, StatusDot } from "@hedgehug/ui";
-  import {
-    myTaskBase,
-    myTaskSettings,
-    myTaskSettingsLoaded,
-    myTasks,
-    myTaskToday,
-  } from "../../myTasks";
+  import { today } from "../../clock";
+  import { myTaskBase, myTaskSettings, myTaskSettingsLoaded, myTasks } from "../../myTasks";
   import { detail, itemsPort, links, toasts } from "../../wire";
   import StatusButton from "../item/StatusButton.svelte";
 
@@ -27,7 +22,7 @@
   let { row }: Props = $props();
 
   const category = $derived(row.status?.category as Category | undefined);
-  const due = $derived(dueLabel(row.end, category, $myTaskToday));
+  const due = $derived(dueLabel(row.end, category, $today));
   const route = $derived({ name: "item" as const, store: row.storeName, item: row.display });
   // 設定を読み終えるたびに引き直す(myTaskSettings 自体は描き直しを知らせない)。
   const settings = $derived.by(() => {

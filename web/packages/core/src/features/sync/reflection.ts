@@ -24,6 +24,8 @@ export interface Reflection {
   // wake は、見えるか・待つ条件が変わったかもしれないときに呼ぶ。見えていればつなぎ、見えていなければ
   // 切り(決定 S22)、溜めたものを確かめる。
   wake(): void;
+  // queue は、出来事と同じく kind を溜め、待つ条件になく見えているときに読み直す(日付が替わったとき。E4a-16)。
+  queue(kind: SyncEventKind): void;
 }
 
 const retryMs = 500;
@@ -127,5 +129,6 @@ export function createReflection(deps: ReflectionDeps): Reflection {
       else disconnect();
       void flush();
     },
+    queue: (kind) => add(kind),
   };
 }

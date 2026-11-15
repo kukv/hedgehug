@@ -139,6 +139,24 @@ describe("createReflection (06「画面への反映」)", () => {
     ]);
   });
 
+  it("queue waits while held (E4a-16)", async () => {
+    const t = setup();
+    t.hold(true);
+    t.r.queue("store");
+    await t.advance(1000);
+    expect(t.applied).toEqual([]);
+    t.hold(false);
+    await t.advance(500);
+    expect(t.applied).toEqual([["store"]]);
+  });
+
+  it("queue applies when free (E4a-16)", async () => {
+    const t = setup();
+    t.r.queue("store");
+    await t.advance(0);
+    expect(t.applied).toEqual([["store"]]);
+  });
+
   it("applies a github event", async () => {
     const t = setup();
     t.r.start();
