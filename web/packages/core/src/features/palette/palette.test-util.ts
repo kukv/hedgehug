@@ -10,6 +10,7 @@ import { item } from "../items/fixtures.test-util";
 import { settings } from "../items/settings.test-util";
 import type { Route } from "../router/route";
 import type { SearchResult } from "../search/types";
+import type { SavedView } from "../views/views";
 import { createPalette, type Palette } from "./palette";
 import { createPlanRequest } from "./planRequest";
 
@@ -77,6 +78,8 @@ export interface Opts {
   moved?: boolean;
   // search は、検索の解析の応答(「このクエリで」。省くとキーなし・エラーなしで 0 件)。
   search?: (query: string) => Promise<SearchResult>;
+  // views は、保存したビューの一覧(「ビュー」の群)。
+  views?: SavedView[];
 }
 
 export const noKey: SearchResult = {
@@ -207,6 +210,8 @@ export async function setup(o: Opts = {}) {
     },
     bulkChangeAll: async (...a) => rec("bulkChangeAll")(...a),
     showSearchTable: rec("showSearchTable"),
+    views: writable(o.views ?? []),
+    saveQueryAsView: async (...a) => rec("saveQueryAsView")(...a),
   });
   return { palette, calls, toasts, route, planRequest, catalog, timer, searched };
 }

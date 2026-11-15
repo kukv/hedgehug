@@ -273,6 +273,41 @@ func TestRestoredHeaderKeepsFlusher(t *testing.T) {
 	}
 }
 
+// headerCounter は、WriteHeader が下の ResponseWriter に何回届いたかを数える。
+type headerCounter struct {
+	*httptest.ResponseRecorder
+	calls int
+}
+
+func (c *headerCounter) WriteHeader(status int) {
+	c.calls++
+	c.ResponseRecorder.WriteHeader(status)
+}
+
+// huma は接続が切れたときに、書いたあとの応答へ 499 をもう一度書く。2 度目は下に渡さない。
+func TestRestoredHeaderDropsSecondFinalWriteHeader(t *testing.T) {
+	rec := &headerCounter{ResponseRecorder: httptest.NewRecorder()}
+	httpapi.RestoredHeader(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+		w.WriteHeader(499)
+	})).ServeHTTP(rec, httptest.NewRequestWithContext(t.Context(), http.MethodPut, "/", nil))
+	if rec.Code != http.StatusNoContent || rec.calls != 1 {
+		t.Errorf("status=%d calls=%d, want 204 and 1", rec.Code, rec.calls)
+	}
+}
+
+// 1xx は最終の応答ではないので、そのあとの最終の WriteHeader も下に届く。
+func TestRestoredHeaderForwardsInformational(t *testing.T) {
+	rec := &headerCounter{ResponseRecorder: httptest.NewRecorder()}
+	httpapi.RestoredHeader(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusEarlyHints)
+		w.WriteHeader(http.StatusOK)
+	})).ServeHTTP(rec, httptest.NewRequestWithContext(t.Context(), http.MethodPut, "/", nil))
+	if rec.calls != 2 {
+		t.Errorf("calls=%d, want 2", rec.calls)
+	}
+}
+
 // 本物の組み立て(httpapi.New)を通しても、出来事の読み続けは接続直後に終わらず、出来事を送れる。
 func TestEventsStreamThroughNew(t *testing.T) {
 	hub := events.NewHub()

@@ -13,6 +13,7 @@ import {
   menuAt,
   type PaletteItem,
   rowMenuContext,
+  type Search,
   type SearchRow,
   type SelectedItem,
   setRowStatus,
@@ -36,6 +37,18 @@ export const search = createSearch({
   toasts,
   selection: searchSelection,
 });
+
+// active は、Store が変わった知らせと selectedOne が使う、いま出している検索の流れ(初めは search)。
+let active: Search = search;
+
+// activate は、いま出している検索の流れを s に置き換え、前の流れに戻す関数を返す(保存したビューの画面が使う)。
+export function activate(s: Search): () => void {
+  const prev = active;
+  active = s;
+  return () => {
+    active = prev;
+  };
+}
 
 // openRowMenu は、テーブルの行末の「…」で、行のアイテムのメニュー(02)を開く(E2a-17)。rect は「…」の
 // getBoundingClientRect()。プロジェクトのアイテムを読めない・アイテムがないときは何もしない。
@@ -62,7 +75,7 @@ export function selectedOne(): SelectedItem | null {
     source: "table",
     setStatus: (statusId) =>
       setRowStatus(
-        { items: itemsPort, toasts, reload: () => search.reload() },
+        { items: itemsPort, toasts, reload: () => active.reload() },
         storeId,
         itemId,
         statusId,
@@ -73,12 +86,13 @@ export function selectedOne(): SelectedItem | null {
 // refreshCandidates は、開いている画面(検索・マイタスク)の候補の元を読み直す。画面を閉じると null。
 let refreshCandidates: (() => Promise<void>) | null = null;
 
-// Store が変わった知らせで、検索の画面を開いていれば、結果と候補の元を読み直す(E1-19)。ツリーのデータは、
-// 取っておいたものを捨ててから結果を読み直す(結果が変わるとツリーが読み直す。E3a-3)。
+// Store が変わった知らせで、検索の画面か保存したビューの画面(E3b-14)を開いていれば、結果と候補の元を読み直す(E1-19)。
+// ツリーのデータは、取っておいたものを捨ててから結果を読み直す(結果が変わるとツリーが読み直す。E3a-3)。
 reloads.add(async () => {
-  if (get(navigation.route).name !== "search") return;
+  const name = get(navigation.route).name;
+  if (name !== "search" && name !== "view") return;
   searchTreeData.reset();
-  await Promise.all([search.reload(), refreshCandidates?.()]);
+  await Promise.all([active.reload(), refreshCandidates?.()]);
 });
 
 // reloadCandidates は、開いている画面の絞り込み欄の候補の元を読み直す(マイタスクの画面の Store が変わった知らせ。myTasks.ts)。

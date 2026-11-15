@@ -11,6 +11,8 @@ const (
 	EventGitHub EventKind = "github"
 	// EventInbox は、受信箱の通知が増えたか、既読・結果が変わったこと(C4a-13)。Store が空なら、すべて既読。
 	EventInbox EventKind = "inbox"
+	// EventViews は、保存したビューが変わったこと(E3b-17)。Store は空。
+	EventViews EventKind = "views"
 )
 
 // Event は、画面に知らせる出来事。

@@ -10,6 +10,7 @@ import type { ValueOption } from "../items/properties";
 import { statusOptions } from "../items/properties";
 import { itemDisplayId, type Route } from "../router/route";
 import type { Timer } from "../toasts/toasts";
+import type { SavedView } from "../views/views";
 import {
   type ActionDeps,
   commandCandidates,
@@ -27,6 +28,7 @@ import {
 import { byName, matchItems, matchProjects, matchWorkspaces } from "./match";
 import { createQueryGroup } from "./queryGroup";
 import type { SelectedItem, Selection } from "./selection";
+import { viewCandidates } from "./views";
 
 // コマンドパレットの状態(02「コマンドパレット」、A5c-2・A5c-9・A5c-15・A5c-16)。
 
@@ -70,6 +72,9 @@ export interface PaletteDeps extends Omit<ActionDeps, "close"> {
   openSearch(query: string): Promise<boolean>;
   // bulkChangeAll は、「{N} 件をまとめて変更…」(E2a-19)。
   bulkChangeAll(query: string): Promise<void>;
+  // views は保存したビューの一覧(「ビュー」の群)。saveQueryAsView は「ビューとして保存…」(E3b-16)。
+  views: Readable<SavedView[]>;
+  saveQueryAsView(query: string): Promise<void>;
 }
 
 export function paletteFooter(mac: boolean): string {
@@ -113,6 +118,7 @@ export function createPalette(deps: PaletteDeps): Palette {
     timer: deps.timer,
     openSearch: deps.openSearch,
     bulkChangeAll: deps.bulkChangeAll,
+    saveAsView: deps.saveQueryAsView,
     close,
     changed: () => render(true),
   });
@@ -160,6 +166,7 @@ export function createPalette(deps: PaletteDeps): Palette {
         item: s.index ? itemCandidates(a, matchItems(s.index, stores, s.input, now)) : [],
         project: s.index ? projectCandidates(a, matchProjects(s.index, stores, s.input, now)) : [],
         workspace: workspaceCandidates(a, matchWorkspaces(stores, s.input)),
+        view: viewCandidates(a, get(deps.views), s.input),
       },
       s.input,
       head === undefined ? {} : { selected: head },

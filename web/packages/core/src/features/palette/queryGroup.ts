@@ -17,6 +17,8 @@ export interface QueryGroupDeps {
   openSearch(query: string): Promise<boolean>;
   // bulkChangeAll は、検索をテーブルで開き、すべての行を選んで、一括変更のダイアログを開く(E2a-19)。
   bulkChangeAll(query: string): Promise<void>;
+  // saveAsView は、検索をテーブルで開き、落ち着いてから「ビューとして保存」のダイアログを開く(E3b-16)。
+  saveAsView(query: string): Promise<void>;
   // close は、パレットを閉じる。changed は、応答が着いて群が変わったとき。
   close(): void;
   changed(): void;
@@ -90,6 +92,15 @@ export function createQueryGroup(deps: QueryGroupDeps): QueryGroup {
           run: async () => {
             deps.close();
             await deps.openSearch(query);
+          },
+        },
+        {
+          key: "query:saveView",
+          group: "query",
+          label: "ビューとして保存…",
+          run: async () => {
+            deps.close();
+            await deps.saveAsView(query);
           },
         },
         {

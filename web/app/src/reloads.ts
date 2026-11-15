@@ -1,4 +1,4 @@
-import type { Item } from "@hedgehug/core";
+import type { Item, SyncEventKind } from "@hedgehug/core";
 
 // 画面への反映(06「画面への反映」)で読み直す、wire.ts の外で作った状態。wire.ts が 300 行なので、
 // 読み直しの関数はここに登録し、wire.ts の reflect が呼ぶ。
@@ -15,3 +15,12 @@ export const inboxReloads = new Set<() => Promise<unknown>>();
 export const itemChanges = new Set<() => Promise<unknown>>();
 // syncReloads は、sync の知らせのときだけ読み直すもの(アクティビティの同期の行。C4d-15)。
 export const syncReloads = new Set<() => Promise<unknown>>();
+// viewsReloads は、views の知らせのときだけ読み直すもの(保存したビューの一覧。E3b-17)。
+export const viewsReloads = new Set<() => Promise<unknown>>();
+// eventReloads は、知らせの種類ごとに、その種類のときだけ読み直すもの(wire.ts の reflect が回す)。
+export const eventReloads: Partial<Record<SyncEventKind, Set<() => Promise<unknown>>>> = {
+  github: githubReloads,
+  inbox: inboxReloads,
+  sync: syncReloads,
+  views: viewsReloads,
+};

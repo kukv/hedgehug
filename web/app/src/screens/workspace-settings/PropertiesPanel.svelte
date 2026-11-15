@@ -8,6 +8,7 @@
     toggleKind,
   } from "@hedgehug/core";
   import { Button } from "@hedgehug/ui";
+  import { viewsPort } from "../../views";
   import { workspaceSettings } from "../../wire";
   import AddPropertyDialog from "./AddPropertyDialog.svelte";
   import ChoicesDialog from "./ChoicesDialog.svelte";
@@ -27,10 +28,28 @@
 
   const rows = $derived(propertyRows(s.detail.settings));
   const title = $derived(s.readOnly ? readOnlyNote : undefined);
+  // 削除の確認を開いたら、そのキーを使う保存したビューがあるかを聞く。着くまでと失敗したときは添え書きなし(E3b-18)。
+  // 閉じたあとや別の行の応答は捨てる。
+  let viewsAffected = $state<{ id: string; affected: boolean } | null>(null);
   const deleteBody = $derived.by(() => {
     const row = rows.find((r) => r.id === deleting);
-    return row ? deletePropertyBody(row.name, s.usage.properties[row.id] ?? 0) : "";
+    if (!row) return "";
+    const views = viewsAffected?.id === row.id && viewsAffected.affected;
+    return deletePropertyBody(row.name, s.usage.properties[row.id] ?? 0, views);
   });
+
+  function askDelete(id: string) {
+    deleting = id;
+    viewsAffected = null;
+    const row = rows.find((r) => r.id === id);
+    if (!row) return;
+    viewsPort
+      .keyImpact(s.storeId, s.detail.id, row.key)
+      .then((affected) => {
+        if (deleting === id) viewsAffected = { id, affected };
+      })
+      .catch(() => {});
+  }
 
   const run = (op: Parameters<typeof workspaceSettings.run>[0], ok?: string) =>
     workspaceSettings.run(op, ok);
@@ -58,7 +77,7 @@
         run((p, st, w) => p.setPropertyKinds(st, w, row.id, toggleKind(row.kinds, kind)))}
       onhide={() => run((p, st, w) => p.setPropertyHidden(st, w, row.id, !row.hidden))}
       onmove={(d) => run((p, st, w) => p.moveProperty(st, w, row.id, d))}
-      ondelete={() => (deleting = row.id)}
+      ondelete={() => askDelete(row.id)}
       onchoices={() => (choices = row.id)}
     />
   {/each}

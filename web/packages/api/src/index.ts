@@ -17,4 +17,5 @@ export { createScreenStatesPort, createSearchPort } from "./search";
 export { createSyncPort } from "./sync";
 export { newTabUrl, rememberToken, tokenFromHash } from "./token";
 export { createTransfersPort } from "./transfers";
+export { createViewsPort } from "./views";
 export { createWorkspacesPort } from "./workspaces";
