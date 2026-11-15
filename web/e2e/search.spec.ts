@@ -150,17 +150,19 @@ test("completes an item created after the screen was opened", async ({ page }, i
   // 画面を開いたあとに作ったアイテムも、Store が変わった知らせで候補の元(パレットの索引)を読み直して出す。
   // 欄にフォーカスがあるあいだは反映を待つ(06)ので、フォーカスを外したまま作り、読み直しを待つ。
   await page.getByRole("main").getByRole("heading", { name: "検索", level: 1 }).click();
+  // フォーカスを外したときに、前の知らせ(seed の書き込み)の反映も索引を読む。その応答は作る前のものでありうるので、
+  // 作ったアイテムのタイトルを含む応答まで待つ。
+  const title = `${mark}の後から`;
   const reread = page.waitForResponse(
-    (r) => r.url().includes("/api/palette-index") && r.request().method() === "GET",
+    async (r) =>
+      r.url().includes("/api/palette-index") &&
+      r.request().method() === "GET" &&
+      (await r.text()).includes(title),
   );
-  await send(page, "post", `${base}/items`, {
-    project: projectId,
-    kind: "Epic",
-    title: `${mark}の後から`,
-  });
+  await send(page, "post", `${base}/items`, { project: projectId, kind: "Epic", title });
   await reread;
   await filter.fill("");
-  await filter.pressSequentially(`parent:${mark}の後から`);
+  await filter.pressSequentially(`parent:${title}`);
   await expect(options).toHaveCount(1);
 });
 
