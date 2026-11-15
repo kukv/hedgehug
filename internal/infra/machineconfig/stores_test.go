@@ -148,15 +148,15 @@ stores:
 
 const oldShape = "stores:\n  - {name: a, path: /x, remotes: [u]}\n"
 
-func TestStoreEntriesSkipsOldShape(t *testing.T) {
+func TestStoreEntriesKeepsEveryRow(t *testing.T) {
 	f := writeConfig(t, oldShape)
 	got, err := f.StoreEntries()
-	if err != nil || len(got) != 0 {
+	if want := []StoreEntry{{Path: "/x"}}; err != nil || !reflect.DeepEqual(got, want) {
 		t.Errorf("StoreEntries = %+v, %v", got, err)
 	}
 	f = writeConfig(t, "stores:\n  - {id: s1, name: a, path: /a}\n  - {id: s2, name: b}\n")
 	got, err = f.StoreEntries()
-	if want := []StoreEntry{{ID: "s1", Path: "/a"}}; err != nil || !reflect.DeepEqual(got, want) {
+	if want := []StoreEntry{{ID: "s1", Path: "/a"}, {ID: "s2"}}; err != nil || !reflect.DeepEqual(got, want) {
 		t.Errorf("StoreEntries = %+v, %v", got, err)
 	}
 }
@@ -173,7 +173,7 @@ func TestOldShapeSurvivesRewrite(t *testing.T) {
 	if _, err := f.read(); err != nil {
 		t.Errorf("read after rewrite: %v", err)
 	}
-	if got, err := f.StoreEntries(); err != nil || len(got) != 0 {
+	if got, err := f.StoreEntries(); err != nil || !reflect.DeepEqual(got, []StoreEntry{{Path: "/x"}}) {
 		t.Errorf("StoreEntries = %+v, %v", got, err)
 	}
 }

@@ -28,24 +28,22 @@ var storeColors = []string{"teal", "orange", "purple", "sky", "pink", "olive", "
 // sshRemote は SSH の形の GitHub の URL(G1-9)。
 var sshRemote = regexp.MustCompile(`^git@github\.com:([^/]+)/(.+?)(\.git)?/?$`)
 
-// StoreEntry は、起動のときに開く Store(id と path が両方ある行)。
+// StoreEntry は、起動のときに開く Store の行。前回の版の形の行は ID が空。
 type StoreEntry struct {
 	ID   port.StoreID
 	Path string
 }
 
-// StoreEntries は、config.yaml の stores のうち id と path がある行を、並びのまま返す。
-// 前回の版の形の行(id がない)は返さない(G1-2)。
+// StoreEntries は、config.yaml の stores のすべての行を、並びのまま返す。id や path が空の行も返し、
+// 開かない行を知らせるのは開く側(G1-2)。
 func (f *File) StoreEntries() ([]StoreEntry, error) {
 	c, err := f.read()
 	if err != nil {
 		return nil, err
 	}
-	var out []StoreEntry
+	out := make([]StoreEntry, 0, len(c.Stores))
 	for _, s := range c.Stores {
-		if s.ID != "" && s.Path != "" {
-			out = append(out, StoreEntry{ID: port.StoreID(s.ID), Path: s.Path})
-		}
+		out = append(out, StoreEntry{ID: port.StoreID(s.ID), Path: s.Path})
 	}
 	return out, nil
 }
