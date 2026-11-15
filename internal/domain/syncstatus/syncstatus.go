@@ -2,7 +2,10 @@
 // 文言は仕様の文字どおりに書く。
 package syncstatus
 
-import "fmt"
+import (
+	"fmt"
+	"time"
+)
 
 // Reason は、同期できなかった理由。値は state.db と API に書く。
 type Reason string
@@ -88,4 +91,17 @@ func All(ok int, failures []Failure) []string {
 		lines = append(lines, f.Store+": "+f.Reason.Short())
 	}
 	return lines
+}
+
+// SkewLimit は、GitHub の時刻とこのマシンの時計のずれが、警告になる幅(06「時計のずれの警告」)。
+const SkewLimit = 5 * time.Minute
+
+// SkewMinutes は、警告の分を返す。d は「GitHub の時刻 − このマシンの時計」。
+// 正はこのマシンの時計が進んでいる、負は遅れている、0 は警告なし(ずれが SkewLimit 未満)。分は 0 に向けて切り捨てる。
+func SkewMinutes(d time.Duration) int {
+	m := -d
+	if m > -SkewLimit && m < SkewLimit {
+		return 0
+	}
+	return int(m / time.Minute)
 }

@@ -29,6 +29,27 @@ func (c *Clock) Now() time.Time {
 	return t
 }
 
+// ClockSkews は、ずれの警告の分をメモリに覚える偽物。
+type ClockSkews struct {
+	mu      sync.Mutex
+	Minutes int
+}
+
+func NewClockSkews() *ClockSkews { return &ClockSkews{} }
+
+func (c *ClockSkews) Skew(context.Context) (int, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.Minutes, nil
+}
+
+func (c *ClockSkews) SetSkew(_ context.Context, minutes int) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.Minutes = minutes
+	return nil
+}
+
 // Identity は、どの Store でも Login を「あなた」とする偽物。
 type Identity struct {
 	Login string
