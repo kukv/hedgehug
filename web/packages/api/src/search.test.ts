@@ -100,7 +100,14 @@ describe("createSearchPort", () => {
   });
 
   it("maps a null list of rows to an empty one", async () => {
-    respond(200, { errors: ["x"], hasKey: false, hasSort: false, group: "", deleted: false, rows: null });
+    respond(200, {
+      errors: ["x"],
+      hasKey: false,
+      hasSort: false,
+      group: "",
+      deleted: false,
+      rows: null,
+    });
     expect(await createSearchPort().search("")).toMatchObject({ errors: ["x"], rows: [] });
   });
 });

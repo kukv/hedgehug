@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { result } from "./fixtures.test-util";
-import { deletedTreeText, layoutNote, layoutChoices, readSearchState } from "./layout";
+import { deletedTreeText, layoutChoices, layoutNote, readSearchState } from "./layout";
 import { defaultTable } from "./table";
 
 describe("readSearchState (E3a-2)", () => {
