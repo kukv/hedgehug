@@ -34,7 +34,7 @@ func commitRows(r port.Reader, store port.StoreInfo, c port.Commit) ([]Row, erro
 
 // rows は、コミット c の行。並びは本体、自動化の行、メンバーの追加の行で、鍵の連番もこの順。
 func (v *view) rows(store port.StoreInfo, c port.Commit) ([]Row, error) {
-	recs := opRows(c)
+	recs := basePrevs(opRows(c))
 	actor := mainActor(recs, c.Author, c.Summary)
 	// 時刻は、同期の行と同じく続きの印のミリ秒にそろえる(そろえないと、秒以下を持つコミットが次のページから抜ける)。
 	base := Row{At: c.At.Truncate(time.Millisecond), Store: store, SHA: c.SHA[:min(len(c.SHA), 7)]}
@@ -82,6 +82,38 @@ func opRows(c port.Commit) []entityRow {
 		return same
 	}
 	return all
+}
+
+// basePrevs は、recs の各行の Prev を、op の前の先端にそろえたもの(C4d-11 の鍵に使う)。同じ保存の行を指す Prev は、
+// その行の Prev に置き換えて辿る。2 台が同じ版から作った同じ変更は、行の ID が違っても、ルールのきっかけが同じ項目の
+// 行でも、そろえた Prev が同じになる。
+func basePrevs(recs []entityRow) []entityRow {
+	own := make(map[change.ID]change.Record, len(recs))
+	for _, er := range recs {
+		own[er.rec.ID] = er.rec
+	}
+	out := make([]entityRow, len(recs))
+	for i, er := range recs {
+		var base []change.ID
+		seen := map[change.ID]bool{}
+		todo := slices.Clone(er.rec.Prev)
+		for len(todo) > 0 {
+			id := todo[len(todo)-1]
+			todo = todo[:len(todo)-1]
+			if seen[id] {
+				continue
+			}
+			seen[id] = true
+			if r, ok := own[id]; ok {
+				todo = append(todo, r.Prev...)
+				continue
+			}
+			base = append(base, id)
+		}
+		er.rec.Prev = base
+		out[i] = er
+	}
+	return out
 }
 
 // purgeSummary は、保持日数を過ぎたものの完全な削除の件名の書き出し(06 の文)。
@@ -197,7 +229,7 @@ func memberRows(base Row, store port.StoreID, actor change.Actor, recs []entityR
 
 // dedupKey は、重なりの鍵(C4d-11): Store・実行者(自動化はルールまで)と、行の (エンティティ・項目・from・to・Prev)
 // の集合。行がなければ件名と、消したもの(removed)の集合。06 がまとめるのは複数のマシンから届いた同じ変更だけ:
-// 2 台が同じ版から作った変更は Prev が同じで、順に起きた繰り返しは Prev が違う。同じものを 2 度消すことはないので、
+// 2 台が同じ版から作った変更は op の前の先端にそろえた Prev(basePrevs)が同じで、順に起きた繰り返しは違う。同じものを 2 度消すことはないので、
 // 別のときの同じ件名の完全な削除は、消したものが違う。
 func dedupKey(store port.StoreID, actor change.Actor, recs []entityRow, summary string, removed []change.Ref) string {
 	parts := make([]string, 0, len(recs))

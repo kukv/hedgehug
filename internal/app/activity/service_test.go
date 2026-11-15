@@ -158,9 +158,9 @@ func TestPageMergesNonHumanDuplicates(t *testing.T) {
 	f.setItem(t, "戻す", apptest.SampleTask, change.NewSet("status", apptest.SampleStatusDone, apptest.SampleStatusTodo))
 	f.setStatusByRule(t, "2 回目")
 	second := f.commit(t, "2 回目")
-	// 別のマシンが「1 回目」と同じ版から作った同じ保存(時刻はあと)。
-	twin := first
-	twin.SHA, twin.At = strings.Repeat("c", 40), first.At.Add(time.Second)
+	// 別のマシンが「1 回目」と同じ版から作った同じ保存(行の ID は違い、時刻はあと)。
+	twin := twinOf(first, strings.Repeat("c", 40))
+	twin.At = first.At.Add(time.Second)
 	f.commits.add(s1, twin)
 	const reset = "スプリント「Sprint 25」を計画中に戻す"
 	at := f.clock.Now()

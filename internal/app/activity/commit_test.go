@@ -1,6 +1,7 @@
 package activity
 
 import (
+	"cmp"
 	"errors"
 	"fmt"
 	"slices"
@@ -185,8 +186,37 @@ func TestRowsAutomation(t *testing.T) {
 	assertTarget(t, "automation Project", a.Project, &Target{Display: "HH-P1", Title: "ログイン", Link: "current"})
 }
 
-// 2 台が同じ版から作った同じ変更(Prev も同じ)の自動化の行は、別のコミットでも同じ重なりの鍵を持つ。順に起きた
-// 繰り返し(Done から戻したあとにまた Done)は、Prev が違うので鍵も違う。
+// twinOf は、別のマシンが c と同じ版から作った同じ保存: 行の ID はそのマシンが振るので違い、同じ保存の中の行を指す
+// Prev もその ID を指す。op の前の先端を指す Prev は同じ。
+func twinOf(c port.Commit, sha string) port.Commit {
+	ids := map[change.ID]change.ID{}
+	for _, e := range c.Changes {
+		for _, r := range e.Rows {
+			ids[r.ID] = "TWIN" + r.ID
+		}
+	}
+	twin := c
+	twin.SHA = sha
+	twin.Changes = make([]port.EntityRows, len(c.Changes))
+	for i, e := range c.Changes {
+		rows := make([]change.Record, len(e.Rows))
+		for j, r := range e.Rows {
+			r.ID = ids[r.ID]
+			prev := make([]change.ID, len(r.Prev))
+			for k, p := range r.Prev {
+				prev[k] = cmp.Or(ids[p], p)
+			}
+			r.Prev = prev
+			rows[j] = r
+		}
+		twin.Changes[i] = port.EntityRows{Ref: e.Ref, Rows: rows}
+	}
+	return twin
+}
+
+// 2 台が同じ版から作った同じ変更の自動化の行は、行の ID が違っても同じ重なりの鍵を持つ。きっかけとルールが同じ
+// 項目(ステータス)でも、ルールの行の Prev は同じ保存のきっかけの行を辿って op の前の先端にそろえるので同じ。
+// 順に起きた繰り返し(Done から戻したあとにまた Done)は、op の前の先端が違うので鍵も違う。
 func TestRowsAutomationDedupKey(t *testing.T) {
 	f := newFixture(t)
 	f.addRule(t)
@@ -194,8 +224,10 @@ func TestRowsAutomationDedupKey(t *testing.T) {
 	f.setItem(t, "戻す", apptest.SampleTask, change.NewSet("status", apptest.SampleStatusDone, apptest.SampleStatusTodo))
 	f.setStatusByRule(t, "2 回目")
 	c := f.commit(t, "1 回目")
-	twin := c
-	twin.SHA = "0123456789abcdef0123456789abcdef01234567" // 別のマシンが同じ版から作った同じ保存
+	twin := twinOf(c, "0123456789abcdef0123456789abcdef01234567")
+	if twin.Changes[0].Rows[1].Prev[0] != twin.Changes[0].Rows[0].ID {
+		t.Fatalf("twin rule row prev = %v, want its own trigger row %s", twin.Changes[0].Rows[1].Prev, twin.Changes[0].Rows[0].ID)
+	}
 	first, other, second := f.rowsOf(t, c), f.rowsOf(t, twin), f.rows(t, "2 回目")
 	if first[1].dedup == "" || first[1].dedup != other[1].dedup {
 		t.Errorf("dedup = %q, %q; want the same key", first[1].dedup, other[1].dedup)
