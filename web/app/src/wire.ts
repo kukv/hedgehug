@@ -5,7 +5,6 @@ import {
   createPlanningPort,
   createProjectsPort,
   createSyncPort,
-  createSystemPort,
   createTransfersPort,
   createWorkspacesPort,
   rememberToken,
@@ -27,7 +26,6 @@ import {
   createScreen,
   createShell,
   createSync,
-  createSystemInfo,
   createTabSignals,
   createWatch,
   createWorklogs,
@@ -59,7 +57,6 @@ const token = rememberToken(location, sessionStorage, (url) => history.replaceSt
 setToken(token);
 
 export const shell = createShell();
-export const system = createSystemInfo(createSystemPort());
 // drafts は書きかけの登録簿(実体は drafts.ts。tab.ts との循環を避けるため wire.ts の外に置く)。
 export { drafts };
 export const navigation = createNavigation(browserHistory(), drafts);

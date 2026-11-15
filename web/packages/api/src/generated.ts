@@ -2475,11 +2475,6 @@ export interface SyncStoreResult {
   result: SyncStoreResultResult;
 }
 
-export interface SystemInfo {
-  /** hedgehug の版 */
-  version: string;
-}
-
 export interface TransferEpic {
   /** 画面の ID(MB-1) */
   display: string;
@@ -8919,29 +8914,5 @@ return fetcher<void>(getSyncNetworkUrl(),
     method: 'PUT',
     headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
     body: JSON.stringify(syncNetworkBody)
-  }
-);}
-
-
-
-export const getGetSystemUrl = () => {
-
-
-
-
-  return `/api/system`
-}
-
-/**
- * @summary サーバーの版を返す
- */
-export const getSystem = async ( options?: Parameters<typeof fetcher>[1]): Promise<SystemInfo> => {
-
-  return fetcher<SystemInfo>(getGetSystemUrl(),
-  {
-    ...options,
-    method: 'GET'
-
-
   }
 );}

@@ -3843,15 +3843,6 @@ components:
         - unsent
         - lastSuccess
       type: object
-    SystemInfo:
-      additionalProperties: false
-      properties:
-        version:
-          description: hedgehug の版
-          type: string
-      required:
-        - version
-      type: object
     TransferChoice:
       additionalProperties: false
       properties:
@@ -9968,20 +9959,3 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: タブがネットワークにつながっているかを知らせる(オフラインのあいだは自動で同期しない)
-  /api/system:
-    get:
-      operationId: get-system
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/SystemInfo"
-          description: OK
-        default:
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ErrorModel"
-          description: Error
-      summary: サーバーの版を返す

@@ -198,7 +198,7 @@ test("opens the inbox from the palette command", async ({ page }, info) => {
 
 test("opens the activity from the palette command", async ({ page }) => {
   await page.goto(tokenUrl());
-  await expect(page.getByRole("heading", { name: "hedgehug" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "マイタスク", level: 1 })).toBeVisible();
   const palette = await openPalette(page);
   await palette.getByRole("combobox").fill("アクティビティを開く");
   await palette.getByRole("option", { name: /^アクティビティを開く/ }).click();

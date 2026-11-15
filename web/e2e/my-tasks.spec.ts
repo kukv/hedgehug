@@ -1,5 +1,5 @@
 import { expect, test } from "./fixtures";
-import { send } from "./helpers";
+import { send, sidebar, tokenUrl } from "./helpers";
 import {
   dayFrom,
   filterBy,
@@ -14,7 +14,7 @@ import {
 import { base } from "./search-table-helpers";
 
 // マイタスクの画面の通しのテスト(04「マイタスク」、E4a)。アイテムはテストごとの印をタイトルに入れて作り、
-// 絞り込みでほかのテストのアイテムを除く。サイドバーの入口は Task 6 で足すので、ここではアドレスから開く。
+// 絞り込みでほかのテストのアイテムを除く。
 
 test.beforeEach(async ({ page }) => {
   await resetMyTasks(page);
@@ -120,4 +120,39 @@ test("deleted rows show the note instead of a status button", async ({ page }, i
   await expect(row).toContainText(/あと \d+ 日で完全に削除/);
   await expect(row.getByRole("button", { name: /^ステータス: / })).toHaveCount(0);
   await expect(row.getByRole("link", { name: title })).toHaveCount(0);
+});
+
+// バッジは絞り込みなしの件数。マイタスクの画面の絞り込みでは変わらない(Review Focus 2)。
+test("badge counts all my tasks", async ({ page }, info) => {
+  const mark = markOf(info);
+  // 先に 1 件作り、バッジが出ている(0 件で消えていない)ところから数える。
+  await myTask(page, `${mark} 一`);
+  await openMyTasks(page);
+  const side = await sidebar(page, info);
+  const badge = side.getByRole("img", { name: /^未完了 \d+ 件$/ });
+  await expect(badge).toBeVisible();
+  const before = Number(await badge.textContent());
+
+  await myTask(page, `${mark} 二`);
+  await expect(badge).toHaveAccessibleName(`未完了 ${before + 1} 件`);
+  await expect(side.getByRole("link", { name: /^マイタスク/ })).toHaveAttribute(
+    "aria-current",
+    "page",
+  );
+
+  await filterBy(page, `${mark}ない`);
+  await expect(page.getByText("一致するものはありません")).toBeVisible();
+  await expect(badge).toHaveAccessibleName(`未完了 ${before + 1} 件`);
+});
+
+test("palette opens my tasks", async ({ page }) => {
+  await page.goto(tokenUrl("/inbox"));
+  await expect(page.getByRole("heading", { name: "受信箱", level: 1 })).toBeVisible();
+  await page.keyboard.press("ControlOrMeta+k");
+  const palette = page.getByRole("dialog", { name: "コマンドパレット" });
+  await palette.getByRole("combobox").fill("マイタスクを開く");
+  await palette.getByRole("option", { name: /^マイタスクを開く/ }).click();
+  await expect(palette).toBeHidden();
+  await expect(page.getByRole("heading", { name: "マイタスク", level: 1 })).toBeVisible();
+  await expect(page).toHaveURL(/\/my-tasks$/);
 });

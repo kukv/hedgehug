@@ -215,6 +215,15 @@ describe("パレットの候補の実行", () => {
     expect(named(calls, "go").map((c) => c.args)).toEqual([[{ name: "inbox" }]]);
   });
 
+  // コマンドの群の 2 番目(「新規作成」の次。E4a)。
+  test("my tasks command follows new", async () => {
+    const { palette, calls } = await setup();
+    await palette.open();
+    expect(labels(palette).slice(1, 3)).toEqual(["新規作成", "マイタスクを開く"]);
+    await pick(palette, "マイタスクを開く");
+    expect(named(calls, "go").map((c) => c.args)).toEqual([[{ name: "mytasks" }]]);
+  });
+
   test("アクティビティを開く は /activity へ go する(Ctrl+Enter は新しいタブ)", async () => {
     const { palette, calls } = await setup();
     await palette.open();
