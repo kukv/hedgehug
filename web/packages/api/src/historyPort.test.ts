@@ -21,7 +21,7 @@ function respond(status: number, body: unknown) {
   return fetch;
 }
 
-const rows = [{ who: "太郎", text: "作成", at: "2026-11-13T09:00:00.000+09:00" }];
+const rows = [{ who: "太郎", text: "作成", at: "2026-11-13T09:00:00.000+09:00", received: false }];
 
 describe("history calls", () => {
   it("reads the history of an item", async () => {

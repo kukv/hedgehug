@@ -9,6 +9,7 @@ const rowOf = (i: number): HistoryRow => ({
   who: "太郎",
   text: `変更 ${i}`,
   at: new Date(Date.UTC(2026, 10, 13, 9, 0, 0) - i * 60_000).toISOString(),
+  received: false,
 });
 const rowsOf = (n: number) => Array.from({ length: n }, (_, i) => rowOf(i));
 const item = { kind: "item", storeId: "S1", id: "I1" } as const;
