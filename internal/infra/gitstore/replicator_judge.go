@@ -45,6 +45,7 @@ func (s syncRun) finish(ctx context.Context, theirs, mine plumbing.Hash, sent bo
 
 // judge は、remote の先端 theirs から受け取った保存と、このマシンの修復の保存と、消えたものがある合わせを、判定の
 // 差し込み口に渡し、mine までを判定済みにする。閲覧のみの同期なら ReadOnly を渡す(決定 C4b2-4)。
+// 判定の基準は mine だが、read が読む作業ツリーはいまの先端のもので、送るあいだにできた保存を含み、mine より新しいことがある。
 func (s syncRun) judge(ctx context.Context, theirs, mine plumbing.Hash) error {
 	if s.r.Judge == nil || s.r.Judged == nil {
 		return nil

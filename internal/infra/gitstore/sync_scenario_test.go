@@ -6,6 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/go-git/go-git/v5/plumbing"
+
 	"github.com/kukv/hedgehug/internal/app/apptest"
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/domain/change"
@@ -223,7 +225,9 @@ func TestSyncDoesNotHoldLockWhileFetching(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	j := withJudge(a)
 	fetched, sent := false, false
+	var late plumbing.Hash // 送るあいだの保存
 	a.rep.duringFetch = func() {
 		if !fetched {
 			fetched = true
@@ -234,6 +238,7 @@ func TestSyncDoesNotHoldLockWhileFetching(t *testing.T) {
 		if !sent {
 			sent = true
 			writeNow("send", set("title", "F", "S"))
+			late = headOf(t, a)
 		}
 	}
 	if res := a.sync(t, remote); res != (port.SyncResult{Sent: 1, Received: 1}) || !fetched || !sent {
@@ -242,9 +247,16 @@ func TestSyncDoesNotHoldLockWhileFetching(t *testing.T) {
 	if n, err := a.rep.Unsent(t.Context(), a.id); err != nil || n != 1 {
 		t.Errorf("unsent = %d, %v, want the save during send left for the next sync", n, err)
 	}
+	// 送っていない保存は判定しない(判定は送った先端までで、いまの先端ではない)。
+	if j.known(t, a, late) != port.NotJudged {
+		t.Error("the save during send was judged before it was sent")
+	}
 	a.rep.duringFetch, a.rep.duringSend = nil, nil
 	if res := a.sync(t, remote); res != (port.SyncResult{Sent: 1}) {
 		t.Errorf("next sync = %+v, want the save during send sent", res)
+	}
+	if j.known(t, a, late) == port.NotJudged {
+		t.Error("the save during send was not judged after it was sent")
 	}
 	b.sync(t, remote)
 	sameFiles(t, a, b)
