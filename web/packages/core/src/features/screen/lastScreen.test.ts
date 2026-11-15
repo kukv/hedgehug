@@ -28,7 +28,7 @@ function setup(start: string, saved: string | null | Promise<string | null> = nu
 }
 
 describe("createLastScreen", () => {
-  it("writes the shown screen", async () => {
+  it("writes the shown screen", () => {
     const { current, port, last } = setup("/s/e2e/w/HH/sprints");
     last.start();
     expect(port.put).not.toHaveBeenCalled();
@@ -37,7 +37,15 @@ describe("createLastScreen", () => {
     expect(lastScreenKey).toBe("last-screen");
   });
 
-  it("does not write home or item", async () => {
+  // 解決できないアドレスを打ったときは、アドレスを覚えず、マイタスクを覚える(壊れたアドレスを開き直さない)。
+  it("writes my tasks for an address that did not resolve", () => {
+    const { current, port, last } = setup("/s/work/w/XX/overview");
+    last.start();
+    current.set({ name: "mytasks" });
+    expect(port.put).toHaveBeenCalledWith(lastScreenKey, '{"path":"/my-tasks"}');
+  });
+
+  it("does not write home or item", () => {
     const { current, port, last } = setup("/inbox");
     last.start();
     current.set({ name: "home" });
@@ -128,7 +136,7 @@ describe("createLastScreen", () => {
     expect(stack).toEqual(["/my-tasks"]);
   });
 
-  it("stops following when stopped", async () => {
+  it("stops following when stopped", () => {
     const { current, port, last } = setup("/inbox");
     const stop = last.start();
     stop();

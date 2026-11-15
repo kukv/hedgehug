@@ -34,7 +34,9 @@ export function createLastScreen(deps: LastScreenDeps): LastScreen {
     start() {
       const stopCurrent = deps.current.subscribe((r) => {
         if (r === null || r.name === "home" || r.name === "item") return;
-        deps.screenStates.write(lastScreenKey, { path: formatRoute(get(deps.navigation.route)) });
+        // マイタスクに解決したときは、打ったままの解決できないアドレスではなく、マイタスクのアドレスを覚える。
+        const route = r.name === "mytasks" ? r : get(deps.navigation.route);
+        deps.screenStates.write(lastScreenKey, { path: formatRoute(route) });
       });
       const stopRoute = deps.navigation.route.subscribe((route) => {
         if (route.name === "home") void restore();
