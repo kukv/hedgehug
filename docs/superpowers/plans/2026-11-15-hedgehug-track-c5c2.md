@@ -57,8 +57,9 @@
 | C5c2-13 | メンバーの統合は通知を作らない。どの種類の判定も、メンバーの統合の保存から通知を作らないことをテストで確かめる | 06 `:266` |
 | C5c2-14 | 閲覧のみの Store では修復しない(既存の `Run` の呼び方のまま) | 06 `:349` |
 | C5c2-15 | e2e は足さない。2 台の場面は `cmd/hedgehug` の本物の gitstore と state.db で確かめる | C5c1-15 と同じ |
-| C5c2-16 | 06 `:266` に (b) の本文を足し、保存形式 `:214` に Issue のリンクとメンバーの見つけ方と書く行を足す(Task 5) | ユーザーの決定(2026-11-15) |
+| C5c2-16 | 06 `:266` に (b) の本文を足し、保存形式 `:214` に Issue のリンクとメンバーの見つけ方と書く行を足す(Task 6) | ユーザーの決定(2026-11-15) |
 | C5c2-17 | リンクした行: リンクを決めた行(C5c2-3)が、GitHub からの取り直しでリポジトリの改名・移管を追った行(`itemlink.Set.Rename`。同じ `op` に、種別と番号が同じで別のリポジトリの `remove links` がある `add links`)なら、その `remove` の行の `prev` が指す `add` の行(複数なら `change.ListRow` の勝った行)へ、改名でない行に着くまでたどる(`itemlink.Origin`)。C5c2-4 の並び・C5c2-9 の宛先・C5c2-11 の鍵は、この行で決める | 06 `:256`「あとから同期した方」、`:266`「リンクした人」。改名の追従はリンクではなく取り直し(07、D3-11)なので、リンクした時刻と人を変えない。改名前の名前で書き込みの検査(07 `:244` の `Same`)を通った同じ Issue が、取り直しのあとに 2 つのアイテムにそろって重なることがある |
+| C5c2-18 | 診断の Issue の二重リンク(`repair.issueTwice`。検索の `is:invalid`)は、`Ref.Key()`(リポジトリの大文字小文字まで同じ)で比べていたのを、`Ref.Same` と同じ比べ方にする(Task 5) | ユーザーの決定(2026-11-15、案 1。C5c2 の PR で直す)。書き込みの検査(07 `:244`)・同期の修復(C5c2-2)と同じものを二重リンクとするため |
 
 ## Review Focus
 
@@ -205,7 +206,35 @@ git commit -m "feat(noticing): 重なった Issue のリンクを外した修復
 
 ---
 
-### Task 5: 2 台の場面テストと、仕様・トラック C の計画の記録
+### Task 5: 診断の Issue の二重リンクを、大文字小文字を区別せずに数える
+
+C5c2-18 のとおり、検索の `is:invalid` が使う診断の Issue の二重リンクを、書き込みの検査・同期の修復と同じ比べ方(`itemlink.Ref.Same`)にする。
+
+**Files:**
+- Modify: `internal/domain/itemlink/itemlink.go`(`SameKey` を足す)、Test: `internal/domain/itemlink/itemlink_test.go`
+- Modify: `internal/app/search/invalid.go:36`(`l.Key()` を `l.SameKey()` にする)
+- Modify: `internal/domain/repair/problems.go:35`(`Issues` のコメントを「`itemlink` の `Ref.SameKey`」にする)
+- Test: `internal/app/search/facts_test.go`
+
+**Interfaces:**
+- Produces(`itemlink`): `func (r Ref) SameKey() string`: 「{小文字のリポジトリ}#{番号}」。`a.Same(b)` と `a.SameKey() == b.SameKey()` が同じになる(種別は含めない)。
+
+- [ ] **Step 1: 失敗するテストを書く**
+  - `TestSameKey`: `{Issue, "Kukv/Web", 5}` と `{Issue, "kukv/web", 5}` が同じ。番号かリポジトリが違えば違う。
+  - `TestInvalidIssueCase`(`facts_test.go`): HH-1 に Issue `Kukv/Web#5`、HH-2 に `kukv/web#5` をリンクした Store で、`is:invalid` が HH-1 と HH-2 を返す。
+- [ ] **Step 2: 失敗を確かめる** — Run: `go test ./internal/domain/itemlink/ ./internal/app/search/` Expected: FAIL(`undefined: SameKey`)
+- [ ] **Step 3: 実装する**
+- [ ] **Step 4: 通ることを確かめる** — Run: `go test ./internal/domain/... ./internal/app/search/ && golangci-lint run ./internal/...` Expected: PASS・指摘なし
+- [ ] **Step 5: コミット**
+
+```bash
+git add internal/domain/itemlink internal/domain/repair internal/app/search
+git commit -m "fix(search): 診断の Issue の二重リンクを、リポジトリの大文字小文字を区別せずに数える(C5c2)"
+```
+
+---
+
+### Task 6: 2 台の場面テストと、仕様・トラック C の計画の記録
 
 **Files:**
 - Create: `cmd/hedgehug/links_repair_scenario_test.go`
@@ -218,7 +247,7 @@ git commit -m "feat(noticing): 重なった Issue のリンクを外した修復
   - 「C5c2(Issue のリンク・メンバー)」を「C5c2(Issue のリンク・メンバー。計画: `2026-11-15-hedgehug-track-c5c2.md`)」にする。
 
 **Interfaces:**
-- Consumes: Task 1〜4、`cmd/hedgehug/repair_helpers_test.go` の `firstMachine`・`cloneMachine`・`writeAs`・`sync`・`noticed`・`sameFiles`・`item`、`repair_notice_scenario_test.go` の `wantRepair`・`wantNoRepair`、サンプルの HH-1(`apptest.SampleEpic`)・HH-2(`apptest.SampleTask`)、`itemlink.Set.Attach`・`member.Join`
+- Consumes: Task 1〜5、`cmd/hedgehug/repair_helpers_test.go` の `firstMachine`・`cloneMachine`・`writeAs`・`sync`・`noticed`・`sameFiles`・`item`、`repair_notice_scenario_test.go` の `wantRepair`・`wantNoRepair`、サンプルの HH-1(`apptest.SampleEpic`)・HH-2(`apptest.SampleTask`)、`itemlink.Set.Attach`・`member.Join`
 
 - [ ] **Step 1: 場面テストを書く**(A = taro、B = hanako。本物の gitstore とテストごとの state.db)
   - `TestRepairIssueTwoItems`:
