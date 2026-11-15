@@ -260,6 +260,33 @@ func TestJudgeReceiveOnly(t *testing.T) {
 	only(t, j.last(), headOf(t, a))
 }
 
+// 閲覧のみの Store にこのマシンの保存があっても(サーバーは断らない。決定 G1-7)、同期のあと、その保存と合わせは
+// 判定済みになる(判定は、受け取った先端ではなく、合わせたあとの先端までを見る。決定 G1-10)。
+func TestJudgeReceiveOnlyMarksLocalSave(t *testing.T) {
+	remote := newRemote(t)
+	a := firstMachine(t, remote)
+	b := cloneMachine(t, remote, "B", t0.Add(time.Hour))
+	j := withJudge(b)
+	view := port.Remote{URL: remote.URL, ReceiveOnly: true}
+	if _, err := b.rep.Sync(t.Context(), b.id, view); err != nil {
+		t.Fatal(err)
+	}
+	b.write(t, "b", set("title", "", "B"))
+	local := headOf(t, b)
+	a.write(t, "a", set("rank", "a", "b"))
+	a.sync(t, remote)
+	if _, err := b.rep.Sync(t.Context(), b.id, view); err != nil {
+		t.Fatal(err)
+	}
+	merged := headOf(t, b)
+	if merged == local || merged == headOf(t, a) {
+		t.Fatalf("b head = %s, want a merge of the local save and a's save", merged)
+	}
+	if j.known(t, b, local) == port.NotJudged {
+		t.Error("the local save on a receive-only store was left unjudged")
+	}
+}
+
 // SyncSave で受け取った保存も渡り、自分の保存は渡らない。
 func TestJudgeOnSyncSave(t *testing.T) {
 	remote := newRemote(t)

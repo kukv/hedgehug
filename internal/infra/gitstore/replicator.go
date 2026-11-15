@@ -144,7 +144,11 @@ func (s syncRun) once(ctx context.Context) (res port.SyncResult, err error) {
 			return err
 		}
 		if s.receiveOnly {
-			res, err = s.finish(ctx, theirs, theirs, false)
+			// 閲覧のみの Store にも、このマシンの保存はありうる(サーバーは断らない。決定 G1-7)。合わせたあとの先端までを判定する。
+			if mine, err = s.head(); err != nil {
+				return err
+			}
+			res, err = s.finish(ctx, theirs, mine, false)
 			return err
 		}
 		// 修復は送る前に書く。送ったあとに書くと、相手のマシンが修復していない合わせた結果を受け取る(決定 C3a-2)。
