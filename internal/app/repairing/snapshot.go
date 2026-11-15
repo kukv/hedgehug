@@ -82,6 +82,8 @@ func appendTo(tx port.Tx, ref change.Ref, drafts ...change.Draft) error {
 		return tx.WriteWorkspaces().Append(ref.ID, drafts...)
 	case change.KindProject:
 		return tx.WriteProjects().Append(ref.ID, drafts...)
+	case change.KindMembers:
+		return tx.WriteMembers().Append(drafts...)
 	default:
 		return tx.WriteItems().Append(ref.ID, drafts...)
 	}

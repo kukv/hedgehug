@@ -28,6 +28,8 @@ var steps = []step{
 	dropDanglingRefs,     // 削除された値を指すルール・種類ごとの既定・自動化
 	resetFinishedInitial, // 完了・中止の分類にされた初期ステータス
 	renameDuplicates,     // 重なった名前・接頭辞・キー
+	unlinkIssues,         // 重なった Issue のリンク
+	mergeMembers,         // 大文字小文字だけが違うメンバー
 }
 
 // syncActor は、修復の保存の実行者。
