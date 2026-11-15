@@ -8,10 +8,9 @@ import (
 
 // ActivityStore は、行の Store。
 type ActivityStore struct {
-	ID       string `json:"id"`
-	Name     string `json:"name"`
-	Color    string `json:"color" doc:"画面のトークン --t-<色> の名前"`
-	ReadOnly bool   `json:"readOnly"`
+	ID    string `json:"id"`
+	Name  string `json:"name"`
+	Color string `json:"color" doc:"画面のトークン --t-<色> の名前"`
 }
 
 // ActivityTarget は、行の対象のアイテムかプロジェクト。
@@ -47,8 +46,8 @@ func toPage(p appactivity.Page) ActivityPage {
 	rows := make([]ActivityRow, len(p.Rows))
 	for i, r := range p.Rows {
 		rows[i] = ActivityRow{
-			Key: r.Key, At: r.At, Cursor: cursorOf(r.At, r.Key), Actor: string(r.Actor), Who: r.Who, Avatar: r.Avatar, Text: r.Text,
-			Store:     ActivityStore{ID: string(r.Store.ID), Name: r.Store.Name, Color: r.Store.Color, ReadOnly: r.Store.ReadOnly},
+			Key: r.Key, At: r.At, Cursor: appactivity.Cursor(r), Actor: string(r.Actor), Who: r.Who, Avatar: r.Avatar, Text: r.Text,
+			Store:     ActivityStore{ID: string(r.Store.ID), Name: r.Store.Name, Color: r.Store.Color},
 			Workspace: r.Workspace, Item: toTarget(r.Item), Project: toTarget(r.Project), SHA: r.SHA,
 		}
 	}

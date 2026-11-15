@@ -77,3 +77,8 @@ func cursorMatcher(before string) (func(Row) bool, error) {
 	}
 	return func(r Row) bool { return r.At.Before(at) || r.At.Equal(at) && r.Key < key }, nil
 }
+
+// Cursor は、r の続きの印(次のページの Before に渡す「{時刻(RFC 3339、ミリ秒まで)}|{鍵}」)。cursorMatcher が読む形。
+func Cursor(r Row) string {
+	return r.At.UTC().Format("2006-01-02T15:04:05.000Z07:00") + "|" + r.Key
+}

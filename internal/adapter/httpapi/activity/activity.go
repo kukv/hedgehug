@@ -5,7 +5,6 @@ import (
 	"context"
 	"errors"
 	"net/http"
-	"time"
 
 	"github.com/danielgtaylor/huma/v2"
 
@@ -43,9 +42,4 @@ func Register(api huma.API, svc appactivity.Service) {
 			}
 			return &pageOutput{Body: toPage(p)}, nil
 		})
-}
-
-// cursorOf は、row の続きの印。appactivity の読み方(時刻は RFC 3339 のミリ秒まで)に合わせる。
-func cursorOf(at time.Time, key string) string {
-	return at.UTC().Format("2006-01-02T15:04:05.000Z07:00") + "|" + key
 }

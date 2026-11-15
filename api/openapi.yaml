@@ -171,13 +171,10 @@ components:
           type: string
         name:
           type: string
-        readOnly:
-          type: boolean
       required:
         - id
         - name
         - color
-        - readOnly
       type: object
     ActivityTarget:
       additionalProperties: false

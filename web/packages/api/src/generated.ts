@@ -129,7 +129,6 @@ export interface ActivityStore {
   color: string;
   id: string;
   name: string;
-  readOnly: boolean;
 }
 
 export interface ActivityRow {

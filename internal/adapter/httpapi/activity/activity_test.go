@@ -63,7 +63,16 @@ type row struct {
 	Cursor    string `json:"cursor"`
 	SHA       string `json:"sha"`
 	Workspace string `json:"workspace"`
-	Store     struct {
+	Item      *struct {
+		Display string `json:"display"`
+		Link    string `json:"link"`
+	} `json:"item"`
+	Project *struct {
+		Display string `json:"display"`
+		Title   string `json:"title"`
+		Link    string `json:"link"`
+	} `json:"project"`
+	Store struct {
 		ID    string `json:"id"`
 		Name  string `json:"name"`
 		Color string `json:"color"`
@@ -113,6 +122,17 @@ func TestListActivity(t *testing.T) {
 	if err != nil || first.Cursor != at.UTC().Format("2006-01-02T15:04:05.000Z07:00")+"|"+first.Key {
 		t.Errorf("at = %q, cursor = %q (%v)", first.At, first.Cursor, err)
 	}
+	var target row
+	for _, r := range p.Rows {
+		if r.Item != nil && r.Project != nil {
+			target = r
+			break
+		}
+	}
+	if target.Item == nil || target.Item.Display != "TM-1" || target.Item.Link != "current" ||
+		target.Project == nil || target.Project.Display != "TM-P1" || target.Project.Title != "運営" || target.Project.Link != "current" {
+		t.Errorf("row with item and project = %+v (item %+v, project %+v)", target, target.Item, target.Project)
+	}
 	if rest := p.Rows[1]; rest.SHA == "" || rest.Actor == "" || rest.Text == "" {
 		t.Errorf("second = %+v", rest)
 	}
@@ -157,9 +177,28 @@ func TestListActivityFilters(t *testing.T) {
 			t.Errorf("row of another store: %+v", r)
 		}
 	}
+}
+
+// 選んだワークスペースの絞り込みは、そのワークスペースを持つ行だけを出す。Web の行は Mobile の絞り込みに出ない。
+func TestListActivityWorkspaceOnly(t *testing.T) {
+	f := setup(t)
+	of := func(id string) []row {
+		return f.get(t, url.Values{"store": {string(s1)}, "workspace": {id}}, http.StatusOK).Rows
+	}
+	mobile := of(string(apptest.SampleMobileWorkspace))
+	web := of(string(apptest.SampleWorkspace))
+	inMobile := map[string]bool{}
 	for _, r := range mobile {
-		if r.Workspace == "Web" {
-			t.Errorf("mobile filter has a Web row: %+v", r)
+		inMobile[r.Key] = true
+	}
+	for _, r := range web {
+		if r.Workspace != "" && inMobile[r.Key] {
+			t.Errorf("row %+v is in both the Web and the Mobile filters", r)
+		}
+	}
+	for _, r := range mobile {
+		if r.Workspace != "" && r.Workspace != "Mobile" {
+			t.Errorf("mobile filter has a row of %q: %+v", r.Workspace, r)
 		}
 	}
 }
