@@ -114,4 +114,21 @@ describe("groupMyTasks", () => {
     const g = groupMyTasks(rows, "workspace", "2026-11-16", two);
     expect(g.map((x) => x.store?.name)).toEqual(["e2e", "team"]);
   });
+
+  it("falls back to the row when the catalog lacks the store", () => {
+    const rows = [
+      {
+        ...row({ id: "1", storeId: "gone", workspaceId: "wX", projectTitle: "P" }),
+        storeName: "旧",
+        storeColor: "red",
+      },
+      row({ id: "2", storeId: "e2e", workspaceId: "w1" }),
+    ];
+    const w = groupMyTasks(rows, "workspace", "2026-11-16", stores);
+    expect(w.map((x) => x.label)).toEqual(["WEB", "wX"]);
+    expect(w[1]?.store).toEqual({ name: "旧", color: "red" });
+    const p = groupMyTasks(rows, "project", "2026-11-16", stores);
+    expect(p.map((x) => x.label)).toEqual(["P", "p"]);
+    expect(p.every((x) => x.store === null)).toBe(true);
+  });
 });
