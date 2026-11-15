@@ -169,6 +169,35 @@ describe("createSearch (E1-19)", () => {
     expect(t.search).toHaveBeenCalledWith("typed", noTable);
   });
 
+  it("settled after replaceQuery before the first read waits for open's answer", async () => {
+    const t = setup();
+    let release: (v: string | null) => void = () => {};
+    t.sp.get = vi.fn(() => new Promise<string | null>((r) => (release = r)));
+    const opening = t.s.open();
+    await t.s.replaceQuery("kind:bug");
+    let done = false;
+    void t.s.settled().then(() => (done = true));
+    await vi.advanceTimersByTimeAsync(500);
+    expect(done).toBe(false);
+    release(null);
+    await opening;
+    await vi.advanceTimersByTimeAsync(0);
+    expect(done).toBe(true);
+    expect(get(t.s.state).resultQuery).toBe("kind:bug");
+  });
+
+  it("a later open with a query typed while reading searches once", async () => {
+    const t = await opened('{"query":"saved"}');
+    const opening = t.s.open();
+    t.s.setQuery("typed");
+    await opening;
+    await vi.advanceTimersByTimeAsync(500);
+    expect(get(t.s.state).query).toBe("typed");
+    expect(t.search).toHaveBeenCalledTimes(1);
+    expect(t.search).toHaveBeenCalledWith("typed", noTable);
+    expect(t.sp.put).toHaveBeenCalledTimes(1);
+  });
+
   it("opens with an empty query when the saved body is JSON null", async () => {
     const t = setup("null");
     await t.s.open();

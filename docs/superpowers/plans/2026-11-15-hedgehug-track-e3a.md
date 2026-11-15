@@ -531,7 +531,7 @@ git commit -m "docs: トラック E の分け方を E3a・E3b に書き換え、
 - 書き込みのあとのツリーの読み直しは、`reloads.ts` に `itemChanges` の集まりを足し、`itemRefresh` を使う区画が登録する形にした。
 - core: `features/search/view.ts` の `treeEmptyText`、`features/search/searchTree.ts`・`features/search/searchTreeData.ts`、`features/search/layout.ts`(`layoutNote`・`deletedTreeText`・`readSearchState`)は、`web/packages/core/src/searchIndex.ts` から公開する。`features/projects/projectMenu.ts`(`projectMenu`・`canMoveProject`・`createProjectMover`)、`features/projects/renameDialog.ts`(`createRenameProjectDialog`)、`features/items/progress.ts` の `projectProgress` は、`web/packages/core/src/index.ts` から公開する。`features/projects/editor.ts` の `ProjectEditor` にメソッド `renameOrMessage` を足した(公開物は増えない)。
 - テーブルで開く入口は、ナビゲーションが成功してから `search.showTable()` を呼ぶ(サイドバーは app の `search.ts` の `openSearchTable`、パレットは依存の `showSearchTable`)。
-- E3a-23 で core の `createSearch` は、最初の `open` が読み終えるまでの変更を `Partial<SavedSearch>` に積み(読む前は検索もせず、`settled` は `open` の検索まで解けない)、`prepareQuery` は印だけを持つようにした。`open` は読んだあとに待っていた検索を取り消し、読んだ値に積んだ分と印を重ねて 1 回書き、1 回検索する。読んでいるあいだの入力を見分ける `touched` はなくした。
+- E3a-23 で core の `createSearch` は、最初の `open` が読み終えるまでの変更を `Partial<SavedSearch>` に積み(読む前は検索もせず、`settled` は `open` の検索まで解けない)、`prepareQuery` は印だけを持つようにした。`open` は読んだあとに待っていた検索を取り消し、読んだ値に積んだ分と印を重ねて 1 回書き、1 回検索する。読んでいるあいだの入力を見分ける `touched` と、読む前の `showTable` の印 `toTable` はなくした(読む前の `showTable` は `setLayout("table")` を積む)。
 - e2e は `search-tree.spec.ts`・`search-tree-keys.spec.ts`・`search-tree-helpers.ts`・`search-layout.spec.ts`。e2e のサーバーは、閲覧のみの Store に 2 つ目のプロジェクト HH-P2「閲覧の計画」を足している。
 
 ## E3b・E4〜E7 に渡すもの
