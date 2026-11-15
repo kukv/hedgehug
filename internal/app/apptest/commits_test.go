@@ -67,22 +67,24 @@ func TestCommitLogStoreLog(t *testing.T) {
 	}
 }
 
-// 複数のエンティティに行を足した保存の Op は、いつも整列済みの先頭の行の op になる。
+// 複数のエンティティに行を足した保存の Op は、いつも整列済みの先頭の行の op になる。members の行にだけ別の op を
+// 持たせ(同期の操作だけが書ける)、整列前の順に依存すれば落ちるようにする。
 func TestCommitLogOpIsStable(t *testing.T) {
 	for range 20 {
 		_, c := newCommitLog()
-		op := port.Operation{Actor: change.User("taro"), Summary: "準備"}
+		op := port.Operation{Actor: change.Actor{Kind: change.ActorSync}, Summary: "同期"}
+		const other change.ID = "01OPSTABLEOP00000000000001"
 		if err := c.Write(t.Context(), "S1", op, func(tx port.Tx) error {
 			d, err := workspace.Create(workspace.Workspace{ID: "01OPSTABLEWS0000000000001", Name: "Web", Prefix: "HH"})
 			if err != nil {
 				return err
 			}
-			return errors.Join(tx.WriteMembers().Append(member.Init()), tx.WriteWorkspaces().Append("01OPSTABLEWS0000000000001", d))
+			return errors.Join(tx.WriteMembers().Append(member.Init().InOp(other)), tx.WriteWorkspaces().Append("01OPSTABLEWS0000000000001", d))
 		}); err != nil {
 			t.Fatal(err)
 		}
 		got, err := c.Commits(t.Context(), "S1")
-		if err != nil || len(got) != 1 || len(got[0].Changes) != 2 || got[0].Op != got[0].Changes[0].Rows[0].Op {
+		if err != nil || len(got) != 1 || len(got[0].Changes) != 2 || got[0].Changes[0].Ref.Kind != change.KindMembers || got[0].Op != other {
 			t.Fatalf("Commits = %+v, %v", got, err)
 		}
 	}
