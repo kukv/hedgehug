@@ -1,6 +1,8 @@
 package apptest_test
 
 import (
+	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -8,6 +10,7 @@ import (
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/domain/change"
 	"github.com/kukv/hedgehug/internal/domain/member"
+	"github.com/kukv/hedgehug/internal/domain/workspace"
 )
 
 func newCommitLog() (*apptest.Stores, *apptest.CommitLog) {
@@ -24,24 +27,63 @@ func TestFakeCommitLog(t *testing.T) {
 	})
 }
 
-// 保持日数の変更は、行がなくても Store 全体の記録(StoreLog)を変えた保存として 1 件になる。
+// retentionStores は、内側の Write のあとで保持日数を変える(Write の中からは、偽物が同じロックを取るので変えられない)。
+type retentionStores struct {
+	port.Stores
+	base *apptest.Stores
+	days int
+}
+
+func (r retentionStores) Write(ctx context.Context, id port.StoreID, op port.Operation, fn func(tx port.Tx) error) error {
+	if err := r.Stores.Write(ctx, id, op, fn); err != nil {
+		return err
+	}
+	r.base.SetRetentionDays(id, r.days)
+	return nil
+}
+
+// 保持日数を変えた Write だけが StoreLog のコミットになり、前の Write で変えた分は関係のない保存に乗らない。
 func TestCommitLogStoreLog(t *testing.T) {
-	s, c := newCommitLog()
+	s, _ := newCommitLog()
+	clock := apptest.NewClock(time.Date(2026, 11, 15, 9, 0, 0, 0, time.UTC))
+	c := apptest.NewCommitLog(retentionStores{Stores: s, base: s, days: 7}, clock)
 	op := port.Operation{Actor: change.User("taro"), Summary: "メンバーを追加"}
-	if err := c.Write(t.Context(), "S1", op, func(tx port.Tx) error {
-		return tx.WriteMembers().Append(member.Init(), member.Join("taro"))
-	}); err != nil {
+	join := func(tx port.Tx) error { return tx.WriteMembers().Append(member.Init(), member.Join("taro")) }
+	if err := c.Write(t.Context(), "S1", op, join); err != nil {
 		t.Fatal(err)
 	}
-	s.SetRetentionDays("S1", 7)
-	if err := c.Write(t.Context(), "S1", op, func(port.Tx) error { return nil }); err != nil {
+	s.SetRetentionDays("S1", 14) // Write の外での変更は、次の Write に乗らない
+	other := apptest.NewCommitLog(s, clock)
+	if err := other.Write(t.Context(), "S1", op, func(tx port.Tx) error { return tx.WriteMembers().Append(member.Join("hanako")) }); err != nil {
 		t.Fatal(err)
 	}
-	got, err := c.Commits(t.Context(), "S1")
-	if err != nil || len(got) != 2 {
-		t.Fatalf("Commits = %d, %v, want 2", len(got), err)
+	got, err := other.Commits(t.Context(), "S1")
+	if err != nil || len(got) != 1 || got[0].StoreLog {
+		t.Fatalf("outside change: %+v, %v", got, err)
 	}
-	if !got[0].StoreLog || len(got[0].Changes) != 0 || got[1].StoreLog {
-		t.Errorf("StoreLog = %v / %v, changes = %d", got[0].StoreLog, got[1].StoreLog, len(got[0].Changes))
+	got, err = c.Commits(t.Context(), "S1")
+	if err != nil || len(got) != 1 || !got[0].StoreLog {
+		t.Fatalf("Commits = %+v, %v; want one StoreLog commit", got, err)
+	}
+}
+
+// 複数のエンティティに行を足した保存の Op は、いつも整列済みの先頭の行の op になる。
+func TestCommitLogOpIsStable(t *testing.T) {
+	for range 20 {
+		_, c := newCommitLog()
+		op := port.Operation{Actor: change.User("taro"), Summary: "準備"}
+		if err := c.Write(t.Context(), "S1", op, func(tx port.Tx) error {
+			d, err := workspace.Create(workspace.Workspace{ID: "01OPSTABLEWS0000000000001", Name: "Web", Prefix: "HH"})
+			if err != nil {
+				return err
+			}
+			return errors.Join(tx.WriteMembers().Append(member.Init()), tx.WriteWorkspaces().Append("01OPSTABLEWS0000000000001", d))
+		}); err != nil {
+			t.Fatal(err)
+		}
+		got, err := c.Commits(t.Context(), "S1")
+		if err != nil || len(got) != 1 || len(got[0].Changes) != 2 || got[0].Op != got[0].Changes[0].Rows[0].Op {
+			t.Fatalf("Commits = %+v, %v", got, err)
+		}
 	}
 }

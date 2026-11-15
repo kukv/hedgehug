@@ -27,10 +27,8 @@ type CommitLog struct {
 
 // commitStore は、Store 1 つのコミット。mu は、Write の前後の比べ方がずれないよう、Write 1 回のあいだ持つ。
 type commitStore struct {
-	mu        sync.Mutex
-	commits   []port.Commit
-	retention int  // 最後に見た保持日数
-	seen      bool // retention を見たか
+	mu      sync.Mutex
+	commits []port.Commit
 }
 
 func NewCommitLog(s port.Stores, c port.Clock) *CommitLog {
@@ -77,10 +75,6 @@ func (c *CommitLog) Write(ctx context.Context, id port.StoreID, op port.Operatio
 	if err != nil {
 		return err
 	}
-	if st.seen {
-		before.retention = st.retention
-	}
-	st.retention, st.seen = after.retention, true
 	if commit, ok := c.diff(op, before, after); ok {
 		st.commits = append(st.commits, commit)
 	}
@@ -147,7 +141,30 @@ func reachableRefs(r port.Reader) ([]change.Ref, error) {
 // diff は、before から after で変わったものをコミットにする。何も変わっていなければ false。
 func (c *CommitLog) diff(op port.Operation, before, after snapshot) (port.Commit, bool) {
 	commit := port.Commit{Summary: op.Summary, StoreLog: before.retention != after.retention}
+	commit.Changes = addedRows(before, after)
+	for ref := range before.rows {
+		if _, ok := after.rows[ref]; !ok {
+			commit.Removed = append(commit.Removed, ref)
+		}
+	}
+	newTransfers := after.transfers[len(before.transfers):]
+	if len(commit.Changes)+len(commit.Removed)+len(newTransfers) == 0 && !commit.StoreLog {
+		return commit, false
+	}
+	byRef := func(a, b change.Ref) int { return cmp.Or(cmp.Compare(a.Kind, b.Kind), cmp.Compare(a.ID, b.ID)) }
+	slices.SortFunc(commit.Changes, func(a, b port.EntityRows) int { return byRef(a.Ref, b.Ref) })
+	slices.SortFunc(commit.Removed, byRef)
 	var added []change.Record
+	for _, e := range commit.Changes {
+		added = append(added, e.Rows...)
+	}
+	c.fill(&commit, op, added, newTransfers)
+	return commit, true
+}
+
+// addedRows は、after にだけある行を、エンティティごとに返す。
+func addedRows(before, after snapshot) []port.EntityRows {
+	var out []port.EntityRows
 	for ref, rows := range after.rows {
 		known := map[change.ID]bool{}
 		for _, r := range before.rows[ref] {
@@ -160,24 +177,10 @@ func (c *CommitLog) diff(op port.Operation, before, after snapshot) (port.Commit
 			}
 		}
 		if len(fresh) > 0 {
-			commit.Changes = append(commit.Changes, port.EntityRows{Ref: ref, Rows: fresh})
-			added = append(added, fresh...)
+			out = append(out, port.EntityRows{Ref: ref, Rows: fresh})
 		}
 	}
-	for ref := range before.rows {
-		if _, ok := after.rows[ref]; !ok {
-			commit.Removed = append(commit.Removed, ref)
-		}
-	}
-	newTransfers := after.transfers[len(before.transfers):]
-	if len(added)+len(commit.Removed)+len(newTransfers) == 0 && !commit.StoreLog {
-		return commit, false
-	}
-	byRef := func(a, b change.Ref) int { return cmp.Or(cmp.Compare(a.Kind, b.Kind), cmp.Compare(a.ID, b.ID)) }
-	slices.SortFunc(commit.Changes, func(a, b port.EntityRows) int { return byRef(a.Ref, b.Ref) })
-	slices.SortFunc(commit.Removed, byRef)
-	c.fill(&commit, op, added, newTransfers)
-	return commit, true
+	return out
 }
 
 // fill は、コミットの SHA・作者・時刻・op を決める。
