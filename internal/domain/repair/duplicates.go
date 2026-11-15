@@ -52,22 +52,29 @@ func NamingRow(log []change.Record, f string) (change.Record, bool) {
 	return change.Record{}, false
 }
 
-// keeper は、重なった g のうち、残す 1 件を返す(決定 C5c1-4、C3a-13)。row は、残す 1 件を決める行。
-// 自分の側(Facts.Side == 1)で足していない行のものの中で、行の at が最も古いもの(同じなら tie の文字列が小さいもの)。
+// older は、重なった 2 件の並び(決定 C5c1-4・C5c2-4)。自分の側(Facts.Side == 1)で足していない行のものが先、
+// 次に行の at が古いもの、同じなら tie の文字列が小さいもの。row は、残す 1 件を決める行。
 // tie は、番号なら内部 ID(C3a-13)、名前なら名前を決めた行の ID(C5c1-4)。
-// どれも自分の側なら、g 全体で最も古いもの。g は空でないこと。
-func keeper[T any](g []T, row func(T) change.Record, tie func(T) string, f Facts) T {
-	older := func(a, b T) int {
+func older[T any](row func(T) change.Record, tie func(T) string, f Facts) func(a, b T) int {
+	ours := func(n T) bool { return f.Side(row(n).ID) == 1 }
+	return func(a, b T) int {
+		if oa, ob := ours(a), ours(b); oa != ob {
+			if oa {
+				return 1
+			}
+			return -1
+		}
 		if c := row(a).At.Compare(row(b).At); c != 0 {
 			return c
 		}
 		return strings.Compare(tie(a), tie(b))
 	}
-	pool := slices.DeleteFunc(slices.Clone(g), func(n T) bool { return f.Side(row(n).ID) == 1 })
-	if len(pool) == 0 {
-		pool = g
-	}
-	return slices.MinFunc(pool, older)
+}
+
+// keeper は、重なった g のうち、残す 1 件を返す(決定 C5c1-4、C3a-13)。older で並べた先頭。
+// どれも自分の側なら、g 全体で最も古いもの。g は空でないこと。
+func keeper[T any](g []T, row func(T) change.Record, tie func(T) string, f Facts) T {
+	return slices.MinFunc(g, older(row, tie, f))
 }
 
 // NameRenames は、重なった名前の直しを返す(決定 C5c1-4・C5c1-5)。新しい値は「{値} (n)」。

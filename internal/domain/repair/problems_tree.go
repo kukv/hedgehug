@@ -73,7 +73,7 @@ func overlappingNumbers(items []item.Item) map[numberKey]bool {
 
 // issueTwice は、Issue の二重リンクに当たる削除されていないアイテム。
 // 1 つの Issue に 2 件以上の削除されていないアイテムがリンクしているとそのすべて、
-// 1 件に 2 つ以上の Issue がリンクしているとその 1 件。同じ鍵の重複は 1 つと数える。
+// 1 件に 2 本以上の Issue のリンクがあるとその 1 件(同じ Issue への 2 本も 2 本と数える)。
 func issueTwice(s StoreState) map[item.ID]bool {
 	byIssue := map[string][]item.ID{}
 	out := map[item.ID]bool{}
@@ -85,7 +85,7 @@ func issueTwice(s StoreState) map[item.ID]bool {
 				byIssue[k] = append(byIssue[k], it.ID)
 			}
 		}
-		if len(keys) >= 2 {
+		if len(s.Issues[it.ID]) >= 2 {
 			out[it.ID] = true
 		}
 	}

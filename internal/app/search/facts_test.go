@@ -219,6 +219,49 @@ func TestFactsInvalid(t *testing.T) {
 	}
 }
 
+// リポジトリの大文字小文字だけが違う同じ Issue のリンクも、Issue の二重リンクに数える(C5c2-18)。
+func TestInvalidIssueCase(t *testing.T) {
+	f := newFixture(t)
+	must(t, apptest.Sample(t.Context(), f.stores, store1))
+	v := itemlink.Values{Title: "t", State: itemlink.Open, Review: itemlink.NoReview}
+	for i, repo := range []string{"Kukv/Web", "kukv/web"} {
+		id := []item.ID{item3, item4}[i]
+		addItem(t, f.stores, task(id, 3+i, item.Task, ptr(apptest.SampleEpic), "同じ Issue"))
+		ref := itemlink.Ref{Kind: itemlink.Issue, Repo: repo, Number: 5}
+		write(t, f.stores, func(tx port.Tx) error { return tx.WriteItems().Append(id, itemlink.Set{}.Attach(ref, v)...) })
+	}
+	var invalid []string
+	for _, e := range entriesOf(t, f, "is:invalid") {
+		if e.facts.Invalid {
+			invalid = append(invalid, e.facts.Display)
+		}
+	}
+	if want := []string{"HH-3", "HH-4"}; !reflect.DeepEqual(invalid, want) {
+		t.Errorf("is:invalid の Invalid = %v, want %v", invalid, want)
+	}
+}
+
+// 1 つのアイテムが、大文字小文字だけが違う同じ Issue に 2 本リンクしていても、二重リンクになる。
+func TestInvalidIssueCaseSameItem(t *testing.T) {
+	f := newFixture(t)
+	must(t, apptest.Sample(t.Context(), f.stores, store1))
+	v := itemlink.Values{Title: "t", State: itemlink.Open, Review: itemlink.NoReview}
+	addItem(t, f.stores, task(item3, 3, item.Task, ptr(apptest.SampleEpic), "同じ Issue に 2 本"))
+	for _, repo := range []string{"Kukv/Web", "kukv/web"} {
+		ref := itemlink.Ref{Kind: itemlink.Issue, Repo: repo, Number: 5}
+		write(t, f.stores, func(tx port.Tx) error { return tx.WriteItems().Append(item3, itemlink.Set{}.Attach(ref, v)...) })
+	}
+	var invalid []string
+	for _, e := range entriesOf(t, f, "is:invalid") {
+		if e.facts.Invalid {
+			invalid = append(invalid, e.facts.Display)
+		}
+	}
+	if want := []string{"HH-3"}; !reflect.DeepEqual(invalid, want) {
+		t.Errorf("is:invalid の Invalid = %v, want %v", invalid, want)
+	}
+}
+
 func TestFactsOverwrittenOnlyWhenNeeded(t *testing.T) {
 	f := newFixture(t)
 	ctx := t.Context()
