@@ -88,9 +88,9 @@ func wireConfig(t *testing.T, body string) (httpapi.Deps, string) {
 	if err := os.WriteFile(filepath.Join(cfg, "hedgehug", "config.yaml"), []byte(body), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	var logs bytes.Buffer
+	logs := &lockedLog{}
 	prev := slog.Default()
-	slog.SetDefault(slog.New(slog.NewTextHandler(&logs, nil)))
+	slog.SetDefault(slog.New(slog.NewTextHandler(logs, nil)))
 	t.Cleanup(func() { slog.SetDefault(prev) })
 	ctx, cancel := context.WithCancel(context.Background())
 	var running sync.WaitGroup
@@ -103,6 +103,30 @@ func wireConfig(t *testing.T, body string) (httpapi.Deps, string) {
 		t.Fatal(err)
 	}
 	return deps, logs.String()
+}
+
+// lockedLog は、wire が動かした goroutine も書くログの書き先。読み書きを 1 つずつにする。
+type lockedLog struct {
+	mu  sync.Mutex
+	buf bytes.Buffer
+}
+
+func (l *lockedLog) Write(p []byte) (int, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.buf.Write(p)
+}
+
+func (l *lockedLog) String() string {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.buf.String()
+}
+
+// openWarnings は、logs のうち、wire が起動のときに config.yaml の Store を開かなかった警告の数。同期などの
+// goroutine が出す警告は数えない。
+func openWarnings(logs string) int {
+	return strings.Count(logs, `level=WARN msg="config.yaml の`)
 }
 
 func storeRow(id port.StoreID, name, path string) string {
@@ -188,7 +212,7 @@ func TestWireSkipsUnopenable(t *testing.T) {
 	if got := listedIDs(t, deps); !slices.Equal(got, []port.StoreID{wiredStore}) {
 		t.Errorf("StoreList = %v, want [%s]", got, wiredStore)
 	}
-	if n := strings.Count(logs, "level=WARN"); n != 3 {
+	if n := openWarnings(logs); n != 3 {
 		t.Errorf("warnings = %d, want 3:\n%s", n, logs)
 	}
 }
@@ -200,7 +224,7 @@ func TestWireSkipsDuplicateIDs(t *testing.T) {
 	if got := listedIDs(t, deps); len(got) != 0 {
 		t.Errorf("StoreList = %v, want none", got)
 	}
-	if n := strings.Count(logs, "level=WARN"); n != 2 {
+	if n := openWarnings(logs); n != 2 {
 		t.Errorf("warnings = %d, want 2:\n%s", n, logs)
 	}
 }
@@ -211,7 +235,7 @@ func TestWireStartsWithBrokenConfig(t *testing.T) {
 	if infos, err := deps.StoreList.List(t.Context()); len(infos) != 0 || err == nil {
 		t.Errorf("StoreList = %v, %v, want none and the parse error", infos, err)
 	}
-	if n := strings.Count(logs, "level=WARN"); n != 1 {
+	if n := openWarnings(logs); n != 1 {
 		t.Errorf("warnings = %d, want 1:\n%s", n, logs)
 	}
 }
