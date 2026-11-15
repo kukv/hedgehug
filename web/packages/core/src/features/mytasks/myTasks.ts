@@ -55,6 +55,9 @@ export function createMyTasks(deps: {
   });
   let runs = 0;
   let pending: unknown;
+  // read は open が画面の状態を読み終えたか。stash は、読む前に変えた項目(読む前に書くと保存した値を上書きする。E3a-23)。
+  let read = false;
+  let stash: Partial<{ filter: string; groupBy: MyTasksGroupBy }> = {};
 
   const cancel = () => {
     if (pending !== undefined) deps.timer.clear(pending);
@@ -86,12 +89,20 @@ export function createMyTasks(deps: {
       cancel();
       const saved = readSaved(await deps.screenStates.read<unknown>(myTasksScreen, null));
       cancel();
-      state.update((s) => ({ ...s, ...saved }));
+      read = true;
+      const dirty = Object.keys(stash).length > 0;
+      state.update((s) => ({ ...s, ...saved, ...stash }));
+      stash = {};
+      if (dirty) write();
       await run();
     },
     setFilter(text) {
       cancel();
       state.update((s) => ({ ...s, filter: text }));
+      if (!read) {
+        stash = { ...stash, filter: text };
+        return;
+      }
       write();
       // 飛んでいる問い合わせの応答は古い絞り込みのものなので捨てる。
       runs += 1;
@@ -102,7 +113,8 @@ export function createMyTasks(deps: {
     },
     setGroupBy(by) {
       state.update((s) => ({ ...s, groupBy: by }));
-      write();
+      if (!read) stash = { ...stash, groupBy: by };
+      else write();
     },
     reload() {
       cancel();

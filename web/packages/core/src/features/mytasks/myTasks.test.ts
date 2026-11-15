@@ -34,6 +34,28 @@ describe("createMyTasks", () => {
     expect(t.list).toHaveBeenCalledWith("priority:high");
   });
 
+  it("open keeps a filter typed while the saved state is being read", async () => {
+    const t = setup();
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    vi.mocked(t.sp.get).mockImplementation(async () => {
+      await gate;
+      return '{"filter":"old","groupBy":"project"}';
+    });
+    const opening = t.m.open();
+    t.m.setFilter("ab");
+    release();
+    await opening;
+    await vi.advanceTimersByTimeAsync(500);
+    expect(get(t.m.state)).toMatchObject({ filter: "ab", groupBy: "project" });
+    expect(t.list).toHaveBeenCalledTimes(1);
+    expect(t.list).toHaveBeenCalledWith("ab");
+    expect(t.sp.put).toHaveBeenLastCalledWith(
+      "my-tasks",
+      JSON.stringify({ filter: "ab", groupBy: "project" }),
+    );
+  });
+
   it("bad saved fields fall back", async () => {
     const t = setup('{"filter":3,"groupBy":"nope"}');
     await t.m.open();
