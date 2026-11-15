@@ -59,7 +59,7 @@
 | C5c2-15 | e2e は足さない。2 台の場面は `cmd/hedgehug` の本物の gitstore と state.db で確かめる | C5c1-15 と同じ |
 | C5c2-16 | 06 `:266` に (b) の本文を足し、保存形式 `:214` に Issue のリンクとメンバーの見つけ方と書く行を足す(Task 6) | ユーザーの決定(2026-11-15) |
 | C5c2-17 | リンクした行: リンクを決めた行(C5c2-3)が、GitHub からの取り直しでリポジトリの改名・移管を追った行(`itemlink.Set.Rename`。同じ `op` に、種別と番号が同じで別のリポジトリの `remove links` がある `add links`)なら、その `remove` の行の `prev` が指す `add` の行(複数なら `change.ListRow` の勝った行)へ、改名でない行に着くまでたどる(`itemlink.Origin`)。C5c2-4 の並び・C5c2-9 の宛先・C5c2-11 の鍵は、この行で決める | 06 `:256`「あとから同期した方」、`:266`「リンクした人」。改名の追従はリンクではなく取り直し(07、D3-11)なので、リンクした時刻と人を変えない。改名前の名前で書き込みの検査(07 `:244` の `Same`)を通った同じ Issue が、取り直しのあとに 2 つのアイテムにそろって重なることがある |
-| C5c2-18 | 診断の Issue の二重リンク(`repair.issueTwice`。検索の `is:invalid`)は、`Ref.Key()`(リポジトリの大文字小文字まで同じ)で比べていたのを、`Ref.Same` と同じ比べ方にする(Task 5) | ユーザーの決定(2026-11-15、案 1。C5c2 の PR で直す)。書き込みの検査(07 `:244`)・同期の修復(C5c2-2)と同じものを二重リンクとするため |
+| C5c2-18 | 診断の Issue の二重リンク(`repair.issueTwice`。検索の `is:invalid`)は、`Ref.Key()`(リポジトリの大文字小文字まで同じ)で比べていたのを、`Ref.Same` と同じ比べ方にする。1 つのアイテムの判定は、鍵をまとめる前のリンクの本数で数える(大文字小文字だけが違う同じ Issue を 2 本持つアイテムも、同期の修復が 1 本外すので二重リンクにする)(Task 5、最終レビュー) | ユーザーの決定(2026-11-15、案 1。C5c2 の PR で直す)。書き込みの検査(07 `:244`)・同期の修復(C5c2-2)と同じものを二重リンクとするため |
 
 ## Review Focus
 
@@ -88,7 +88,7 @@
 - Produces(`repair`、パッケージの中だけ): `func older[T any](row func(T) change.Record, tie func(T) string, f Facts) func(a, b T) int`: C5c2-4 の並び(自分の側でないものが先 → `at` → tie)。`keeper` は、これで並べた先頭を返す形にする(結果は変えない)。
 
 - [ ] **Step 1: 失敗するテストを書く**
-  - `TestListRow`: `add links A`(at 1)→ `remove links A`(at 2)→ `add links A`(at 3)の log で、A は at 3 の行。`add links B` の値の JSON のキーの順を変えた v でも同じ行。ない値は false。作成の初期値 `{"members":["x"]}` の x は作成の行。
+  - `TestListRow`: `add links A`(at 1)→ `remove links A`(at 2)→ `add links A`(at 3)の log で、A は at 3 の行。`add links B` の値の JSON の空白だけを変えた v でも同じ行、キーの順を変えた v は false(`resolveList` と同じ `canonical` で比べ、`Resolve` といつも一致させる)。ない値は false。作成の初期値 `{"members":["x"]}` の x は作成の行。
   - `TestOrigin`: taro が `Kukv/Web#5` をリンク(`Attach`)→ GitHub の実行者で `Rename(…, "kukv/web2", …)` → さらに `Rename(…, "kukv/web3", …)`。`kukv/web3#5` の `add` の行から taro の `add` の行に着く。改名でない `add` はそのまま返る。PR の改名も同じ。
   - 既存の `TestKeeper…`・`TestRenumbers`・`TestNameRenames…` が変わらず通る。
 - [ ] **Step 2: 失敗を確かめる** — Run: `go test ./internal/domain/change/` Expected: FAIL(`undefined: ListRow`)
