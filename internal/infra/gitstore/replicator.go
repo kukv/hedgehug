@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
@@ -27,6 +28,8 @@ type Replicator struct {
 	// cmd が置く。どちらかが nil なら判定しない。
 	Judge  port.JudgeFunc
 	Judged port.JudgedSaves
+	// OnSkew は、git の通信の応答の Date で測った時計のずれ(Date − このマシンの時計)を受け取る(決定 C5d-3)。nil なら測らない。
+	OnSkew func(time.Duration)
 
 	// beforeSend は、送る直前に呼ぶ。テストで、送信が他の人の更新と重なる場面を作るためのもの。
 	beforeSend func() error
@@ -36,6 +39,7 @@ func NewReplicator(s *Stores) *Replicator { return &Replicator{stores: s} }
 
 // Sync は、受け取り、合わせ、修復し、送る。合わせ、修復しているあいだは、Store のロックを持つ。
 func (r *Replicator) Sync(ctx context.Context, id port.StoreID, remote port.Remote) (port.SyncResult, error) {
+	ctx = withSkew(ctx, r.OnSkew, r.stores.clock.Now)
 	s, unlock, err := r.begin(id, remote)
 	if err != nil {
 		return port.SyncResult{}, err

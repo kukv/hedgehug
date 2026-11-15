@@ -10,6 +10,21 @@ import {
 
 export const tokenUrl = (path = "/") => `${path}#token=e2e-token`;
 
+// send は、e2e のサーバーの API を呼び、応答の本文を返す(204 は undefined)。
+export async function send(
+  page: Page,
+  method: "post" | "put" | "delete",
+  path: string,
+  data: unknown,
+) {
+  const res = await page.request[method](path, {
+    headers: { Authorization: "Bearer e2e-token" },
+    data,
+  });
+  if (!res.ok()) throw new Error(`${path}: ${res.status()} ${await res.text()}`);
+  return res.status() === 204 ? undefined : res.json();
+}
+
 // sidebar は、サイドバーを出して返す。860px 以下の幅では、引き出しを開く。
 export async function sidebar(page: Page, info: TestInfo) {
   if (info.project.name !== "desktop") {

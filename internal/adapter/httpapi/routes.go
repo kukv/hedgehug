@@ -97,6 +97,8 @@ type Deps struct {
 	Sync   *appsyncing.Service
 	Auto   *appsyncing.Auto
 	Events *events.Hub // nil なら NewAPI が作る(知らせる者がいない)
+	// ClockSkew は、GitHub の応答で測った時計のずれの警告(C5d)。cmd が 1 つ作り、GitHub の問い合わせと git の通信と共用する。
+	ClockSkew *appsyncing.Skew
 	// GitHubSession は、GitHub の API と、同期・リンクの操作のトークンの入口で共用する Session。nil なら githubServices が作る。
 	GitHubSession *ghapp.Session
 
@@ -174,7 +176,7 @@ func NewAPI(mux *http.ServeMux, deps Deps) huma.API {
 	registerSearch(api, deps, hub)
 	ghapi.Register(api, githubServices(deps))
 	events.Register(api, hub)
-	syncapi.Register(api, syncapi.Services{Sync: deps.Sync, Auto: deps.Auto})
+	syncapi.Register(api, syncapi.Services{Sync: deps.Sync, Auto: deps.Auto, Skew: deps.ClockSkew})
 
 	return api
 }

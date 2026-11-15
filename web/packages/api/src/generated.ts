@@ -2493,6 +2493,8 @@ export interface SyncStoreStatus {
 export interface SyncStatusList {
   /** 「裏で自動的に同期する」がオンか(オフラインの帯の文を選ぶ) */
   auto: boolean;
+  /** 時計のずれの警告の分。正はこのマシンの時計が進んでいる、負は遅れている。0 は警告なし */
+  clockSkew: number;
   stores: SyncStoreStatus[];
 }
 

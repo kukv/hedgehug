@@ -131,8 +131,13 @@ describe("settings", () => {
     expect(parseRoute("/settings/accounts")).toEqual({ name: "settings", tab: "accounts" });
   });
 
+  it("reads /settings/general as the general tab, and writes it back", () => {
+    expect(parseRoute("/settings/general")).toEqual({ name: "settings", tab: "general" });
+    expect(formatRoute({ name: "settings", tab: "general" })).toBe("/settings/general");
+  });
+
   it("goes home for a tab that is not there", () => {
-    expect(parseRoute("/settings/general")).toEqual({ name: "home" });
+    expect(parseRoute("/settings/unknown")).toEqual({ name: "home" });
     expect(parseRoute("/settings/accounts/x")).toEqual({ name: "home" });
   });
 

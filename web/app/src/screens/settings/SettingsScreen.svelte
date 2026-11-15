@@ -3,6 +3,7 @@
   import { PageHead, Tabs } from "@hedgehug/ui";
   import { navigation } from "../../wire";
   import AccountsSection from "./AccountsSection.svelte";
+  import GeneralSection from "./GeneralSection.svelte";
 
   // 設定の画面(08「設定画面の構成」)。タブは、作ったものだけを出す(D2 画面の計画の決定 S1・S4)。
   interface Props {
@@ -12,7 +13,10 @@
   }
 
   let { tab, ondrawer, alert }: Props = $props();
-  const tabs = [{ id: "accounts", label: "アカウントとメンバー" }];
+  const tabs = [
+    { id: "general", label: "一般" },
+    { id: "accounts", label: "アカウントとメンバー" },
+  ];
 </script>
 
 <PageHead title="設定" note="このマシンの設定と、Store の管理" {ondrawer} {alert} />
@@ -22,7 +26,9 @@
   onselect={(id) => navigation.go({ name: "settings", tab: id as SettingsTab })}
 />
 <div class="content">
-  {#if tab === "accounts"}
+  {#if tab === "general"}
+    <GeneralSection />
+  {:else if tab === "accounts"}
     <AccountsSection />
   {/if}
 </div>

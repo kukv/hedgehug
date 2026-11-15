@@ -19,6 +19,7 @@ describe("createSync", () => {
       fakeSyncPort({
         status: async () => ({
           auto: false,
+          clockSkew: 0,
           stores: [
             {
               storeId: "S1",
@@ -44,14 +45,14 @@ describe("createSync", () => {
       fakeSyncPort({
         status: async () => {
           if (fail) throw new Error("down");
-          return { auto: true, stores: [] };
+          return { auto: true, clockSkew: 0, stores: [] };
         },
       }),
     );
     await sync.load();
     fail = true;
     await sync.load();
-    expect(get(sync.status)).toEqual({ auto: true, stores: [] });
+    expect(get(sync.status)).toEqual({ auto: true, clockSkew: 0, stores: [] });
   });
 
   it("shows one toast for 「すべて同期」 and reloads (決定 S12・S13)", async () => {
@@ -130,7 +131,7 @@ describe("createSync", () => {
 
   it("says there is nothing to sync when offline and no visible store has a remote", async () => {
     const { sync, shown, port } = setup(
-      fakeSyncPort({ status: async () => ({ auto: true, stores: [] }) }),
+      fakeSyncPort({ status: async () => ({ auto: true, clockSkew: 0, stores: [] }) }),
       false,
     );
     await sync.load();

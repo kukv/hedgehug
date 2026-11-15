@@ -25,6 +25,7 @@ func mirrorRefPrefix(url string) string {
 // Mirror は、Store の先端をミラーへ送る(保存形式「同期」の手順 7、決定 C2-15)。ミラーからは受け取って
 // 合わせない。履歴は書き換えない(強制しない)。
 func (r *Replicator) Mirror(ctx context.Context, id port.StoreID, mirror port.Remote) error {
+	ctx = withSkew(ctx, r.OnSkew, r.stores.clock.Now)
 	root, err := r.stores.dir(id)
 	if err != nil {
 		return err
@@ -178,6 +179,7 @@ func (r *Replicator) SyncSave(ctx context.Context, id port.StoreID, remote port.
 	if remote.ReceiveOnly {
 		return port.SyncResult{}, fmt.Errorf("%w: cannot save to a receive-only store", port.ErrInvalidOperation)
 	}
+	ctx = withSkew(ctx, r.OnSkew, r.stores.clock.Now)
 	s, unlock, err := r.begin(id, remote)
 	if err != nil {
 		return port.SyncResult{}, err

@@ -49,6 +49,9 @@
   {#if card.stale}
     <p class="line warn">{card.stale}</p>
   {/if}
+  {#if card.clock}
+    <p class="line warn">{card.clock}</p>
+  {/if}
   {#if open}
     <div class="menu" role="menu" aria-label="Store ごとの同期状態">
       {#each card.rows as row (row.storeId)}

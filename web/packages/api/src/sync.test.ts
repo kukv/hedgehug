@@ -24,6 +24,7 @@ describe("createSyncPort", () => {
   it("reads the status with dates", async () => {
     respond(200, {
       auto: false,
+      clockSkew: -6,
       stores: [
         {
           store: "S1",
@@ -47,6 +48,7 @@ describe("createSyncPort", () => {
     });
     expect(await createSyncPort().status()).toEqual({
       auto: false,
+      clockSkew: -6,
       stores: [
         {
           storeId: "S1",

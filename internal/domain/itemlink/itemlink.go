@@ -75,6 +75,9 @@ func (r Ref) Display() string { return fmt.Sprintf("%s#%d", r.Repo, r.Number) }
 // 「もうリンクしています」。GitHub の PR と Issue は番号を共有する)。
 func (r Ref) Same(o Ref) bool { return r.Number == o.Number && strings.EqualFold(r.Repo, o.Repo) }
 
+// SameKey は、Same と同じ比べ方の鍵「小文字のリポジトリ#番号」。a.Same(b) と a.SameKey() == b.SameKey() は同じになる。
+func (r Ref) SameKey() string { return fmt.Sprintf("%s#%d", strings.ToLower(r.Repo), r.Number) }
+
 // ValueField は、リンクの値の項目名(links/<種別:リポジトリ#番号>/<name>)。name は title・state・review。
 func ValueField(r Ref, name string) string { return valuesHead + r.Key() + "/" + name }
 
