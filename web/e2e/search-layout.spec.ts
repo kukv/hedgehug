@@ -212,3 +212,34 @@ test("palette opens in table", async ({ page }, info) => {
   await expect(layoutOf(page, "テーブル")).toHaveAttribute("aria-pressed", "true");
   await expect(page.getByText("1 件を選択中", { exact: true })).toBeVisible();
 });
+
+// ツリーに戻したとき、組み直すまで前の件数を出さない。テーブルにしているあいだに届いた前の組み直しは捨てる。
+test("does not show a stale tree count after switching back", async ({ page }, info) => {
+  const s = await seedTask(page, info);
+  const p2 = await s.project(2);
+  await s.item(p2.id, "Epic", `${s.mark} F`);
+  // 空の絞り込みで開くとすべてのプロジェクトを読んでしまうので、絞り込みを入れた画面の状態で開く(2 つめのプロジェクトは
+  // まだ読まない)。
+  await resetSearchScreen(page.request, "tree", s.query);
+  await openAt(page);
+  await expect(page.getByText("1 件", { exact: true })).toBeVisible();
+
+  // プロジェクトのアイテムの読み込みを止めておく。
+  let open = () => {};
+  let gate = new Promise<void>((r) => (open = r));
+  await page.route("**/api/stores/*/projects/*/items", async (route) => {
+    await gate;
+    await route.continue();
+  });
+  const late = page.waitForResponse((r) => r.url().endsWith(`/projects/${p2.id}/items`));
+  await search(page, `kind:epic ${s.mark}`);
+  await choose(page, "テーブル");
+  open();
+  await late;
+
+  gate = new Promise<void>((r) => (open = r));
+  await choose(page, "ツリー");
+  await expect(page.getByText(/^\d+ 件$/)).toHaveCount(0);
+  open();
+  await expect(page.getByText("2 件", { exact: true })).toBeVisible();
+});
