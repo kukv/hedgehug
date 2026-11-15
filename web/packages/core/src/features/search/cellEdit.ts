@@ -86,12 +86,12 @@ export function cellEditor(
   return { kind: "property", row: propertyRow(ctx.settings, p, value, ctx.people, row.projectId) };
 }
 
-// groupKeys は、グループの見出しの文字。同じ見出しは、2 回目から `${label}#2` のように数を付ける。
+// groupKeys は、グループの見出しの文字。すべての鍵に、その見出しが何回目かを `${n}:${label}` の形で付ける(見出しが `A#2` でも重ならない)。
 export function groupKeys(groups: SearchGroup[]): string[] {
   const seen = new Map<string, number>();
   return groups.map((g) => {
     const n = (seen.get(g.label) ?? 0) + 1;
     seen.set(g.label, n);
-    return n === 1 ? g.label : `${g.label}#${n}`;
+    return `${n}:${g.label}`;
   });
 }

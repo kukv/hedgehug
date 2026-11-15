@@ -79,6 +79,31 @@ describe("createTableCells loading", () => {
     expect(cells.context("s1", "w1")).toBeUndefined();
   });
 
+  it("does not read again after unload", async () => {
+    const { deps, cells } = setup();
+    const a = [row()];
+    cells.load(a);
+    await flush();
+    cells.unload(a);
+    cells.reset();
+    await flush();
+    expect(deps.workspaces.get).toHaveBeenCalledTimes(1);
+  });
+
+  it("ignores unload of rows replaced by a newer load", async () => {
+    const { deps, cells } = setup();
+    const a = [row()];
+    const b = [row({ workspaceId: "w2" })];
+    cells.load(a);
+    cells.load(b);
+    await flush();
+    cells.unload(a);
+    cells.reset();
+    await flush();
+    expect(deps.workspaces.get).toHaveBeenCalledTimes(3);
+    expect(deps.workspaces.get).toHaveBeenLastCalledWith("s1", "w2");
+  });
+
   it("reads the last loaded rows again on reset", async () => {
     const { deps, cells } = setup();
     cells.load([row(), row({ workspaceId: "w2" })]);

@@ -24,6 +24,8 @@ export interface TableCells {
   context(storeId: string, workspaceId: string): Context | undefined;
   // load は、まだ読んでいない行のワークスペースの元を読み始める(テーブルが出している行が変わるたびに呼ぶ)。
   load(rows: SearchRow[]): void;
+  // unload は、テーブルが消えるときに呼ぶ。最後に load した行がその行なら忘れる(別のテーブルが先に load していたら何もしない)。
+  unload(rows: SearchRow[]): void;
   // reset は、元を捨て、最後に load した行の元を読み直す(読み終えるまでは前の元を返す)。
   reset(): void;
   // save は、1 回保存する。保存したら true。成否にかかわらず changed() と reload() を待つ。
@@ -72,6 +74,10 @@ export function createTableCells(deps: TableCellsDeps): TableCells {
         },
       );
     }
+  }
+
+  function unload(rows: SearchRow[]) {
+    if (last === rows) last = [];
   }
 
   function reset() {
@@ -124,6 +130,7 @@ export function createTableCells(deps: TableCellsDeps): TableCells {
     loaded: readonly(count),
     context: (storeId, workspaceId) => ready.get(keyOf(storeId, workspaceId)),
     load,
+    unload,
     reset,
     save,
   };

@@ -31,7 +31,7 @@
   }
 
   let { rows, columns, groups, sort, onsort, selection, onmenu, cells, reload }: Props = $props();
-  // グループは見出しの文字で見分ける(同じ見出しは #2 から)。行はグループの中でアイテムで見分ける。
+  // グループは見出しの文字で見分ける(同じ見出しは何回目かを付ける)。行はグループの中でアイテムで見分ける。
   const keys = $derived(groupKeys(groups));
   const picked = $derived(selection.rows);
   // 終了日の「期限切れ」「今日」と相対時間は、結果が届いたときと日付が替わったときの時刻で決める(読み直した行の
@@ -42,7 +42,11 @@
     return new Date();
   });
   // 選択肢の元は、出している行のワークスペースの分を読む(行が変わるたびに、まだ読んでいない分を読み始める)。
-  $effect(() => cells.load(rows));
+  $effect(() => {
+    const loading = rows;
+    cells.load(loading);
+    return () => cells.unload(loading);
+  });
 </script>
 
 <!-- 同じアイテムが複数のグループに出ても、チェックは Store とアイテムの内部 ID で 1 つの選択を指す -->

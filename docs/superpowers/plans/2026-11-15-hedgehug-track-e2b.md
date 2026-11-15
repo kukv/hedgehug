@@ -43,7 +43,7 @@ E2a の計画の Global Constraints をすべて引き継ぐ。加えて次を�
 | E2b-6 | 編集できないセル: ID・種類・タイトル・プロジェクト・親・作成日・更新日(E2a のまま)、`unused` の列(「—」)、削除済みの行のすべてのセル(E2a の表示のまま。削除済みのピルと日数を添えているので、「閲覧のみの Store です」は添えない)、選択肢の元を読めていない行。閲覧のみの Store の行は、部品を出して無効にし、`title` に「閲覧のみの Store です」 | 04 の 312・482・483・713 行、03 の 246 行。削除済みの見せ方はマイタスクの行(E4a)と同じ |
 | E2b-7 | 保存: プロパティは `items.setProperty(storeId, itemId, propertyId, value)`、関連システム・複数選択は `addValue`・`removeValue`、スプリント・リリースは `planning.setItemSprint`・`setItemRelease`(空は null)。いまの値と同じなら送らない(プロパティは `PropertyField` が、スプリント・リリースは `chosen` と比べて)。成功してもトーストは出さない。断られたらその文、ほかの失敗(404・通信)は「保存できませんでした」をエラーのトーストに出す。成否にかかわらず、`itemRefresh.afterChange()` とテーブルの読み直しをする | 04 の 713 行、E2a の申し送り(パレットの「ステータスを変更」と同じ出し方)、F1-18 |
 | E2b-8 | 保存できなかったセルは、そのセルの部品だけを作り直して保存済みの値に戻す(詳細パネルの `version` と同じ。同じ行のほかのセルの入力中の文字は残す)。読み直しで値が変わらないと入力欄に断られた文字が残るため | 詳細パネルの `DetailProperties.svelte` と同じ |
-| E2b-9 | グループの行は、グループの見出しとアイテム(Store と内部 ID)で見分ける(E2a はグループの位置と行の位置)。同じ見出しが 2 つあるとき(別の Store の同じ ID とタイトルの親など)は、2 つ目から `#2`・`#3` を付ける。セルを編集して並べ替えやグループが変わっても、入力中の文字や開いているメニューが別のアイテムの行に移らない。関連システムのグループで、開いているメニューから外した値のグループの行は、そのグループから消えるのでメニューも閉じる(ほかのグループの同じアイテムの行は残る) | 04 の 691 行(同じアイテムが複数のグループに出る)。行を描き直さずにメニューを残すと、選択肢のチェックが保存と食い違う |
+| E2b-9 | グループの行は、グループの見出しとアイテム(Store と内部 ID)で見分ける(E2a はグループの位置と行の位置)。同じ見出しが 2 つあるとき(別の Store の同じ ID とタイトルの親など)は、見出しの前にその見出しが何回目かを付けた `1:A`・`2:A` の形で見分ける(見出しが `A#2` でも重ならない)。セルを編集して並べ替えやグループが変わっても、入力中の文字や開いているメニューが別のアイテムの行に移らない。グループが「更新日」のときは、どの列を編集しても行は今日の見出しへ移るので、同じく部品を作り直す(開いていたメニューは閉じる)。関連システムのグループで、開いているメニューから外した値のグループの行は、そのグループから消えるのでメニューも閉じる(ほかのグループの同じアイテムの行は残る) | 04 の 691 行(同じアイテムが複数のグループに出る)。行を描き直さずにメニューを残すと、選択肢のチェックが保存と食い違う |
 | E2b-10 | 担当者のセルは、`PropertyField` の `user` のセレクト(「未割り当て」、メンバー、あなたに「(あなた)」、いまの人がメンバーにいなければ「不明なユーザー」)。E2a のアバターの表示は、選択肢の元を読めていない行と削除済みの行だけに残す | 04 の 703 行、01 |
 | E2b-11 | テーブルの部品 `ItemTable` は、セルの編集の元 `cells: TableCells` と読み直し `reload: () => Promise<void>` を props で受ける(検索の画面と保存したビューの画面は `searchCells` と、画面の `search` の `reload`)。`ItemTable` は出している行が変わるたびに `cells.load(rows)` を呼び、`reset` は最後に `load` した行の元を読み直す。E2c のワークスペース・プロジェクトのタブは、同じ `createTableCells` で自分の `TableCells` を作って渡す | E2c が同じ部品を使う(E2a の申し送り) |
 | E2b-12 | E3b(PR #233)が develop に入っていたら、Task 6 で取り込み、`SearchBody` が props の `search` の `reload` を `ItemTable` に渡すようにする(ビューの画面のテーブルも同じ編集になる) | 04 の 661 行(検索とビューのテーブルは同じ)。CLAUDE.md の「残タスクを残さない」 |
@@ -114,7 +114,7 @@ git commit -m "feat(search): 検索の行に、セルの編集に要る値の内
   - `rowValues(row: SearchRow): ItemValues`(`cellEdit.ts`。`status: row.statusId`、`assignee: row.assignee?.login ?? ""`、`priority`・`systems`・`choices`・`fields` は `row.values`、`start`・`end`・`points`・`estimate` は行)
   - `export type CellEditor = { kind: "property"; row: PropertyRow } | { kind: "plan"; key: "sprint" | "release"; options: { value: string; label: string }[]; value: string } | { kind: "display" }`
   - `cellEditor(row: SearchRow, column: SearchColumn, ctx: Context | undefined): CellEditor`
-  - `groupKeys(groups: SearchGroup[]): string[]`(見出しの文字。2 回目からは `${label}#2` のように数を付ける)
+  - `groupKeys(groups: SearchGroup[]): string[]`(見出しの文字。すべての鍵に何回目かを付けた `${n}:${label}`)
 
 - [ ] **Step 1: 失敗するテストを書く**
 
@@ -127,7 +127,7 @@ git commit -m "feat(search): 検索の行に、セルの編集に要る値の内
 - `edits a hidden builtin property`: 優先度を `hidden: true` にしても `kind: "property"`。
 - `plan cells`: Story の列 `sprint` → `kind: "plan"`、`options[0]` が `{ value: "", label: "バックログ" }`、`value` は `chosen(...)`。列 `release` も同じ(先頭「なし」)。
 - `rowValues reads ids`: `statusId`・`assignee.login`・`values` から `ItemValues`。
-- `groupKeys numbers repeats`: `["A","B","A"]` → `["A","B","A#2"]`。
+- `groupKeys numbers repeats`: `["A","B","A"]` → `["1:A","1:B","2:A"]`。`["A","A","A#2"]` の鍵はすべて異なる。
 
 `properties.test.ts`(あるもの)に `propertyRow matches propertyRows for one property` を足す。
 

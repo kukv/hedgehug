@@ -177,6 +177,8 @@ describe("rowValues", () => {
 describe("groupKeys", () => {
   it("groupKeys numbers repeats", () => {
     const g = (label: string) => ({ label, rows: [] });
-    expect(groupKeys([g("A"), g("B"), g("A")])).toEqual(["A", "B", "A#2"]);
+    expect(groupKeys([g("A"), g("B"), g("A")])).toEqual(["1:A", "1:B", "2:A"]);
+    const keys = groupKeys([g("A"), g("A"), g("A#2")]);
+    expect(new Set(keys).size).toBe(3);
   });
 });
