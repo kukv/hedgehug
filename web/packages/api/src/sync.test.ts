@@ -126,6 +126,24 @@ describe("watch", () => {
     expect(new Headers(init.headers).get("Authorization")).toBe("Bearer tok");
   });
 
+  it("passes views events", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(streamOf(['event: views\ndata: {"store":""}\n\n']), {
+            status: 200,
+            headers: { "Content-Type": "text/event-stream" },
+          }),
+      ),
+    );
+    setToken("tok");
+    const seen: string[] = [];
+    await createSyncPort().watch({ open: () => seen.push("open"), event: (k) => seen.push(k) })
+      .done;
+    expect(seen).toEqual(["open", "views"]);
+  });
+
   it("passes github and inbox events and ignores unknown ones", async () => {
     vi.stubGlobal(
       "fetch",

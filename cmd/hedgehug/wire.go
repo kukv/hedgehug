@@ -92,7 +92,7 @@ func wire(ctx context.Context) (httpapi.Deps, port.JudgedSaves, error) {
 		SyncTargets:   svc.Targets,
 	}
 	// state.db に置くもの(レポートの選択・画面の状態・最近開いたもの・同期の行・同期で受け取った保存)と、コミットと版の印の読み口
-	deps.Reports, deps.Screens, deps.Recent = db.ReportSelections(), db.ScreenStates(), db.Recent()
+	deps.Reports, deps.Screens, deps.Recent, deps.Views = db.ReportSelections(), db.ScreenStates(), db.Recent(), db.Views()
 	deps.SyncLog, deps.Commits, deps.Versions, deps.Received = db.SyncLog(), stores, stores, db
 	deps.Links = linksOf(deps, conn) // トークンの入口は同期と同じ Connector(D4a-2)
 	go (&githublink.Reader{Links: deps.Links, Settings: file.SyncSettings(), Waiting: auto.Waiting}).Run(ctx)

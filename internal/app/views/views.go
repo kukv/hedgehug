@@ -11,6 +11,7 @@ import (
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/domain/refusal"
 	"github.com/kukv/hedgehug/internal/domain/savedview"
+	"github.com/kukv/hedgehug/internal/domain/workspace"
 )
 
 // 値の型は、infra と共有するため domain/savedview に置く。
@@ -35,10 +36,12 @@ type Store interface {
 
 // Service は、ビューの作成・保存・一覧と、名前の変更・複製・削除。書く操作は 1 つずつ行う(E3b-6)。
 type Service struct {
-	Store  Store
-	IDs    port.IDs
-	Keys   func(ctx context.Context) (map[string]bool, error)
-	Events port.Events
+	Store Store
+	IDs   port.IDs
+	Keys  func(ctx context.Context) (map[string]bool, error)
+	// HeldElsewhere は、(store, ws) 以外のワークスペースに追加プロパティのキーがあるか(E3b-18)。
+	HeldElsewhere func(ctx context.Context, store port.StoreID, ws workspace.ID, key string) (bool, error)
+	Events        port.Events
 
 	mu sync.Mutex
 }

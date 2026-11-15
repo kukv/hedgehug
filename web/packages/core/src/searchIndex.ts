@@ -79,3 +79,4 @@ export {
   treeEmptyText,
 } from "./features/search/view";
 export type { ScreenStatesPort, SearchPort } from "./port/search";
+export type { ViewContentDto, ViewDto, ViewsPort } from "./port/views";

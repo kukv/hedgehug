@@ -86,6 +86,7 @@ func wire(ctx context.Context) (httpapi.Deps, port.JudgedSaves, error) {
 		AppMissing:  state.AppMissing(),
 		Reports:     state.ReportSelections(),
 		Screens:     state.ScreenStates(),
+		Views:       state.Views(),
 		Secrets:     &apptest.Secrets{Tokens: e2eTokens},
 		GitHub:      e2eGitHub,
 		DeviceFlow:  e2eDeviceFlow,

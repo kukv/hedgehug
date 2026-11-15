@@ -114,3 +114,53 @@ func readLiveSpaces(r port.Reader) ([]*space, error) {
 	slices.SortFunc(out, func(a, b *space) int { return cmp.Or(cmp.Compare(a.rank, b.rank), cmp.Compare(a.ws.ID, b.ws.ID)) })
 	return out, nil
 }
+
+// KeyHeldElsewhere は、(store, ws) 以外に、追加プロパティのキー key(大文字と小文字を区別しない)を持つ
+// ワークスペースがあるか。このマシンのすべての Store(非表示を含む)の、削除されていないワークスペースを見る(E3b-18)。
+func (s Service) KeyHeldElsewhere(ctx context.Context, store port.StoreID, ws workspace.ID, key string) (bool, error) {
+	key = strings.ToLower(key)
+	targets, err := s.SyncTargets.List(ctx)
+	if err != nil {
+		return false, err
+	}
+	for _, t := range targets {
+		var held bool
+		if err := s.Stores.Read(ctx, t.ID, func(r port.Reader) error {
+			var err error
+			held, err = holdsKey(r, t.ID == store, ws, key)
+			return err
+		}); err != nil {
+			return false, err
+		}
+		if held {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+// holdsKey は、Store r の削除されていないワークスペース(own のとき ws を除く)に、追加プロパティ key があるか。
+func holdsKey(r port.Reader, own bool, ws workspace.ID, key string) (bool, error) {
+	wss, err := r.Workspaces().List()
+	if err != nil {
+		return false, err
+	}
+	for _, w := range wss {
+		if w.Deleted != nil || (own && w.ID == ws) {
+			continue
+		}
+		st, err := r.Workspaces().Settings(w.ID)
+		if errors.Is(err, port.ErrNotFound) {
+			continue
+		}
+		if err != nil {
+			return false, err
+		}
+		keys := map[string]bool{}
+		addKeys(st, keys)
+		if keys[key] {
+			return true, nil
+		}
+	}
+	return false, nil
+}

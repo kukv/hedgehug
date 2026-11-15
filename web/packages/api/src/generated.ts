@@ -605,6 +605,48 @@ export interface CreateProject {
   title: string;
 }
 
+/**
+ * 表示の形
+ */
+export type ViewContentLayout = typeof ViewContentLayout[keyof typeof ViewContentLayout];
+
+
+export const ViewContentLayout = {
+  tree: 'tree',
+  table: 'table',
+} as const;
+
+/**
+ * @nullable
+ */
+export type ViewSort = {
+  desc: boolean;
+  key: string;
+} | null;
+
+export interface ViewTable {
+  /** 列の鍵(id・title・p:{キー} など) */
+  columns: string[];
+  /** グループの設定。空なら設定なし */
+  group: string;
+  /** 列見出しの並べ替え。なければ null */
+  sort: ViewSort | null;
+}
+
+export interface ViewContent {
+  /** 表示の形 */
+  layout: ViewContentLayout;
+  /** クエリの文字列 */
+  query: string;
+  table: ViewTable;
+}
+
+export interface CreateViewBody {
+  content: ViewContent;
+  /** ビューの名前 */
+  name: string;
+}
+
 export interface CreateWorkspace {
   /**
      * 1 行。改行は入れられない
@@ -918,6 +960,11 @@ export interface Item {
   /** @nullable */
   watchers: string[] | null;
   workspace: string;
+}
+
+export interface KeyImpact {
+  /** 削除すると、保存したビューの条件にそのキーが使えなくなるか */
+  affected: boolean;
 }
 
 export type LinkInputKind = typeof LinkInputKind[keyof typeof LinkInputKind];
@@ -1684,6 +1731,11 @@ export interface RenameProject {
   title: string;
 }
 
+export interface RenameViewBody {
+  /** 新しい名前 */
+  name: string;
+}
+
 export interface RenameWorkspace {
   /**
      * 1 行。改行は入れられない
@@ -1964,6 +2016,10 @@ export interface SaveItemAsTemplate {
   /** 子と Step を含める */
   structure: boolean;
   title: string;
+}
+
+export interface SaveViewBody {
+  content: ViewContent;
 }
 
 export interface ScreenState {
@@ -2582,6 +2638,21 @@ export interface ValuesBody {
   name: string;
 }
 
+export interface View {
+  content: ViewContent;
+  /**
+     * ULID を小文字にした 26 文字
+     * @pattern ^[0-9a-z]{26}$
+     */
+  id: string;
+  name: string;
+}
+
+export interface ViewList {
+  /** 名前の順(大文字と小文字を区別しない) */
+  views: View[];
+}
+
 export interface Worklog {
   /** 記録した人のログイン名 */
   by: string;
@@ -2984,6 +3055,15 @@ export type GetReportParams = {
 
 export type GetWorkspaceTransferPreviewParams = {
   toStore: string;
+};
+
+export type ViewKeyImpactParams = {
+  /** 消すプロパティのあるワークスペースの Store */
+  storeId: string;
+  /** 消すプロパティのあるワークスペース */
+  workspaceId: string;
+  /** 消す追加プロパティのキー */
+  key: string;
 };
 
 export const getListAccountsUrl = () => {
@@ -3446,7 +3526,7 @@ export const getWatchEventsUrl = () => {
 }
 
 /**
- * 出来事ごとに `event: store`・`event: sync`・`event: github`・`event: inbox` のどれかの行と、`data: {"store":"<Store ID>"}` の行を、空行で区切って送る。
+ * 出来事ごとに `event: store`・`event: sync`・`event: github`・`event: inbox`・`event: views` のどれかの行と、`data: {"store":"<Store ID>"}` の行を、空行で区切って送る。
  * @summary Store の変化と同期の状態の変化を、Server-Sent Events で送り続ける
  */
 export const watchEvents = async ( options?: Parameters<typeof fetcher>[1]): Promise<string> => {
@@ -8890,5 +8970,224 @@ export const getSystem = async ( options?: Parameters<typeof fetcher>[1]): Promi
     method: 'GET'
 
 
+  }
+);}
+
+
+
+export const getListViewsUrl = () => {
+
+
+
+
+  return `/api/views`
+}
+
+/**
+ * @summary 保存したビューの一覧を返す
+ */
+export const listViews = async ( options?: Parameters<typeof fetcher>[1]): Promise<ViewList> => {
+
+  return fetcher<ViewList>(getListViewsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export const getCreateViewUrl = () => {
+
+
+
+
+  return `/api/views`
+}
+
+/**
+ * @summary ビューを作る
+ */
+export const createView = async (createViewBody: CreateViewBody, options?: Parameters<typeof fetcher>[1]): Promise<View> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return fetcher<View>(getCreateViewUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(createViewBody)
+  }
+);}
+
+
+
+export const getViewKeyImpactUrl = (params: ViewKeyImpactParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/views/key-impact?${stringifiedParams}` : `/api/views/key-impact`
+}
+
+/**
+ * @summary 追加プロパティの削除が、保存したビューに影響するかを返す
+ */
+export const viewKeyImpact = async (params: ViewKeyImpactParams, options?: Parameters<typeof fetcher>[1]): Promise<KeyImpact> => {
+
+  return fetcher<KeyImpact>(getViewKeyImpactUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export const getDeleteViewUrl = (id: string,) => {
+
+
+
+
+  return `/api/views/${encodeURIComponent(String(id))}`
+}
+
+/**
+ * @summary ビューを削除する
+ */
+export const deleteView = async (id: string, options?: Parameters<typeof fetcher>[1]): Promise<void> => {
+
+  return fetcher<void>(getDeleteViewUrl(id),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+export const getSaveViewUrl = (id: string,) => {
+
+
+
+
+  return `/api/views/${encodeURIComponent(String(id))}`
+}
+
+/**
+ * @summary ビューの内容を置き換える
+ */
+export const saveView = async (id: string,
+    saveViewBody: SaveViewBody, options?: Parameters<typeof fetcher>[1]): Promise<View> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return fetcher<View>(getSaveViewUrl(id),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(saveViewBody)
+  }
+);}
+
+
+
+export const getDuplicateViewUrl = (id: string,) => {
+
+
+
+
+  return `/api/views/${encodeURIComponent(String(id))}/duplicate`
+}
+
+/**
+ * @summary ビューを複製する
+ */
+export const duplicateView = async (id: string, options?: Parameters<typeof fetcher>[1]): Promise<View> => {
+
+  return fetcher<View>(getDuplicateViewUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+export const getRenameViewUrl = (id: string,) => {
+
+
+
+
+  return `/api/views/${encodeURIComponent(String(id))}/rename`
+}
+
+/**
+ * @summary ビューの名前を変える
+ */
+export const renameView = async (id: string,
+    renameViewBody: RenameViewBody, options?: Parameters<typeof fetcher>[1]): Promise<View> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return fetcher<View>(getRenameViewUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(renameViewBody)
   }
 );}
