@@ -64,7 +64,7 @@ func removedIssue(row change.Record) (itemlink.Ref, bool) {
 }
 
 // unlinkNotice は、アイテム ref の Issue のリンク link の remove の行 row の通知。リンクした人があなたでなければ、
-// 本文を決められなければ false。
+// または本文を決められなければ false。
 func unlinkNotice(r port.Reader, b batch, ref change.Ref, row change.Record, link itemlink.Ref, me string) (port.Notice, bool, error) {
 	log, err := logOf(r, b, ref)
 	if err != nil {

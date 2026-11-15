@@ -131,8 +131,29 @@ func TestIssueUnlinksBothSidesAdded(t *testing.T) {
 	b := linkTo(f, "hanako", taskRef, web5)
 	s := unlinkRepair(f, taskRef, web5)
 	s.Entities[0].Rows[0].Prev = []change.ID{change.ID(a), change.ID(b)}
+	// 勝つ add の行は、この 2 行だけに ListRow を当てて決める(どの機械でも同じ)。
+	var adds []change.Record
+	for _, c := range f.logOfRef(taskRef) {
+		if string(c.ID) == a || string(c.ID) == b {
+			adds = append(adds, c)
+		}
+	}
+	if len(adds) != 2 {
+		t.Fatalf("adds = %d, want 2", len(adds))
+	}
+	win, ok := change.ListRow(adds, "links", adds[0].To)
+	if !ok {
+		t.Fatal("ListRow: no winner")
+	}
+	winner, loser := "taro", "hanako"
+	if win.By == "hanako" {
+		winner, loser = "hanako", "taro"
+	}
+	want := issueSource(taskRef, web5, string(win.ID))
 	other := map[change.ID][]change.ID{change.ID(a): nil}
-	for _, me := range []string{"hanako", "taro"} {
+	judgeAs := func(me string) []port.Notice {
+		f.t.Helper()
+		before := len(f.notices())
 		f.svc.Identity = apptest.Identity{Login: me}
 		ctx := f.t.Context()
 		err := f.svc.Judge(ctx, store, port.Received{Saves: []port.ReceivedSave{s}}, func(fn func(r port.Reader) error) error {
@@ -141,10 +162,18 @@ func TestIssueUnlinksBothSidesAdded(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+		return f.notices()[before:]
 	}
-	n := f.wantOne()
-	if n.Source != issueSource(taskRef, web5, a) && n.Source != issueSource(taskRef, web5, b) {
-		t.Errorf("source = %q", n.Source)
+	if got := judgeAs(loser); len(got) != 0 {
+		t.Errorf("loser %s notices = %+v, want none", loser, got)
+	}
+	first := judgeAs(winner)
+	if len(first) != 1 || first[0].Source != want {
+		t.Fatalf("winner %s notices = %+v, want one with source %q", winner, first, want)
+	}
+	// 別の機械で同じ保存を判定しても、鍵は同じ(重複して通知されない)。
+	if again := judgeAs(winner); len(again) > 0 && again[0].Source != want {
+		t.Errorf("second judgement source = %q, want %q", again[0].Source, want)
 	}
 }
 
