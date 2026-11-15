@@ -5,6 +5,7 @@
     type SearchColumn,
     type SearchGroup,
     type SearchRow,
+    type TableCells,
     type TableSettings,
   } from "@hedgehug/core";
   import { today } from "../../clock";
@@ -23,9 +24,12 @@
     // selection は行のチェックと「すべて選択」(E2a-16)、onmenu は行末の「⋯」(E2a-17)。
     selection: RowSelection;
     onmenu: (row: SearchRow, rect: DOMRect) => void;
+    // cells はセルの編集の選択肢の元と保存、reload は保存のあとの読み直し(E2b)。
+    cells: TableCells;
+    reload: () => Promise<void>;
   }
 
-  let { rows, columns, groups, sort, onsort, selection, onmenu }: Props = $props();
+  let { rows, columns, groups, sort, onsort, selection, onmenu, cells, reload }: Props = $props();
   const picked = $derived(selection.rows);
   // 終了日の「期限切れ」「今日」と相対時間は、結果が届いたときと日付が替わったときの時刻で決める(読み直した行の
   // 「N 分前」がずれない。E4a-16)。
@@ -49,6 +53,8 @@
         on,
       )}
     onmenu={(rect) => onmenu(row, rect)}
+    {cells}
+    {reload}
   />
 {/snippet}
 
