@@ -8,4 +8,5 @@ export {
 } from "./features/views/content";
 export { createNameDialog, type NameDialog } from "./features/views/nameDialog";
 export { saveAsView, saveSummary } from "./features/views/saveDialog";
+export { createViewScreen, type ViewScreen } from "./features/views/viewScreen";
 export { createViews, type SavedView, type Views } from "./features/views/views";
