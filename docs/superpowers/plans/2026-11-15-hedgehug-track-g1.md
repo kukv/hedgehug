@@ -4,7 +4,7 @@
 
 **Goal:** 本物のビルドで、config.yaml に書いた Store を起動のときに開き、Store の一覧・同期・GitHub・「あなた」を本物の値で動かす。「あなた」がメンバーにいなければ書き込みと一緒に足し、設定の「一般」でログイン名と同期のタイミングを変えられるようにする。
 
-**Architecture:** config.yaml(`infra/machineconfig`)に `stores`・`login`・`default_store` を足し、そこから `port.StoreList`・`port.SyncTargets`・`port.StoreGitHub` を実装する。`port.Identity` は `app/stores.Identity` が `StoreGitHub` と `Accounts` から決める(Store を読まない)。「あなた」の追加は `app/members.JoinOnWrite` が `port.Stores` を包んで、同じ保存に足す。追加したログイン名は応答のヘッダー `Hedgehug-Joined` で画面に知らせ、トーストを出す。`cmd/hedgehug/wire.go` は起動のときに config.yaml の Store を `gitstore.Stores.Attach` で開き、仮の `no*` を本物に差し替える。合わせて、同期のロックの範囲を狭め、`Auto` の取りこぼしを直す。
+**Architecture:** config.yaml(`infra/machineconfig`)に `stores`・`login` を足し、そこから `port.StoreList`・`port.SyncTargets`・`port.StoreGitHub` を実装する。`port.Identity` は `app/stores.Identity` が `StoreGitHub` と `Accounts` から決める(Store を読まない)。「あなた」の追加は `app/members.JoinOnWrite` が `port.Stores` を包んで、同じ保存に足す。追加したログイン名は応答のヘッダー `Hedgehug-Joined` で画面に知らせ、トーストを出す。`cmd/hedgehug/wire.go` は起動のときに config.yaml の Store を `gitstore.Stores.Attach` で開き、仮の `no*` を本物に差し替える。合わせて、同期のロックの範囲を狭め、`Auto` の取りこぼしを直す。
 
 **Tech Stack:** Go 1.27.3(go-git v5、huma v2、go.yaml.in/yaml/v4)。web は Svelte 5・TypeScript・Vitest・Playwright。依存ライブラリは足さない。
 
@@ -49,16 +49,16 @@
 
 | # | 決めたこと | 根拠 |
 |---|---|---|
-| G1-1 | config.yaml に足す鍵: `login`(文字列)、`default_store`(Store ID)、`stores`(並びがサイドバーの並び)。`stores` の各行は `id`・`name`・`path`(Store のコピーの絶対パス)・`remote`(文字列。なければ省く)・`mirrors`(文字列の並び)・`account`(アカウントの `id`)・`color`・`hidden`・`read_only`。追加と変更は G2・G3 が書く。G1 は読むだけ(ログイン名と同期のタイミングは書く) | 保存形式 `:279`。`name`・`path`・`account`・`color`・`hidden`・`default_store` は前回の実装と同じ鍵名(C2-4・D2-14 と同じく、同じ意味のものは前回の名前)。前回の `remotes`(並び)は意味が違う(2 本目以降からも取り込んだ)ので使わず、`remote` と `mirrors` に分ける |
+| G1-1 | config.yaml に足す鍵: `login`(文字列)、`stores`(並びがサイドバーの並び)。既定の Store の鍵(`default_store`)は、読み書きする G3 が足す。`stores` の各行は `id`・`name`・`path`(Store のコピーの絶対パス)・`remote`(文字列。なければ省く)・`mirrors`(文字列の並び)・`account`(アカウントの `id`)・`color`・`hidden`・`read_only`。追加と変更は G2・G3 が書く。G1 は読むだけ(ログイン名と同期のタイミングは書く) | 保存形式 `:279`。`name`・`path`・`account`・`color`・`hidden` は前回の実装と同じ鍵名(C2-4・D2-14 と同じく、同じ意味のものは前回の名前)。前回の `remotes`(並び)は意味が違う(2 本目以降からも取り込んだ)ので使わず、`remote` と `mirrors` に分ける |
 | G1-2 | `id` のない行・`path` を開けない行・`path` の `store.yaml` の Store ID が `id` と違う行は、起動のときに `slog.Warn` を出して開かず、どの一覧にも出さない。config.yaml からは消さない | 前回の版の config.yaml の `stores` は `id` を持たず、前回の形式の Store は開けない。読めない行で起動を止めない。消すのは利用者の操作(G3 のこのマシンから削除)だけ |
 | G1-3 | config.yaml を書き直すとき、手で書いたコメントと知らない鍵は残さない(いまの書き方のまま)。D2-14 の申し送りはこれで閉じる | config.yaml を書くのは画面の操作だけで、手で書くのは `hosts` の client ID ぐらい。その値は残る。コメントを残す書き方(yaml.Node の部分の書き換え)は、鍵ごとの書き換えの処理が要り、得るものに比べて大きい |
 | G1-4 | 土台の決定 1 の `MachineSettings` は口として作らない。ログイン名の書き口は `port.StoreGitHub.SetMachineLogin`、同期のタイミングの書き口は `port.SyncSettings.SetTiming` に足す | `port`・`apptest` は 20 ファイルで満杯。読み口がすでにその 2 つにある |
 | G1-5 | `port.Identity` の本物は `app/stores.Identity{GitHub port.StoreGitHub, Accounts port.Accounts}`。Store に割り当てたアカウントがあり、そのアカウントが登録されていればそのログイン名、なければマシンのログイン名。どちらもなければ `ErrNoLogin`(「このマシンのログイン名が未設定です」)。Store が一覧にないときは `port.ErrStoreNotFound` | 01 `:85-88`。割り当てたアカウントが消えているのは手で書き換えたときだけで、07 のアカウントの削除は割り当てを「なし」にする。トラック C `:2058` の制約を守る |
-| G1-6 | 「あなた」の追加は `members.JoinOnWrite(stores port.Stores, list port.StoreGitHub) port.Stores` が `Write` を包んで行う。実行者が人(`change.ActorUser`)で、その Store が閲覧のみでなく、`tx.Members().List()` にそのログイン名(大文字と小文字を区別しない)がいないとき、利用者の `fn` を呼ぶ前に `member.Join(login)` を足す(`fn` の中の「メンバーにいるか」の確かめで自分が通るように)。`fn` が何も書かなかったら、足した追加も取り消す(保存しない)。保存できたときだけ、ctx の入れ物(`port.WithJoined`・`port.Joined`)に記録する | 01 `:88`「その書き込みと一緒に追加する」。何も書かない操作はそもそも書き込みでない。自分を担当者・オーナーにする操作は `setowner`・`bulkchange` がメンバーを確かめる。保存に失敗したらトーストを出さない(`restoredHeader` と同じく 2xx のときだけ) |
+| G1-6 | 「あなた」の追加は `members.JoinOnWrite(stores port.Stores, list port.StoreGitHub) port.Stores` が `Write` を包んで行う。実行者が人(`change.ActorUser`)で、その Store が閲覧のみでなく、`tx.Members().List()` にそのログイン名(大文字と小文字を区別しない)がいないとき、利用者の `fn` を呼ぶ前に `member.Join(login)` を足す。`fn` が何も書かなかったら、足した追加も取り消す(保存しない)。保存できたときだけ、ctx の入れ物(`port.WithJoined`・`port.Joined`)に記録する | 01 `:88`「その書き込みと一緒に追加する」。何も書かない操作はそもそも書き込みでない。保存に失敗したらトーストを出さない(`restoredHeader` と同じく 2xx のときだけ)。担当者・オーナーの候補はメンバーの一覧から出す(`projects/setowner.go` の `memberOf` は `Write` の前に `Stores.Read` で確かめる)ので、メンバーにいない「あなた」は、次の書き込みで足されるまで候補に出ない。01 の「次に書き込むときに」のとおりで、変えない |
 | G1-7 | 閲覧のみの Store への書き込みを、サーバーは今までどおり断らない(track-a2 `:837`)。「あなた」の追加だけは行わない | 01 `:90`「閲覧のみの Store では追加しない」。画面は書く操作を無効にしている(01 `:118`) |
 | G1-8 | 応答のヘッダー `Hedgehug-Joined: <ログイン名>`(複数の Store に足したときは 1 つにまとめ、`, ` で区切る)。画面の `fetcher` が `onJoined` の受け手に渡し、`wire.ts` がログイン名ごとにトースト「{ログイン名} をメンバーに追加しました」を出す | 既存の `Hedgehug-Restored` と同じ形(`server.go`)。ログイン名は英数字・ハイフン・アンダースコアなのでエスケープは要らない |
 | G1-9 | `SyncTargets.List` は、remote が SSH の形(`git@github.com:owner/name(.git)`)なら `https://github.com/owner/name.git` に直して返す。ミラーも同じ。HTTPS の形はそのまま返す | トラック C `:5286`。07 は SSH 鍵を使わない。通信はトークンの HTTPS |
-| G1-10 | `gitstore.Replicator.Sync` の 1 回の試みを「受け取り(ロックの外)→ ロックを取って、途中の保存の跡を戻し・seen の確かめ・取り込み・修復・先端を読む → ロックを放す → 送る(ロックの外)」に組み替える。送ったあとの `refs/hedgehug/remote/…` の書き換えは、ロックを取り直して行う | トラック C `:5285`。通信は 1 回最大 60 秒・3 回まで。そのあいだ画面の保存が待たされる。オブジェクトは中身で決まる名前なので、受け取りと送りはロックなしで足してよい。送る先端より新しい保存は、次の同期で送る |
+| G1-10 | `gitstore.Replicator.Sync` の通信(受け取りと送り)を Store のロックの外で行う。手順は Task 5。同じ Store の `Sync`・`SyncSave` は、Replicator の中の Store ごとの mutex で 1 つずつにする(通信どうしは重ねない)。判定(`finish` の `judge`)と結果の数え方は、ロックの中で、送った先端(閲覧のみなら受け取った先端)を基準にする(いまの先端ではない)。`SyncSave`(移動の送り届け)は今のまま、通信のあいだもロックを持つ | トラック C `:5285`。通信は 1 回最大 60 秒・3 回まで。そのあいだ画面の保存が待たされる。オブジェクトは中身で決まる名前なので、受け取りと送りはロックなしで足してよい。送ったあとにできた保存は次の同期で送る。判定は作業ツリーを読むので、保存の途中を読まないようロックの中で行い、送っていない自分の保存を判定済みにしないよう送った先端までにする。`SyncSave` は送れなかったら保存を捨てる(先端を戻す)ので、そのあいだに別の保存が入ってはいけない。`refs/hedgehug/remote/…` は受け取りが書き換えるので、通信どうしは重ねない |
 | G1-11 | `Auto` は Store ごとに最後に試みた時刻をメモリに持ち、`due` には state.db の記録とメモリの新しい方を渡す | トラック C `:5289`。記録に失敗すると毎秒「時間が来た」と判定され続ける |
 | G1-12 | オフラインの知らせが期限で消えたタブは「期限切れのオフライン」として覚え、そのタブから `online: true` が来たらオンライン復帰の契機にする。画面は `online: true` の知らせの送信に失敗したら、次の `check` で送り直す(成功するまで)。見えないタブのタイマーの間引きは、今の形で足りる(待つ条件は見えているタブだけが送り、オフラインの期限は 2 分)ので変えない | C2 画面 `:2863`・トラック C `:5290` |
 | G1-13 | 設定のタブは G1 では増やさない(「一般」「アカウントとメンバー」のまま)。サイドバーの歯車と、パレットの「設定を開く」と、`/settings`(タブなし)の開く先を「一般」に変える。パレットの設定の群には「設定: 一般」を足さない | 分け方の G-3。トラック C `:2065`・C5d-1。C5d-2 が「アカウントとメンバー」にしていた理由(一般が空)はなくなる。パレットの設定の群(02 `:634`)に「一般」はない |
@@ -73,11 +73,11 @@
 
 ## Review Focus
 
-- Enter で確定した直後にフォーカスが外れる → 確認ダイアログが 2 つ出たり、2 回保存したりしない(Task 8 のテスト)。
-- 「あなた」がメンバーにいない Store で、自分をオーナーにする → メンバーの確かめで断られず、同じ保存でメンバーが足される(Task 3 のテスト)。
+- Enter で確定した直後にフォーカスが外れる → 確認ダイアログが 2 つ出たり、2 回保存したりしない(Task 9 のテスト)。
+- 本物の HTTP の経路で、メンバーにいない人がアイテムを作る → 同じ保存でメンバーが足され、応答に `Hedgehug-Joined` が付く(Task 6 のテスト)。
 - 何も変えない保存(同じ値を入れる)を、メンバーにいない人がする → 保存もトーストも出ない(Task 3 のテスト)。
 - 同期が受け取りの通信で待っているあいだに画面から保存する → 保存は通信を待たない(Task 5 のテスト)。
-- config.yaml に前回の版の `stores`(`id` なし)が残っている → 起動は止まらず、その行は出ない。アカウントを足すなどで書き直しても起動できる(Task 1・6 のテスト)。
+- config.yaml に前回の版の `stores`(`id` なし)が残っている → 起動は止まらず、その行は出ない。アカウントを足すなどで書き直しても起動できる(Task 1 の `TestOldShapeSurvivesRewrite`・Task 6 のテスト)。
 
 ---
 
@@ -103,6 +103,7 @@
   - `TestSyncTargetsSSHRemote`: `remote: git@github.com:org/tasks.git` → `https://github.com/org/tasks.git`。`git@github.com:org/tasks`(.git なし)も同じ。`https://github.com/org/tasks` はそのまま。ミラーも同じ
   - `TestStoreGitHubUnassign`: 2 行が `account: a1` → `Unassign(a1)` 後に読み直すと両方空、ほかの鍵(`accounts`・`hosts`・`sync`)は残る
   - `TestStoreEntriesSkipsOldShape`: 前回の版の形 `stores: [{name: a, path: /x, remotes: [u]}]` を読んでもエラーにならず、`StoreEntries` は空
+  - `TestOldShapeSurvivesRewrite`: 前回の版の形の行がある config.yaml で `Unassign` を呼んで書き直したあとも、読み直しがエラーにならない
 - [ ] **Step 2: `go test ./internal/infra/machineconfig/ -run 'Store|Sync' ` で落ちることを確かめる**
 - [ ] **Step 3: 実装する**(SSH の直しは `^git@github\.com:([^/]+)/(.+?)(\.git)?/?$` → `https://github.com/$1/$2.git`)
 - [ ] **Step 4: テストが通ることを確かめる**
@@ -119,7 +120,7 @@
 **Interfaces:**
 - Produces:
   - `StoreGitHub.SetMachineLogin(ctx, login string) error` — 検査はしない(呼ぶ側が `member.ValidLogin` で確かめる)
-  - `SyncSettings.SetTiming(ctx, t port.SyncTiming) error` — 秒で `sync` に書く。`Auto` は false のときだけ書かず true も明示して書く
+  - `SyncSettings.SetTiming(ctx, t port.SyncTiming) error` — `sync` の 4 つの鍵をすべて書く(`auto` は true も false も書く。ほかの 3 つは秒)
   - `var ErrNoLogin = errors.New("このマシンのログイン名が未設定です")`(port/identity.go)
   - `type stores.Identity struct{ GitHub port.StoreGitHub; Accounts port.Accounts }` と `func (i Identity) Me(ctx, store port.StoreID) (string, error)`(G1-5)
 
@@ -183,7 +184,12 @@
 
 - [ ] **Step 1: 失敗するテストを書く** — `TestSyncDoesNotHoldLockWhileFetching`: テスト用の差し込み口(`beforeSend` と同じ形で `duringFetch func()` を足す)の中で `Stores.Write` を呼び、受け取りが終わる前に保存が終わる(チャネルで確かめる。`time.Sleep` を使わない)。同じく `duringSend` の中の `Write` も待たされない。送ったあとの保存は次の同期で送られる(未送信 1)
 - [ ] **Step 2: `go test ./internal/infra/gitstore/ -run TestSyncDoesNotHoldLock` で落ちる(デッドロックで時間切れ)ことを確かめる**(`-timeout 30s`)
-- [ ] **Step 3: 実装する** — `begin` はロックを取らずに開く。`once` は `fetch` → `lock`(`open(root)` で跡を戻す・`checkSeen`・`integrate`・`repairUnsent`・先端を読む)→ 放す → `send` → `lock` を取り直して remote の位置の ref を書く。`errRejected` のやり直しと `restoreSeen` の流れは変えない
+- [ ] **Step 3: 実装する** — `Sync` を次の順にする(`SyncSave` は変えない。G1-10)。
+  1. Store ごとの mutex を取る(`Sync` が終わるまで。`SyncSave` も同じ mutex を取る)。
+  2. ロックを取り、`open(root)` で途中の保存の跡を戻し、先端(`start`)とブランチを読み、`baseline` を呼ぶ。ロックを放す。
+  3. 試みごとに: `link.fetch`(ロックの外。`refs/hedgehug/remote/*` を書く)→ ロックを取り、`open(root)`・`checkSeen`・`checkRemoteStore`・`integrate`・`repairUnsent` のあと先端を読んで `mine` とする → 閲覧のみなら、そのままロックの中で `finish(theirs, theirs, false)` → ロックを放す。書ける Store は `link.send(mine)`(ロックの外)→ ロックを取り、remote の位置の ref を `mine` にし、`finish(theirs, mine, true)` → ロックを放す。
+  4. `finish` の `judge` と `result` は、`repo.Head()` ではなく渡した `mine` を基準にする(`SyncSave` から呼ぶときは送った先端を渡すので結果は変わらない)。
+  5. `errRejected` のやり直しは 3 から。`ErrRemoteRewritten` のときの `restoreSeen` はロックの中で行う。
 - [ ] **Step 4: gitstore のテストを全部流して通ることを確かめる** `go test ./internal/infra/gitstore/...`(同期の場面のテスト・`cmd/hedgehug` の場面のテストも `go test ./cmd/...`)
 - [ ] **Step 5: Commit** `fix(sync): 受け取りと送りのあいだ Store のロックを持たない(G1)`
 
@@ -200,7 +206,7 @@
 
 - [ ] **Step 1: 失敗する場面のテストを書く**(`t.Setenv("XDG_CONFIG_HOME", …)`・`XDG_DATA_HOME` を一時フォルダに。`gitstore.Create` で Store を 1 つ作り、メンバーは hanako だけにする。config.yaml に `login: taro`・その Store の行と、`id` のない前回の形の行を書く)
   - `TestWireOpensConfiguredStores`: `wire(ctx)` の `deps.StoreList.List` がその Store 1 つ、`deps.Identity.Me` が taro
-  - `TestWireJoinsYouOnWrite`: `deps.Stores.Write`(実行者 taro、アイテムの作成)のあと、メンバーに taro
+  - `TestWireJoinsYouOnWrite`: `httpapi.New(token, fstest.MapFS{}, deps)` に、トークン付きでアイテムを作る要求を送る(`httptest`)→ 応答が 2xx で `Hedgehug-Joined: taro`、Store のメンバーに taro。同じ要求をもう一度送ると、ヘッダーは付かない
   - `TestWireSkipsUnopenable`: `path` を消した行は出ず、`wire` はエラーを返さない
 - [ ] **Step 2: `go test ./cmd/hedgehug/ -run TestWire` で落ちることを確かめる**
 - [ ] **Step 3: 実装する**(開けなかった行は G1-2 のとおり `slog.Warn`。`wire.go:103` 付近の「G までないので通知は出ない」のコメントも直す)
@@ -228,7 +234,7 @@
 - Create: `internal/app/stores/login.go`、`internal/app/stores/login_test.go`
 - Create: `internal/adapter/httpapi/stores/login.go`、`login_test.go`
 - Create: `internal/adapter/httpapi/syncing/timing.go`、`timing_test.go`
-- Modify: `internal/domain/account/impact.go`(`LoginLines` を足す)、`internal/adapter/httpapi/routes.go`、`httpapi.Deps`(`SyncSettings port.SyncSettings` を足す。`StoreGitHub`・`Events` は既存)、`cmd/hedgehug/wire.go`・`wire_e2e.go`(本物は `file.SyncSettings()`、e2e は `apptest` の偽物。e2e の `apptest.StoreGitHub` は `Login: "taro"` と、アカウントなしの Store を 1 つ以上持たせる)、`api/openapi.yaml` と web の API クライアント(`make generate`)
+- Modify: `internal/domain/account/impact.go`(`LoginLines` を足す)、`internal/adapter/httpapi/routes.go`、`httpapi.Deps`(`SyncSettings port.SyncSettings` を足す。`StoreGitHub`・`Events` は既存)、`cmd/hedgehug/wire.go`・`wire_e2e.go`(本物は `file.SyncSettings()`、e2e は `apptest` の偽物。e2e の `apptest.StoreGitHub`(`wire_e2e.go:93`)に、アカウントなしの非表示の行 `{ID: "e2e-local", Name: "local", Hidden: true}` を足す。非表示なので GitHub の自動の読み取りの対象にならず、アカウントに割り当てていないので `accounts.spec.ts` の削除・編集の確認の行は変わらない)、`api/openapi.yaml` と web の API クライアント(`make generate`)
 
 **Interfaces:**
 - Produces:
@@ -236,7 +242,7 @@
   - `type stores.Login struct{ GitHub port.StoreGitHub; Events port.Events }` と
     - `Get(ctx) (string, error)`
     - `Preview(ctx, login string) ([]string, error)` — 確かめて、確認の本文の行(空なら確認なし)。使えなければ `refusal` の断り(文言は Global Constraints)
-    - `Set(ctx, login string) error` — 前後の空白を除き、同じなら何もしない。保存したら G1-17 の出来事
+    - `Set(ctx, login string) error` — 前後の空白を除き、`Preview` と同じ検査で断る(画面を通らない呼び出しでも、使えない名前を保存しない。保存すると以後のすべての保存が `port.Operation` の検査で失敗する)。同じなら何もしない。保存したら G1-17 の出来事
   - API:
     - `GET /api/settings/login` → `{login}`
     - `POST /api/settings/login/preview` `{login}` → `{lines: string[]}`(400 で断りの文言)
@@ -245,7 +251,7 @@
     - `PUT /api/sync/timing` 同じ本文 → 204(選択肢にない値は 400「選べない値です」)。保存したら `EventSync`
 
 - [ ] **Step 1: 失敗するテストを書く**
-  - `login_test.go`(app): 2 つの Store(team-a はアカウントなし、team-b はあり)、マシンのログイン名 taro → `Preview("tarou")` は `["team-a での あなた が @taro から tarou に変わります。"]`、`Preview("Taro")` は空、`Preview(" tarou ")` は前後を除いて同じ、`Preview("ta ro")`・`Preview("")`・40 文字は断り、マシンのログイン名が空なら空、`Set("tarou")` で team-a の `EventStore` が 1 つ、`Set("taro")`(同じ)は何もしない
+  - `login_test.go`(app): 2 つの Store(team-a はアカウントなし、team-b はあり)、マシンのログイン名 taro → `Preview("tarou")` は `["team-a での あなた が @taro から tarou に変わります。"]`、`Preview("Taro")` は空、`Preview(" tarou ")` は前後を除いて同じ、`Preview("ta ro")`・`Preview("")`・40 文字は断り、マシンのログイン名が空なら空、`Set("tarou")` で team-a の `EventStore` が 1 つ、`Set("taro")`(同じ)は何もしない、`Set("ta ro")` は断ってマシンのログイン名は taro のまま
   - httpapi の 2 つのテスト: 上の各経路の状態コードと本文
 - [ ] **Step 2: 落ちることを確かめる**
 - [ ] **Step 3: 実装する**(`identityLines` を `LoginLines` として出し、`EditLines`・`DeleteLines` はそれを呼ぶ)。`make generate`
@@ -270,7 +276,7 @@
 - [ ] **Step 1: 失敗するテストを書く**(`general.test.ts`): 同じ値の `commit` は口を呼ばない、Enter とフォーカスの外れの続けての `commit` は 1 回だけ、本文の行が 1 つ以上なら確認を求め、キャンセルで元の値、断りの文言を返す。`route.test.ts`: `/settings` は `general`。`actions.test.ts`: 「設定を開く」の行き先は `general`
 - [ ] **Step 2: 落ちることを確かめる**
 - [ ] **Step 3: 画面を作る** — 上から、ログイン名の入力欄 → 時計のずれの警告(C5d のまま)→ 見出し「同期のタイミング」と注意書き・チェックボックスと 3 つの選択(チェックがオフなら 3 つを無効)・「すべて同期」(G1-20)→ 見出し「キーボード」の表 → 見出し「ツリー」の表。確認ダイアログは ui の確認ダイアログ(タイトル「ログイン名を変更」、行を並べ、「変更」は警告色)。日本語変換中の Enter では確定しない(`isComposing`)
-- [ ] **Step 4: e2e を足す**(`settings.spec.ts`): 歯車で「一般」が開く / ログイン名を `tarou` にして Enter → 確認ダイアログの行が出る(e2e の偽物に、アカウントなしの Store を置く)→「変更」で欄が `tarou`、もう一度開いても `tarou` / `ta ro` で断りの文言と元の値 / 間隔を「15 分ごと」にして再読み込みしても「15 分ごと」/ チェックを外すと 3 つが無効。最後に値を元に戻す(worker のサーバーを共有するため)
+- [ ] **Step 4: e2e を足す**(`settings.spec.ts`): 歯車で「一般」が開く / ログイン名を `tarou` にして Enter → 確認ダイアログに「local での あなた が @taro から tarou に変わります。」(Task 8 で足した偽物の行)→「変更」で欄が `tarou`、もう一度開いても `tarou` / `ta ro` で断りの文言と元の値 / 間隔を「15 分ごと」にして再読み込みしても「15 分ごと」/ チェックを外すと 3 つが無効。最後に値を元に戻す(worker のサーバーを共有するため)
 - [ ] **Step 5: `make web-check` と `make e2e` が通ることを確かめる**
 - [ ] **Step 6: Commit** `feat(settings): 「一般」にログイン名・同期のタイミング・キーボードの一覧を置く(G1)`
 
