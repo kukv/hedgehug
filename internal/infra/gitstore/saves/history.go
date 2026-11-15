@@ -19,7 +19,7 @@ import (
 const storeLogPath = ".hedgehug/log.jsonl"
 
 // History は、from から辿れる保存のコミット(親が 1 つで Hedgehug-Op を持つもの。マージと最初のコミットは
-// 含めない)を、作者の時刻の新しい順(同じなら SHA の辞書順)で返す(決定 C4d-2)。recall が返すコミットは
+// 含めない)を、保存の時刻(port.Commit.At。atOf)の新しい順(同じなら SHA の辞書順)で返す(決定 C4d-2)。recall が返すコミットは
 // 差分を取らずにその値を使い、新しく読んだものは remember で覚えさせる。コミットは書き換わらないので、
 // SHA で覚えてよい。
 func History(repo *git.Repository, from plumbing.Hash, recall func(plumbing.Hash) (port.Commit, bool), remember func(plumbing.Hash, port.Commit)) ([]port.Commit, error) {
@@ -71,8 +71,21 @@ func commitOf(c *object.Commit, k port.SaveKey) (port.Commit, error) {
 	summary, _, _ := strings.Cut(c.Message, "\n")
 	return port.Commit{
 		SHA: k.Version, Summary: summary, Op: k.Op, Author: k.Author, At: atOf(k, rows),
-		Changes: rows, Removed: removed, StoreLog: storeLog,
+		Changes: withoutDescriptions(rows), Removed: removed, StoreLog: storeLog,
 	}, nil
+}
+
+// withoutDescriptions は、rows から説明の全文(Description)を除き、行のないエンティティを落とす。コミットは覚えて
+// 使い回すが、アクティビティは説明を使わないので、全文を覚えない。
+func withoutDescriptions(rows []port.EntityRows) []port.EntityRows {
+	out := rows[:0]
+	for _, e := range rows {
+		if len(e.Rows) > 0 {
+			e.Description = nil
+			out = append(out, e)
+		}
+	}
+	return out
 }
 
 // diffOf は、c の木と、最初の親(なければ空)との差分。

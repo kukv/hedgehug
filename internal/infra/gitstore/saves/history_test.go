@@ -161,3 +161,27 @@ func TestHistoryOrdersByRowAtWithinASecond(t *testing.T) {
 		t.Errorf("At = %v, %v", got[0].At, got[2].At)
 	}
 }
+
+// 覚えるコミットは説明の全文を持たない(アクティビティは使わない)。説明だけを変えたエンティティも、行がなければ持たない。
+func TestHistoryDropsDescription(t *testing.T) {
+	r := newRepo(t)
+	create := rec("R1", "OP1", t0.Add(time.Minute), change.Create, "")
+	r.save(map[string]string{"a": "0"}, BotName, t0, "")
+	r.save(map[string]string{itemLog: logOf(t, create), itemDesc: "説明"}, "taro", t0.Add(time.Minute), "OP1")
+	s2 := r.save(map[string]string{itemDesc: "説明を変えた"}, "taro", t0.Add(2*time.Minute), "OP2")
+	seen := map[plumbing.Hash]port.Commit{}
+	got := history(t, r, s2, seen)
+	if len(got) != 2 || len(got[0].Changes) != 0 {
+		t.Fatalf("description-only commit changes = %+v", got)
+	}
+	if len(got[1].Changes) != 1 || got[1].Changes[0].Description != nil || len(got[1].Changes[0].Rows) != 1 {
+		t.Errorf("create commit changes = %+v, want the row without the description", got[1].Changes)
+	}
+	for h, c := range seen {
+		for _, e := range c.Changes {
+			if e.Description != nil {
+				t.Errorf("remembered %s keeps the description %q", h, *e.Description)
+			}
+		}
+	}
+}
