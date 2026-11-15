@@ -5,24 +5,29 @@
     createTreeFocus,
     get,
     type Item,
-    menuAt,
     rowKey,
     type SearchResult,
     type SearchTreeRow,
     type SearchTreeView,
     type StoreNode,
-    screenFor,
     setRowStatus,
     treeScope,
   } from "@hedgehug/core";
   import { tick } from "svelte";
   import { selection } from "../../palette";
-  import { openProjectMenu, projectMover } from "../../projectRows";
+  import { projectMover } from "../../projectRows";
   import { itemChanges } from "../../reloads";
   import { search } from "../../search";
-  import { createAt, dataIn, dimKeys, routeOf, searchTreeData } from "../../searchTree";
+  import {
+    createAt,
+    dimKeys,
+    openTreeMenu,
+    routeOf,
+    searchTreeData,
+    treeScreen,
+  } from "../../searchTree";
   import { catalog, detail, itemsPort, links, navigation, toasts } from "../../wire";
-  import { itemMenuHost, itemRefresh } from "../../wireActions";
+  import { itemRefresh } from "../../wireActions";
   import SearchTreeBody from "./SearchTreeBody.svelte";
   import { createTreeKeyboard } from "./treeKeyboard";
   import { treeTabStops } from "./treeTabStops";
@@ -30,8 +35,8 @@
   // 検索の画面のツリー(04「ツリー」、E3a-3〜6・11・16・17・20)。結果が変わるたびに、木に入れるプロジェクトのデータを
   // 読み、読めたら木を組み直す。読んでいるあいだは前の木を出したままにする(読み直すたびに空にしない)。
   interface Props {
-    // view は、描いている木(件数と空の文に使う)。まだ組んでいなければ null。
-    view?: SearchTreeView | null;
+    // view は、描いている木と、その元の結果の書き方の誤り(件数と空の文に使う)。まだ組んでいなければ null。
+    view?: (SearchTreeView & { errors: string[] }) | null;
   }
 
   let { view = $bindable(null) }: Props = $props();
@@ -43,7 +48,6 @@
   let list = $state<HTMLElement>();
   // ほかの画面にいたあいだの変更を拾うため、開いたときは取っておいたものを捨てる。
   searchTreeData.reset();
-
   // round は、組み直した回数。古い読み込みのあとでは組み直さない。building は、いちばん新しい組み直し。
   let round = 0;
   let building: Promise<void> = Promise.resolve();
@@ -54,7 +58,11 @@
     const filtered = query.trim() !== "";
     const mine = ++round;
     building = searchTreeData.load(treeScope(all, res.rows, filtered)).then(() => {
-      if (mine === round) view = buildSearchTree(all, res.rows, filtered, searchTreeData.get);
+      if (mine !== round) return;
+      view = {
+        ...buildSearchTree(all, res.rows, filtered, searchTreeData.get),
+        errors: res.errors,
+      };
     });
     return building;
   }
@@ -62,7 +70,8 @@
   $effect(() => void rebuild(result, resultQuery, $stores));
 
   // refresh は、ツリーから書いたあとの読み直し。取っておいたものを捨てて検索を読み直し、木が組み直るまで待つ
-  // (順番待ちの次のキーは、組み直した木で基準を決める)。
+  // (順番待ちの次のキーは、組み直した木で基準を決める)。検索が失敗すると結果が変わらず上の $effect が動かない
+  // (捨てたデータを読み直さない)ので、ここでも組み直す。$effect が後から組み直したら、それも待つ。
   async function refresh() {
     searchTreeData.reset();
     await search.reload();
@@ -90,30 +99,17 @@
       search.setCollapsed([...f.collapsed]);
     }),
   );
-
-  const dataOf = (storeId: string, projectId: string) => dataIn(view, storeId, projectId);
   const rowAt = (key: string | null) => get(treeFocus.state).rows.find((r) => r.id === key) ?? null;
   const setStatus = (it: Item, statusId: string) =>
     setRowStatus({ items: itemsPort, toasts, reload: refresh }, it.storeId, it.id, statusId);
-
-  // openMenu は、行のメニュー。アイテムの行の見えている兄弟は、同じ Store・ワークスペースの見えている行から決める。
-  function openMenu(row: SearchTreeRow, rect: { left: number; bottom: number }) {
-    if (row.kind === "project") return openProjectMenu(row.store, row.workspace, row.project, rect);
-    const { x, y } = menuAt(rect);
-    const rows = screenFor(get(treeFocus.state).rows, row.id, dataOf)?.rows ?? [];
-    const items = dataOf(row.store.id, row.item.projectId)?.items ?? [];
-    const children = items.filter((c) => c.parentId === row.item.id);
-    itemMenuHost.open(row.item, { rows, children, row: true }, x, y);
-  }
+  const openMenu = (row: SearchTreeRow, rect: { left: number; bottom: number }) =>
+    openTreeMenu(row, rect, get(treeFocus.state).rows, view);
 
   const keyboard = createTreeKeyboard<SearchTreeRow>({
     focus: treeFocus,
     list: () => list,
     itemOf: (row) => (row.kind === "item" ? row.item : null),
-    screen: () => {
-      const { rows, currentId } = get(treeFocus.state);
-      return currentId ? screenFor(rows, currentId, dataOf) : null;
-    },
+    screen: () => treeScreen(get(treeFocus.state), view),
     readOnly: (row) => row.store.readOnly,
     open: (row) => {
       if (row.kind === "item") void detail.open(row.store.id, row.item.id);

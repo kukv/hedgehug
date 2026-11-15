@@ -18,6 +18,9 @@ import (
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/app/syncing"
 	"github.com/kukv/hedgehug/internal/domain/account"
+	"github.com/kukv/hedgehug/internal/domain/change"
+	"github.com/kukv/hedgehug/internal/domain/numbering"
+	"github.com/kukv/hedgehug/internal/domain/project"
 	"github.com/kukv/hedgehug/internal/infra/statedb"
 )
 
@@ -96,8 +99,8 @@ func wire(ctx context.Context) (httpapi.Deps, error) {
 	}), nil
 }
 
-// e2eStores は、e2e と readonly の Store にサンプル(e2e にはワークスペース Mobile も)、team の Store に Team の
-// サンプルを入れる。
+// e2eStores は、e2e と readonly の Store にサンプル(e2e にはワークスペース Mobile も、readonly には 2 つ目の
+// プロジェクトも)、team の Store に Team のサンプルを入れる。
 func e2eStores(ctx context.Context, ids port.IDs) (*apptest.Stores, error) {
 	stores := apptest.NewStores(apptest.NewClock(time.Now()), ids)
 	for _, id := range []port.StoreID{e2eStore, readonlyStore, teamStore} {
@@ -107,6 +110,7 @@ func e2eStores(ctx context.Context, ids port.IDs) (*apptest.Stores, error) {
 		func() error { return apptest.Sample(ctx, stores, e2eStore) },
 		func() error { return apptest.SampleMobile(ctx, stores, e2eStore) },
 		func() error { return apptest.Sample(ctx, stores, readonlyStore) },
+		func() error { return readonlyProject(ctx, stores) },
 		func() error { return apptest.SampleTeam(ctx, stores, teamStore) },
 	} {
 		if err := f(); err != nil {
@@ -114,6 +118,26 @@ func e2eStores(ctx context.Context, ids port.IDs) (*apptest.Stores, error) {
 		}
 	}
 	return stores, nil
+}
+
+// readonlyProjectID は、閲覧のみの Store のサンプルのワークスペースに足す 2 つ目のプロジェクト(HH-P2)の内部 ID。
+const readonlyProjectID project.ID = "01E2EROPROJ000000000000002"
+
+// readonlyProject は、閲覧のみの Store のサンプルのワークスペース「Web」に、2 つ目のプロジェクト HH-P2「閲覧の計画」を
+// サンプルのプロジェクトの後ろに足す(検索のツリーで、閲覧のみの Store のプロジェクトの行の Alt+↑↓ が、動かせる位置でも
+// 何もしないことを確かめるため。E3a-16)。
+func readonlyProject(ctx context.Context, stores *apptest.Stores) error {
+	pr := project.Project{
+		ID: readonlyProjectID, Place: project.Place{Workspace: apptest.SampleWorkspace, Number: 2},
+		Rank: "X", Title: "閲覧の計画", Owner: "taro", Status: project.Todo,
+	}
+	op := port.Operation{Actor: change.User("taro"), Summary: "サンプルデータを作成"}
+	return stores.Write(ctx, readonlyStore, op, func(tx port.Tx) error {
+		return errors.Join(
+			tx.WriteWorkspaces().Append(apptest.SampleWorkspace, numbering.Draft(numbering.Projects, 2)),
+			tx.WriteProjects().Append(pr.ID, project.Create(pr)),
+		)
+	})
 }
 
 // e2eSync は、e2e と readonly の Store を偽の remote と同期する(手での同期の確かめに使う)。team の Store は remote が

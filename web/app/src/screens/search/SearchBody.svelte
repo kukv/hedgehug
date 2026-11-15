@@ -26,10 +26,13 @@
   // 最初の検索が終わるまでは、空の表示を出さない(開いた直後に「まだ何もありません」がちらつかない)。
   const empty = $derived($view.result ? emptyText($view.query, rows.length, errors) : null);
   const picked = searchSelection.rows;
-  // tree は、ツリーが描いている木。組むまでは件数も空の文も出さない。
-  let tree = $state<SearchTreeView | null>(null);
+  // tree は、ツリーが描いている木。組むまでは件数も空の文も出さない。空の文の書き方の誤りは、いまの結果ではなく
+  // 木を組んだ結果のもの(木を組み直すまでは、描いている木と文を食い違わせない)。
+  let tree = $state<(SearchTreeView & { errors: string[] }) | null>(null);
   const treeEmpty = $derived(
-    tree ? treeEmptyText({ hasProjects: tree.hasProjects, rows: tree.nodes.length }, errors) : null,
+    tree
+      ? treeEmptyText({ hasProjects: tree.hasProjects, rows: tree.nodes.length }, tree.errors)
+      : null,
   );
 </script>
 

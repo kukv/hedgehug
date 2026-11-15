@@ -3,17 +3,21 @@ import {
   createSearchTreeData,
   type Item,
   itemDisplayId,
+  menuAt,
   type ProjectNode,
   type Route,
   type SearchTreeData,
   type SearchTreeRow,
   type SearchTreeView,
   type StoreNode,
+  screenFor,
   type TreeNode,
   type TreeNodeOf,
   type WorkspaceNode,
 } from "@hedgehug/core";
+import { openProjectMenu } from "./projectRows";
 import { catalog, itemDialog, itemsPort, listMembers, workspacesPort } from "./wire";
+import { itemMenuHost } from "./wireActions";
 
 // 検索の画面のツリー(E3a)の組み立て。search.ts がこれを読むので、ここから search.ts を読まない。
 
@@ -127,4 +131,30 @@ export function dataIn(view: SearchTreeView | null, storeId: string, projectId: 
     if (p) return p.data;
   }
   return undefined;
+}
+
+// treeScreen は、フォーカスのある行の書き込みの画面(キー操作の screen)。focus は見えている行といまの行。
+export function treeScreen(
+  focus: { rows: readonly SearchTreeRow[]; currentId: string | null },
+  view: SearchTreeView | null,
+) {
+  const dataOf = (storeId: string, projectId: string) => dataIn(view, storeId, projectId);
+  return focus.currentId ? screenFor(focus.rows, focus.currentId, dataOf) : null;
+}
+
+// openTreeMenu は、行のメニュー(行の「⋯」とメニューキー)。visible は見えている行、view は描いている木。
+// アイテムの行の見えている兄弟は、同じ Store・ワークスペースの見えている行から決める。
+export function openTreeMenu(
+  row: SearchTreeRow,
+  rect: { left: number; bottom: number },
+  visible: readonly SearchTreeRow[],
+  view: SearchTreeView | null,
+) {
+  if (row.kind === "project") return openProjectMenu(row.store, row.workspace, row.project, rect);
+  const { x, y } = menuAt(rect);
+  const dataOf = (storeId: string, projectId: string) => dataIn(view, storeId, projectId);
+  const rows = screenFor(visible, row.id, dataOf)?.rows ?? [];
+  const items = dataOf(row.store.id, row.item.projectId)?.items ?? [];
+  const children = items.filter((c) => c.parentId === row.item.id);
+  itemMenuHost.open(row.item, { rows, children, row: true }, x, y);
 }

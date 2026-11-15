@@ -53,8 +53,9 @@ test("space and alt-up on item rows", async ({ page }, info) => {
 });
 
 // Review Focus 3: 閲覧のみの Store の行と書ける Store の行が並んでも、書き込みの判定はフォーカスのある行の Store で決める。
-// サンプルを読むだけで、書き換えない(作成ダイアログは開いたら閉じる)。
-test("read-only row next to writable row", async ({ page }) => {
+// サンプルを読むだけで、書き換えない(作成ダイアログは開いたら閉じる)。Store「readonly」のワークスペース「Web」には
+// HH-P1「ログイン」の後ろに HH-P2「閲覧の計画」がある(wire_e2e.go)ので、HH-P1 の Alt+↓ は並びの上では動かせる位置にある。
+test("read-only row next to writable row", async ({ page }, info) => {
   const moves = moveRequests(page);
   const readonlyWrites = writesTo(page, new RegExp(`/api/stores/${readonlyStore}/`));
   const tree = await openTree(page, "認証");
@@ -66,9 +67,9 @@ test("read-only row next to writable row", async ({ page }) => {
   await pick(roEpic);
   await page.keyboard.press("c");
   await page.keyboard.press("Space");
-  // 閲覧のみの Store のプロジェクトの行: C・Alt+↑↓ は何もしない。
+  // 閲覧のみの Store のプロジェクトの行: C・Alt+↓ は何もしない(動かせる位置でも、並べ替えの API を呼ばない)。
   await pick(rowOf(tree, readonlyStore, sampleProject));
-  for (const key of ["c", "Alt+ArrowUp", "Alt+ArrowDown"]) await page.keyboard.press(key);
+  for (const key of ["c", "Alt+ArrowDown"]) await page.keyboard.press(key);
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect(status).toHaveAttribute("aria-label", before ?? "");
 
@@ -82,6 +83,12 @@ test("read-only row next to writable row", async ({ page }) => {
   // ダイアログを開き閉じするあいだに、閲覧のみの Store へ書く要求が飛んでいれば、ここで分かる。
   expect(moves).toEqual([]);
   expect(readonlyWrites).toEqual([]);
+  // サイドバーの並びも変わっていない。
+  const side = await sidebar(page, info);
+  await expect(side.getByRole("region", { name: "readonly" }).getByRole("link")).toContainText([
+    "ログイン",
+    "閲覧の計画",
+  ]);
 });
 
 test("project row keys and menu", async ({ page }, info) => {
@@ -100,10 +107,9 @@ test("project row keys and menu", async ({ page }, info) => {
   await page.keyboard.press("Alt+ArrowDown");
   await expect.poll(projectsOf).toBe([p2.title, p1.title, p3.title].join(","));
   await expect(current).toHaveAttribute("data-row", `${e2eStore}/${p1.id}`);
-  // 末尾のプロジェクトの Alt+↓ は何もしない(API を呼ばない)。
+  // 末尾のプロジェクトの Alt+↓ は何もしない(API を呼ばない。最後に要求の数とサイドバーの並びで確かめる)。
   await pick(rowOf(tree, e2eStore, p3.id));
   await page.keyboard.press("Alt+ArrowDown");
-  expect(moves).toHaveLength(1);
 
   // メニューの「名前を変更…」。
   const renamed = `${p1.title} 改`;
