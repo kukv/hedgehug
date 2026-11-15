@@ -32,7 +32,7 @@ func ProjectRows(log []change.Record, c ProjectContext) []Row {
 	var rows []Row
 	for _, r := range log {
 		if text, ok := projectText(log, r, c); ok {
-			rows = append(rows, Row{Who: Who(r.Actor, c.Names), Text: text, At: r.At})
+			rows = append(rows, Row{Who: Who(r.Actor, c.Names), Text: text, At: r.At, Op: r.Op, Actor: r.Actor.Kind})
 		}
 	}
 	return newestFirst(rows)

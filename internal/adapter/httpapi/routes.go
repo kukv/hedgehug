@@ -66,6 +66,8 @@ type Deps struct {
 	// アクティビティ(C4d)。Commits は Store のコミット、SyncLog は同期の行
 	Commits port.StoreCommits
 	SyncLog port.SyncLog
+	// 履歴の「同期で受信」(C4d-16)。同期で受け取った保存の op を引く(state.db)。nil なら添えない
+	Received apphistory.ReceivedOps
 
 	// 自動化・通知
 	Inbox port.InboxBook // 受信箱。機能には appinbox.Notifier で包んで渡す(足したら画面に知らせる。C4a-13)
@@ -143,7 +145,7 @@ func NewAPI(mux *http.ServeMux, deps Deps) huma.API {
 		Comments:     appcomments.Service{Stores: deps.Stores, IDs: deps.IDs, Identity: deps.Identity},
 		Worklogs:     appworklogs.Service{Stores: deps.Stores, IDs: deps.IDs, Identity: deps.Identity, Clock: deps.Clock},
 		Relations:    apprelations.Service{Stores: deps.Stores, Identity: deps.Identity},
-		History:      apphistory.Service{Stores: deps.Stores, StoreList: deps.StoreList, Clock: deps.Clock},
+		History:      apphistory.Service{Stores: deps.Stores, StoreList: deps.StoreList, Clock: deps.Clock, Received: deps.Received},
 	})
 	transfers.Register(api, apptransfers.Service{
 		Stores: deps.Stores, StoreList: deps.StoreList, SyncTargets: deps.SyncTargets, Delivery: deps.Delivery,

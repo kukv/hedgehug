@@ -3,6 +3,7 @@ package history
 
 import (
 	"context"
+	"slices"
 
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/domain/change"
@@ -14,16 +15,30 @@ import (
 )
 
 // Service は、履歴を読む口。StoreList は、同じ Store の中の移動の行に出す Store 名を引くため(A5a-17)。
+// Received は、同期で受け取った保存の op を引くため(C4d-16)。nil なら、どの行にも添えない。
 type Service struct {
 	Stores    port.Stores
 	StoreList port.StoreList
 	Clock     port.Clock
+	Received  ReceivedOps
+}
+
+// ReceivedOps は、このマシンが同期で受け取った保存の op を引く口(C4d-16。state.db の判定の記録が満たす)。
+type ReceivedOps interface {
+	// Received は、ops のうち、store の判定の記録にあり、同じ op にこのマシンで作った保存の記録がないものを true にして返す。
+	Received(ctx context.Context, store port.StoreID, ops []change.ID) (map[change.ID]bool, error)
+}
+
+// Row は、履歴の 1 行と、その行が同期で受け取った保存のものか(02「履歴」の「同期で受信」)。
+type Row struct {
+	dhistory.Row
+	Received bool
 }
 
 // Item は、アイテムの履歴を新しい順で返す。なければ port.ErrNotFound。値の名前は、行を書いたときにアイテムがいた
 // ワークスペースの設定で引く(いまのワークスペースと、同じ Store のほかのワークスペース)。
 // ワークスペースのログに同じ操作の delete の行があるアイテムの行は出さない(B2-9)。
-func (s Service) Item(ctx context.Context, store port.StoreID, id item.ID) ([]dhistory.Row, error) {
+func (s Service) Item(ctx context.Context, store port.StoreID, id item.ID) ([]Row, error) {
 	name, err := s.storeName(ctx, store)
 	if err != nil {
 		return nil, err
@@ -60,7 +75,34 @@ func (s Service) Item(ctx context.Context, store port.StoreID, id item.ID) ([]dh
 		})
 		return nil
 	})
-	return rows, err
+	if err != nil {
+		return nil, err
+	}
+	return s.mark(ctx, store, rows)
+}
+
+// mark は、rows に、同期で受け取った保存の印を添える。実行者「同期」の行(同期の修復)には添えない(このマシンの修復も
+// このマシンの保存として記録しないので、記録では見分けられない。C4d-16)。
+func (s Service) mark(ctx context.Context, store port.StoreID, rows []dhistory.Row) ([]Row, error) {
+	out := make([]Row, len(rows))
+	var ops []change.ID
+	for i, r := range rows {
+		out[i] = Row{Row: r}
+		if r.Actor != change.ActorSync && r.Op != "" && !slices.Contains(ops, r.Op) {
+			ops = append(ops, r.Op)
+		}
+	}
+	if s.Received == nil || len(ops) == 0 {
+		return out, nil
+	}
+	got, err := s.Received.Received(ctx, store, ops)
+	if err != nil {
+		return nil, err
+	}
+	for i := range out {
+		out[i].Received = out[i].Actor != change.ActorSync && got[out[i].Op]
+	}
+	return out, nil
 }
 
 // storeName は、表示中の Store id の名前。なければ空。
@@ -119,7 +161,7 @@ func readOrigin(r port.Reader, id item.ID) (dhistory.Origin, error) {
 }
 
 // Project は、プロジェクトの履歴を新しい順で返す。なければ port.ErrNotFound。
-func (s Service) Project(ctx context.Context, store port.StoreID, id project.ID) ([]dhistory.Row, error) {
+func (s Service) Project(ctx context.Context, store port.StoreID, id project.ID) ([]Row, error) {
 	var rows []dhistory.Row
 	err := s.Stores.Read(ctx, store, func(r port.Reader) error {
 		if _, err := port.LiveProject(r, id); err != nil {
@@ -142,7 +184,10 @@ func (s Service) Project(ctx context.Context, store port.StoreID, id project.ID)
 		})
 		return nil
 	})
-	return rows, err
+	if err != nil {
+		return nil, err
+	}
+	return s.mark(ctx, store, rows)
 }
 
 // workspaceNames は、この Store のすべてのワークスペース(削除済みを含む。アイテムの履歴の readOrigin と同じ)の名前。

@@ -68,6 +68,7 @@ func wire(ctx context.Context) (httpapi.Deps, error) {
 		Stores:   commits,
 		Commits:  commits,
 		SyncLog:  state.SyncLog(),
+		Received: state, // 入口 POST /e2e/receive が、同じ state.db の判定の記録に書く
 		IDs:      ids,
 		Identity: apptest.Identity{Login: "taro"},
 		Inbox:    state.Inbox(clock),

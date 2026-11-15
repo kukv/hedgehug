@@ -684,6 +684,8 @@ export interface ErrorModel {
 export interface HistoryRow {
   /** 時刻(ミリ秒までの RFC 3339) */
   at: string;
+  /** 同期で受け取った保存の行か(このマシンで作った保存と、実行者が同期の行は false) */
+  received: boolean;
   /** 変更の文(作成・タイトルを「…」に変更 など) */
   text: string;
   /** 操作した人の表示(メンバーの名前・自動化・GitHub・同期・不明なユーザー) */

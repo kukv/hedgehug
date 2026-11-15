@@ -1009,6 +1009,9 @@ components:
         at:
           description: 時刻(ミリ秒までの RFC 3339)
           type: string
+        received:
+          description: 同期で受け取った保存の行か(このマシンで作った保存と、実行者が同期の行は false)
+          type: boolean
         text:
           description: 変更の文(作成・タイトルを「…」に変更 など)
           type: string
@@ -1019,6 +1022,7 @@ components:
         - who
         - text
         - at
+        - received
       type: object
     ImpactOutputBody:
       additionalProperties: false

@@ -13,11 +13,13 @@ import (
 	"github.com/kukv/hedgehug/internal/domain/workspace"
 )
 
-// Row は、履歴の 1 行。
+// Row は、履歴の 1 行。Op はその行を書いた操作、Actor は実行者の種類(同期で受け取った保存の印を決める材料。C4d-16)。
 type Row struct {
-	Who  string
-	Text string
-	At   time.Time
+	Who   string
+	Text  string
+	At    time.Time
+	Op    change.ID
+	Actor change.ActorKind
 }
 
 // Context は、アイテムの履歴の文を作る材料。

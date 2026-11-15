@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"slices"
 
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/domain/change"
@@ -85,6 +86,31 @@ func (j judged) Own(ctx context.Context, store port.StoreID, op change.ID) (bool
 		return false, nil
 	}
 	return j.exists(ctx, `SELECT 1 FROM judged_saves WHERE store = ? AND op = ? AND own = 1 LIMIT 1`, string(store), string(op))
+}
+
+// Received は、ops のうち、同期で受け取った保存のもの(記録があり、同じ op にこのマシンの保存の記録がない。決定 C4d-16)
+// を true にして返す。空の op は数えない。
+func (d *DB) Received(ctx context.Context, store port.StoreID, ops []change.ID) (map[change.ID]bool, error) {
+	out := map[change.ID]bool{}
+	ops = slices.DeleteFunc(slices.Clone(ops), func(op change.ID) bool { return op == "" })
+	if len(ops) == 0 {
+		return out, nil
+	}
+	marks, args := inClause(ops)
+	rows, err := d.db.QueryContext(ctx, `SELECT op FROM judged_saves WHERE store = ? AND op IN `+marks+` GROUP BY op HAVING MAX(own) = 0`, //nolint:gosec // G202: つなぐのは ? だけの IN 句。値は args で渡す
+		append([]any{string(store)}, args...)...)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	for rows.Next() {
+		var op string
+		if err := rows.Scan(&op); err != nil {
+			return nil, err
+		}
+		out[change.ID(op)] = true
+	}
+	return out, rows.Err()
 }
 
 func (j judged) ForgetStore(ctx context.Context, store port.StoreID) error {

@@ -90,9 +90,9 @@ func wire(ctx context.Context) (httpapi.Deps, error) {
 		Delivery:      svc,
 		SyncTargets:   svc.Targets,
 	}
-	// state.db に置くもの(レポートの選択・画面の状態・最近開いたもの・同期の行)と、コミットの読み口
+	// state.db に置くもの(レポートの選択・画面の状態・最近開いたもの・同期の行・同期で受け取った保存)と、コミットの読み口
 	deps.Reports, deps.Screens, deps.Recent = db.ReportSelections(), db.ScreenStates(), db.Recent()
-	deps.SyncLog, deps.Commits = db.SyncLog(), stores
+	deps.SyncLog, deps.Commits, deps.Received = db.SyncLog(), stores, db
 	deps.Links = linksOf(deps, conn) // トークンの入口は同期と同じ Connector(D4a-2)
 	go (&githublink.Reader{Links: deps.Links, Settings: file.SyncSettings(), Waiting: auto.Waiting}).Run(ctx)
 	return deps, nil

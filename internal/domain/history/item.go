@@ -20,7 +20,7 @@ import (
 func ItemRows(log []change.Record, c Context) []Row {
 	var rows []Row
 	for _, e := range emitted(log, c) {
-		rows = append(rows, Row{Who: Who(e.rec.Actor, c.Names), Text: e.text, At: e.rec.At})
+		rows = append(rows, Row{Who: Who(e.rec.Actor, c.Names), Text: e.text, At: e.rec.At, Op: e.rec.Op, Actor: e.rec.Actor.Kind})
 	}
 	return newestFirst(rows)
 }
