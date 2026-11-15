@@ -58,6 +58,7 @@ E1・E2a の計画の Global Constraints をすべて引き継ぐ。加えて次
 | E3a-20 | パレットの「選んでいるアイテム」: ツリーにフォーカスがあり、フォーカスのある行がアイテムの行なら、そのアイテム(rank 1、`source: "tree"`。プロジェクトの画面のツリーと同じ)。ステータスの変更は core の `setRowStatus` で、検索を読み直す | A5c-9、E2a-18 |
 | E3a-21 | プロジェクトの画面とワークスペースの画面のツリーのタブの開閉を画面の状態に残すことは、そのタブの画面の状態の鍵を決める E2c・E7 のうち E7 が行う(トラック E の分け方に書く) | 04 の 474 行。タブの画面の状態の鍵は E2c で決める |
 | E3a-22 | 既存の不具合の直し: 新しいブラウザのタブで、パレットの「検索で開く」「{N} 件をまとめて変更…」から検索の画面を開くと、保存した列などの設定が初めの値で上書きされていた。`prepareQuery` を、画面の状態を読んでから絞り込みだけを置き換える形にする(Task 3) | ユーザーの決定(2026-11-15)。04 の 359 行(レイアウトの設定と列は変えない) |
+| E3a-23 | 既存の不具合の直し: (A) 新しいタブで画面の状態を読み終える前の入力・レイアウトの切り替え・テーブルの設定の変更が、保存した設定を初めの値で上書きしていた。読み終えるまでは書かずに積み、読んだ値に重ねて 1 回書く。(B) パレットの「検索で開く」「{N} 件をまとめて変更…」で画面を移れなかった(「入力を破棄」で断った)のに、打った絞り込みとテーブルへの切り替えが残っていた。`prepareQuery` は印だけにし、移れて `open` したときに書く | ユーザーの決定(2026-11-15)。04 の 359 行、01 の 178 行 |
 
 ## Review Focus
 
@@ -530,6 +531,7 @@ git commit -m "docs: トラック E の分け方を E3a・E3b に書き換え、
 - 書き込みのあとのツリーの読み直しは、`reloads.ts` に `itemChanges` の集まりを足し、`itemRefresh` を使う区画が登録する形にした。
 - core: `features/search/view.ts` の `treeEmptyText`、`features/search/searchTree.ts`・`features/search/searchTreeData.ts`、`features/search/layout.ts`(`layoutNote`・`deletedTreeText`・`readSearchState`)は、`web/packages/core/src/searchIndex.ts` から公開する。`features/projects/projectMenu.ts`(`projectMenu`・`canMoveProject`・`createProjectMover`)、`features/projects/renameDialog.ts`(`createRenameProjectDialog`)、`features/items/progress.ts` の `projectProgress` は、`web/packages/core/src/index.ts` から公開する。`features/projects/editor.ts` の `ProjectEditor` にメソッド `renameOrMessage` を足した(公開物は増えない)。
 - テーブルで開く入口は、ナビゲーションが成功してから `search.showTable()` を呼ぶ(サイドバーは app の `search.ts` の `openSearchTable`、パレットは依存の `showSearchTable`)。
+- E3a-23 で core の `createSearch` は、最初の `open` が読み終えるまでの変更を `Partial<SavedSearch>` に積み(読む前は検索もせず、`settled` は `open` の検索まで解けない)、`prepareQuery` は印だけを持つようにした。`open` は読んだあとに待っていた検索を取り消し、読んだ値に積んだ分と印を重ねて 1 回書き、1 回検索する。読んでいるあいだの入力を見分ける `touched` はなくした。
 - e2e は `search-tree.spec.ts`・`search-tree-keys.spec.ts`・`search-tree-helpers.ts`・`search-layout.spec.ts`。e2e のサーバーは、閲覧のみの Store に 2 つ目のプロジェクト HH-P2「閲覧の計画」を足している。
 
 ## E3b・E4〜E7 に渡すもの

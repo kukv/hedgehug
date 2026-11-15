@@ -83,3 +83,13 @@ export function setup(saved: string | null = null) {
   });
   return { s, search, sp, toasts, prune, clear };
 }
+
+// opened は、open が画面の状態を読み終えたあとの setup(open の検索と書き込みの記録は消す)。読む前の setter は
+// 書かずに積み、検索も open に任せる(E3a-23)ので、読んだあとの動きを確かめるテストはこれを使う。
+export async function opened(saved: string | null = null) {
+  const t = setup(saved);
+  await t.s.open();
+  t.search.mockClear();
+  vi.mocked(t.sp.put).mockClear();
+  return t;
+}

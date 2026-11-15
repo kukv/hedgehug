@@ -1,12 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { get } from "../../reactive/store";
-import { kindBugBody, noTable, setup } from "./fixtures.test-util";
+import { kindBugBody, noTable, opened, setup } from "./fixtures.test-util";
 import { defaultTable } from "./table";
 
 beforeEach(() => vi.useFakeTimers());
 afterEach(() => vi.useRealTimers());
 
-describe("createSearch layout (E3a-2・9・10・22)", () => {
+describe("createSearch layout (E3a-2・9・10・22・23)", () => {
   const savedTree = (query: string, table: object) =>
     JSON.stringify({ query, layout: "tree", table, tree: { collapsed: ["s/1"] } });
   const written = (t: ReturnType<typeof setup>) =>
@@ -128,14 +128,28 @@ describe("createSearch layout (E3a-2・9・10・22)", () => {
     expect(t.search).toHaveBeenCalledWith("kind:bug", { sort: table.sort, group: "kind" });
   });
 
-  it("prepareQuery then cancelPrepare before open releases settled and keeps the query for the next open", async () => {
+  // 移れなかった入口の絞り込みとテーブルへの切り替えは残さない(E3a-23)。
+  it("prepareQuery then cancelPrepare before open releases settled and leaves the saved state", async () => {
     const t = setup(savedTree("a", { columns: ["id", "title"], group: "none", sort: null }));
+    t.s.prepareQuery("kind:bug");
+    t.s.cancelPrepare();
+    await t.s.settled();
+    await t.s.open();
+    expect(t.sp.put).not.toHaveBeenCalled();
+    expect(get(t.s.state)).toMatchObject({ query: "a", layout: "tree" });
+    expect(t.search).toHaveBeenCalledWith("a", noTable);
+  });
+
+  it("cancelPrepare after the first open leaves the saved state", async () => {
+    const t = await opened('{"query":"a","layout":"tree"}');
     t.s.prepareQuery("kind:bug");
     t.s.cancelPrepare();
     await t.s.settled();
     expect(t.sp.put).not.toHaveBeenCalled();
     await t.s.open();
-    expect(written(t)).toMatchObject({ query: "kind:bug", layout: "table" });
+    expect(t.sp.put).not.toHaveBeenCalled();
+    expect(get(t.s.state)).toMatchObject({ query: "a", layout: "tree" });
+    expect(t.search).toHaveBeenCalledWith("a", noTable);
   });
 
   it("prepareQuery while open is reading replaces the query after the read", async () => {
@@ -150,5 +164,50 @@ describe("createSearch layout (E3a-2・9・10・22)", () => {
     expect(t.search).toHaveBeenCalledTimes(1);
     expect(t.search).toHaveBeenCalledWith("kind:bug", noTable);
     await t.s.settled();
+  });
+
+  // 読む前の変更は書かずに積み、読んだ値のその項目だけを置き換えて 1 回書く(E3a-23)。
+  describe("before the first read", () => {
+    const table = {
+      columns: ["id", "title", "points"],
+      group: "kind",
+      sort: { key: "id", desc: true },
+    };
+    const saved = { query: "a", layout: "tree", table, tree: { collapsed: ["s/1"] } };
+
+    it("setQuery keeps the other saved fields and writes once after the read", async () => {
+      const t = setup(savedTree("a", table));
+      t.s.setQuery("b");
+      expect(t.sp.put).not.toHaveBeenCalled();
+      await t.s.open();
+      expect(written(t)).toEqual({ ...saved, query: "b" });
+      expect(t.sp.put).toHaveBeenCalledTimes(1);
+      await vi.advanceTimersByTimeAsync(500);
+      expect(t.search).toHaveBeenCalledTimes(1);
+      expect(t.search).toHaveBeenCalledWith("b", { sort: table.sort, group: "kind" });
+    });
+
+    it("setLayout keeps the other saved fields and writes once after the read", async () => {
+      const t = setup(savedTree("a", table));
+      t.s.setLayout("table");
+      expect(t.sp.put).not.toHaveBeenCalled();
+      await t.s.open();
+      expect(written(t)).toEqual({ ...saved, layout: "table" });
+      expect(get(t.s.state)).toMatchObject({ ...saved, layout: "table" });
+      expect(t.sp.put).toHaveBeenCalledTimes(1);
+    });
+
+    it("setTable keeps the other saved fields and writes once after the read", async () => {
+      const t = setup(savedTree("a", table));
+      const next = { columns: ["id", "title"], group: "none", sort: null };
+      t.s.setTable(next);
+      expect(t.sp.put).not.toHaveBeenCalled();
+      await t.s.open();
+      expect(written(t)).toEqual({ ...saved, table: next });
+      expect(t.sp.put).toHaveBeenCalledTimes(1);
+      await vi.advanceTimersByTimeAsync(500);
+      expect(t.search).toHaveBeenCalledTimes(1);
+      expect(t.search).toHaveBeenCalledWith("a", noTable);
+    });
   });
 });

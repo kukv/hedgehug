@@ -159,8 +159,8 @@ export function createCandidates(changed: (source: "items" | "members") => void)
 }
 
 // openSearch は、パレットの「検索で開く」(E1-21)。検索は 1 回だけ: 検索の画面にいればその場で検索し、ほかの画面からは
-// 絞り込みを書いておき、開いた画面の open が検索する(同じ画面へは移らず open も呼ばれない)。
-// 移れたかを返す。「入力を破棄」の確認で断られたら、検索の準備を取り消して false。
+// 絞り込みの印を付けておき、開いた画面の open が書いて検索する(同じ画面へは移らず open も呼ばれない)。
+// 移れたかを返す。「入力を破棄」の確認で断られたら、印を消して(画面の状態は前のまま。E3a-23)false。
 export async function openSearch(query: string): Promise<boolean> {
   if (get(navigation.route).name === "search") {
     await search.replaceQuery(query);

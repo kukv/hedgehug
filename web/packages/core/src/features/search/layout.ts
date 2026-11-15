@@ -76,6 +76,9 @@ export function initialSearchState(): SearchState {
   return { ...readSearchState(null), result: null, resultQuery: null, loading: false };
 }
 
+// Search の setter は、このタブで最初の open が画面の状態を読み終えるまでは書かずに積み、open が読んだ値に
+// 重ねて 1 回だけ書く(E3a-23。読む前に書くと、保存した値が初めの値で上書きされる)。読む前は検索もせず、
+// open の 1 回の検索に任せる。
 export interface Search {
   state: Readable<SearchState>;
   // open は、画面を開いたときに、保存した絞り込みとレイアウトで検索する。
@@ -84,18 +87,18 @@ export interface Search {
   setQuery(text: string): void;
   // replaceQuery は、パレットなどから絞り込みを入れ替え、テーブルにする(E3a-9)。待たずに検索する。
   replaceQuery(text: string): Promise<void>;
-  // prepareQuery は、絞り込みを入れ替えてテーブルにするだけで、検索しない。ほかの画面から検索の画面を開くとき、
-  // 開いた画面の open が 1 回だけ検索する。このタブでまだ open が読んでいなければ、読んだ値の絞り込みだけを
-  // 置き換えてから書く(E3a-22。読む前に書くと、保存した列などが初めの値で上書きされる)。
+  // prepareQuery は、ほかの画面から検索の画面を開くときに、絞り込みと「テーブルにする」の印だけを付ける(書かず、
+  // 検索もしない)。移れて呼ばれる次の open が、読んだ値の絞り込みを置き換えてテーブルにし、1 回書いて 1 回検索する
+  // (E3a-22・E3a-23)。
   prepareQuery(text: string): void;
   // setLayout は、レイアウトを書くだけで検索しない。テーブル以外にするときは選択を解除する(E3a-10)。
   setLayout(layout: SearchLayout): void;
-  // showTable は、テーブルで開く入口(E3a-9)が呼ぶ。まだ open が読んでいなければ、読んだあとでテーブルにする。
-  // すでにテーブルなら何も書かない。
+  // showTable は、テーブルで開く入口(E3a-9)が呼ぶ。すでにテーブルなら何も書かない。
   showTable(): void;
   // setCollapsed は、ツリーの閉じている行の鍵を書くだけ(E3a-11)。
   setCollapsed(collapsed: string[]): void;
-  // cancelPrepare は、prepareQuery の印を取り消す(検索の画面へ移れなかったとき)。settled を待つものを解く。
+  // cancelPrepare は、prepareQuery の印を消す(検索の画面へ移れなかったとき)。画面の状態は前のまま。
+  // settled を待つものを解く。
   cancelPrepare(): void;
   // reload は、Store が変わった知らせ(reloads)で、いまの絞り込みのまま読み直す。
   reload(): Promise<void>;
