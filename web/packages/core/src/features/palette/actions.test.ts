@@ -240,7 +240,7 @@ describe("パレットの候補の実行", () => {
     ]);
     await home.palette.choose(1, true);
     expect(named(home.calls, "openTab").map((c) => c.args)).toEqual([
-      [{ name: "settings", tab: "accounts" }],
+      [{ name: "settings", tab: "general" }],
     ]);
 
     const onWs = await setup({ here: { workspaceId: "S1-W1" } });

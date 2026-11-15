@@ -86,7 +86,7 @@ export function commandCandidates(d: ActionDeps): Candidate[] {
     moveTo(d, "command:inbox", g, "受信箱を開く", { name: "inbox" }),
     moveTo(d, "command:activity", g, "アクティビティを開く", { name: "activity" }),
     openSearchTable(d),
-    moveTo(d, "command:settings", g, "設定を開く", { name: "settings", tab: "accounts" }),
+    moveTo(d, "command:settings", g, "設定を開く", { name: "settings", tab: "general" }),
     {
       key: "command:sync",
       group: g,

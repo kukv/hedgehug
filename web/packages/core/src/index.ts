@@ -209,4 +209,5 @@ export {
 } from "./reactive/store";
 export * from "./searchIndex";
 export * from "./selectionIndex";
+export * from "./settingsIndex";
 export * from "./workspacesIndex";

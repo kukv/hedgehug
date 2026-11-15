@@ -126,8 +126,8 @@ describe("display IDs", () => {
 });
 
 describe("settings", () => {
-  it("reads /settings and /settings/accounts as the accounts tab", () => {
-    expect(parseRoute("/settings")).toEqual({ name: "settings", tab: "accounts" });
+  it("reads /settings as the general tab, and /settings/accounts as the accounts tab", () => {
+    expect(parseRoute("/settings")).toEqual({ name: "settings", tab: "general" });
     expect(parseRoute("/settings/accounts")).toEqual({ name: "settings", tab: "accounts" });
   });
 

@@ -21,7 +21,7 @@
   const status = sync.status;
   const card = $derived(syncCard($status, $syncNow));
   const hint = syncAllHint(isMac());
-  const settings: Route = { name: "settings", tab: "accounts" };
+  const settings: Route = { name: "settings", tab: "general" };
   const inboxRoute: Route = { name: "inbox" };
   const activityRoute: Route = { name: "activity" };
   // 「検索」はテーブルで開く入口(E3a-9)。修飾キーのない主ボタンのクリックで移れたときだけテーブルにする。
