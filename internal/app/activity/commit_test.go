@@ -341,6 +341,29 @@ func TestRowsNone(t *testing.T) {
 	assertTarget(t, "Item", rows[0].Item, &Target{Display: "HH-2"})
 }
 
+// 行のない bot のコミットは、件名が保持日数を過ぎたものの完全な削除なら実行者なし、ほかの完全な削除は同期。
+func TestRowsBotPurgeWithoutRows(t *testing.T) {
+	f := newFixture(t)
+	f.write(t, change.Actor{Kind: change.ActorNone}, "保持日数を過ぎた削除済み 3 件を完全に削除", func(tx port.Tx) error {
+		return tx.WriteItems().Remove(apptest.SampleTask)
+	})
+	c := f.commit(t, "保持日数を過ぎた削除済み 3 件を完全に削除")
+	if len(c.Changes) != 0 || c.Author != change.BotLogin {
+		t.Fatalf("commit = %+v", c)
+	}
+	rows := f.rowsOf(t, c)
+	if len(rows) != 1 || rows[0].Actor != ActorNone || rows[0].Who != "" || rows[0].Avatar != "" || !rows[0].Storewide || len(rows[0].Workspaces) != 0 || rows[0].dedup == "" {
+		t.Errorf("retention purge rows = %+v", rows)
+	}
+	f.write(t, change.Actor{Kind: change.ActorSync}, "HH-4 を完全に削除(祖先が完全に削除)", func(tx port.Tx) error {
+		return tx.WriteItems().Remove(apptest.SampleEpic)
+	})
+	rows = f.rows(t, "HH-4 を完全に削除(祖先が完全に削除)")
+	if len(rows) != 1 || rows[0].Actor != ActorSync || rows[0].Who != "同期" || rows[0].Storewide {
+		t.Errorf("repair purge rows = %+v", rows)
+	}
+}
+
 func TestRowsMovedOut(t *testing.T) {
 	f := newFixture(t)
 	moved := item.ID("01ACTITEM00000000000000003")

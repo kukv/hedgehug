@@ -34,7 +34,7 @@ func commitRows(r port.Reader, store port.StoreInfo, c port.Commit) ([]Row, erro
 // rows は、コミット c の行。並びは本体、自動化の行、メンバーの追加の行で、鍵の連番もこの順。
 func (v *view) rows(store port.StoreInfo, c port.Commit) ([]Row, error) {
 	recs := opRows(c)
-	actor := mainActor(recs, c.Author)
+	actor := mainActor(recs, c.Author, c.Summary)
 	base := Row{At: c.At, Store: store, SHA: c.SHA[:min(len(c.SHA), 7)]}
 	main := base
 	main.Text = c.Summary
@@ -82,14 +82,22 @@ func opRows(c port.Commit) []entityRow {
 	return all
 }
 
+// purgeSummary は、保持日数を過ぎたものの完全な削除の件名の書き出し(06 の文)。
+const purgeSummary = "保持日数を過ぎた削除済み "
+
 // mainActor は、本体の実行者(C4d-5)。自動化でない最初の行の実行者。なければ、作者が bot なら同期、ほかは作者の人。
-func mainActor(recs []entityRow, author string) change.Actor {
+// 行が 1 行もない bot のコミットのうち、件名が保持日数を過ぎたものの完全な削除のものは実行者なし(完全な削除の記録は
+// 実行者を持たないので、件名で同期の修復の完全な削除と見分ける)。
+func mainActor(recs []entityRow, author, summary string) change.Actor {
 	for _, er := range recs {
 		if er.rec.Actor.Kind != change.ActorAutomation {
 			return er.rec.Actor
 		}
 	}
 	if author == change.BotLogin {
+		if len(recs) == 0 && strings.HasPrefix(summary, purgeSummary) {
+			return change.Actor{Kind: change.ActorNone}
+		}
 		return change.Actor{Kind: change.ActorSync}
 	}
 	return change.User(author)
