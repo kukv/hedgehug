@@ -42,7 +42,7 @@ import {
   type SyncEventKind,
   writable,
 } from "@hedgehug/core";
-import { syncNow, tickClock, today } from "./clock";
+import { tickClock, today } from "./clock";
 import { drafts, leaveItem } from "./drafts";
 import { hereOf } from "./here";
 import { browserHistory } from "./history";
@@ -53,6 +53,8 @@ import { held, online as isOnline, tabId, visible } from "./tab";
 import { palettePort, timer, toasts } from "./wireBase";
 
 // 組み立て: api の実装を core に渡す(設計書 6 節)。画面はここで作った状態を使う。
+// syncNow は、相対時間と 24 時間の判定に使う時刻(実体は clock.ts)。
+export { syncNow } from "./clock";
 
 // トークンは、ほかの何よりも先に決める(アドレスからハッシュを消してから、履歴を読む)。A2 の計画の決定 5。
 const token = rememberToken(location, sessionStorage, (url) => history.replaceState(null, "", url));
@@ -255,9 +257,6 @@ const signals = createTabSignals({
   online: isOnline,
   now: () => Date.now(),
 });
-
-// syncNow は、相対時間と 24 時間の判定に使う時刻(実体は clock.ts)。
-export { syncNow };
 
 const onlineState = writable(isOnline());
 export const online = readonly(onlineState);

@@ -27,7 +27,13 @@ test("my tasks regroup when the day changes", async ({ page }, info) => {
   await filterBy(page, mark);
   await expect(groupHeadings(page)).toHaveText(["今日 1"]);
 
+  // 日付が替わると store を積み、マイタスクを読み直す(E4a-16)。入力欄にフォーカスがあると読み直しを待つので、外す。
+  await page.getByRole("combobox", { name: "絞り込み" }).blur();
+  const reloaded = page.waitForRequest(
+    (r) => r.url().endsWith("/api/my-tasks") && r.method() === "POST",
+  );
   await page.clock.fastForward("24:00:00");
+  await reloaded;
   await expect(groupHeadings(page)).toHaveText(["期限切れ 1"]);
   await expect(page.getByRole("combobox", { name: "絞り込み" })).toHaveValue(mark);
 });
