@@ -44,7 +44,7 @@ func (v *view) rows(store port.StoreInfo, c port.Commit) ([]Row, error) {
 		return nil, err
 	}
 	if actor.Kind != change.ActorUser {
-		main.dedup = dedupKey(store.ID, actor, recs, c.Summary)
+		main.dedup = dedupKey(store.ID, actor, recs, c.Summary, c.Removed)
 	}
 	out := []Row{main}
 	for _, er := range recs {
@@ -59,7 +59,7 @@ func (v *view) rows(store port.StoreInfo, c port.Commit) ([]Row, error) {
 	}
 	out = append(out, memberRows(base, store.ID, actor, recs, refs, v.names)...)
 	for i := range out {
-		out[i].Key = fmt.Sprintf("%s:%04d", c.SHA, i)
+		out[i].Key = fmt.Sprintf("%s:%06d", c.SHA, i)
 	}
 	return out, nil
 }
@@ -88,6 +88,10 @@ const purgeSummary = "保持日数を過ぎた削除済み "
 // mainActor は、本体の実行者(C4d-5)。自動化でない最初の行の実行者。なければ、作者が bot なら同期、ほかは作者の人。
 // 行が 1 行もない bot のコミットのうち、件名が保持日数を過ぎたものの完全な削除のものは実行者なし(完全な削除の記録は
 // 実行者を持たないので、件名で同期の修復の完全な削除と見分ける)。
+// op の行がすべて自動化の行で作者が bot のコミットは、GitHub か同期かを件名からも行からも決められないが、起きない:
+// ルールの行を書けるのは人と GitHub の操作だけ(port.CheckRuleDrafts)。人の操作は作者が人なので人になり(止まった
+// 自動化の「制約を無視して…」は自動化の行だけを人が書く)、GitHub の取り直しと自動リンクは、ルールを動かす前に
+// 必ず同じ保存でリンクの行(実行者 GitHub)を書く(githublink の fire)。
 func mainActor(recs []entityRow, author, summary string) change.Actor {
 	for _, er := range recs {
 		if er.rec.Actor.Kind != change.ActorAutomation {
@@ -158,7 +162,7 @@ func (v *view) automationRow(base Row, store port.StoreID, er entityRow) (Row, e
 	p := propertyOf(st, er.rec.F)
 	value := item.Display(p, er.rec.To, st, v.names, base.At)
 	row.Text = automation.ActivityText(rule.name, automation.ChangeText(p.Name, value))
-	row.dedup = dedupKey(store, er.rec.Actor, []entityRow{er}, "")
+	row.dedup = dedupKey(store, er.rec.Actor, []entityRow{er}, "", nil)
 	return row, nil
 }
 
@@ -182,25 +186,37 @@ func memberRows(base Row, store port.StoreID, actor change.Actor, recs []entityR
 		row.Text = fmt.Sprintf("メンバー %s を追加", login)
 		row.Storewide = true
 		if actor.Kind != change.ActorUser {
-			row.dedup = dedupKey(store, actor, []entityRow{er}, "")
+			row.dedup = dedupKey(store, actor, []entityRow{er}, "", nil)
 		}
 		out = append(out, row)
 	}
 	return out
 }
 
-// dedupKey は、重なりの鍵(C4d-11): Store・実行者と、行の (エンティティ・項目・from・to) の集合。行がなければ件名。
-func dedupKey(store port.StoreID, actor change.Actor, recs []entityRow, summary string) string {
+// dedupKey は、重なりの鍵(C4d-11): Store・実行者(自動化はルールまで)と、行の (エンティティ・項目・from・to・Prev)
+// の集合。行がなければ件名と、消したもの(removed)の集合。06 がまとめるのは複数のマシンから届いた同じ変更だけ:
+// 2 台が同じ版から作った変更は Prev が同じで、順に起きた繰り返しは Prev が違う。同じものを 2 度消すことはないので、
+// 別のときの同じ件名の完全な削除は、消したものが違う。
+func dedupKey(store port.StoreID, actor change.Actor, recs []entityRow, summary string, removed []change.Ref) string {
 	parts := make([]string, 0, len(recs))
 	for _, er := range recs {
+		prev := make([]string, len(er.rec.Prev))
+		for i, id := range er.rec.Prev {
+			prev[i] = string(id)
+		}
+		slices.Sort(prev)
 		parts = append(parts, strings.Join([]string{
 			string(er.ref.Kind), string(er.ref.ID), er.rec.F, string(compact(er.rec.From)), string(compact(er.rec.To)),
+			strings.Join(prev, ","),
 		}, "\x1f"))
 	}
-	slices.Sort(parts)
 	if len(parts) == 0 {
-		parts = []string{"summary\x1f" + summary}
+		parts = append(parts, "summary\x1f"+summary)
+		for _, ref := range removed {
+			parts = append(parts, "removed\x1f"+string(ref.Kind)+"\x1f"+string(ref.ID))
+		}
 	}
+	slices.Sort(parts)
 	return string(store) + "\x1e" + actor.Code() + "\x1e" + strings.Join(parts, "\x1e")
 }
 

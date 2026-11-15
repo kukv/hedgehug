@@ -122,7 +122,7 @@ func TestRowsUserSave(t *testing.T) {
 	if r.Actor != ActorUser || r.Who != "田中 太郎" || r.Avatar != "田中 太郎" || r.Text != "HH-1 のタイトルを変更" {
 		t.Errorf("actor %q who %q avatar %q text %q", r.Actor, r.Who, r.Avatar, r.Text)
 	}
-	if r.Key != c.SHA+":0000" || r.SHA != c.SHA[:7] || len(r.SHA) != 7 || !r.At.Equal(c.At) || r.Store != s1Info || r.dedup != "" {
+	if r.Key != c.SHA+":000000" || r.SHA != c.SHA[:7] || len(r.SHA) != 7 || !r.At.Equal(c.At) || r.Store != s1Info || r.dedup != "" {
 		t.Errorf("key %q sha %q at %v store %+v dedup %q", r.Key, r.SHA, r.At, r.Store, r.dedup)
 	}
 	if !slices.Equal(r.Workspaces, []workspace.ID{apptest.SampleWorkspace}) || r.Workspace != "Web" || r.Storewide {
@@ -175,7 +175,7 @@ func TestRowsAutomation(t *testing.T) {
 	if a.Actor != ActorAutomation || a.Who != "自動化" || a.Avatar != "" || a.Text != want || a.Text != "「進行中なら完了」でステータスを Done に変更" {
 		t.Errorf("automation actor %q who %q avatar %q text %q", a.Actor, a.Who, a.Avatar, a.Text)
 	}
-	if a.SHA != rows[0].SHA || !a.At.Equal(rows[0].At) || a.Key != c.SHA+":0001" || a.dedup == "" {
+	if a.SHA != rows[0].SHA || !a.At.Equal(rows[0].At) || a.Key != c.SHA+":000001" || a.dedup == "" {
 		t.Errorf("automation sha %q at %v key %q dedup %q", a.SHA, a.At, a.Key, a.dedup)
 	}
 	if !slices.Equal(a.Workspaces, []workspace.ID{apptest.SampleWorkspace}) || a.Workspace != "Web" || a.Storewide {
@@ -185,16 +185,23 @@ func TestRowsAutomation(t *testing.T) {
 	assertTarget(t, "automation Project", a.Project, &Target{Display: "HH-P1", Title: "ログイン", Link: "current"})
 }
 
-// 同じ変更の自動化の行は、別のコミットでも同じ重なりの鍵を持つ。変更が違えば鍵も違う。
+// 2 台が同じ版から作った同じ変更(Prev も同じ)の自動化の行は、別のコミットでも同じ重なりの鍵を持つ。順に起きた
+// 繰り返し(Done から戻したあとにまた Done)は、Prev が違うので鍵も違う。
 func TestRowsAutomationDedupKey(t *testing.T) {
 	f := newFixture(t)
 	f.addRule(t)
 	f.setStatusByRule(t, "1 回目")
 	f.setItem(t, "戻す", apptest.SampleTask, change.NewSet("status", apptest.SampleStatusDone, apptest.SampleStatusTodo))
 	f.setStatusByRule(t, "2 回目")
-	first, second := f.rows(t, "1 回目"), f.rows(t, "2 回目")
-	if first[1].dedup == "" || first[1].dedup != second[1].dedup {
-		t.Errorf("dedup = %q, %q; want the same key", first[1].dedup, second[1].dedup)
+	c := f.commit(t, "1 回目")
+	twin := c
+	twin.SHA = "0123456789abcdef0123456789abcdef01234567" // 別のマシンが同じ版から作った同じ保存
+	first, other, second := f.rowsOf(t, c), f.rowsOf(t, twin), f.rows(t, "2 回目")
+	if first[1].dedup == "" || first[1].dedup != other[1].dedup {
+		t.Errorf("dedup = %q, %q; want the same key", first[1].dedup, other[1].dedup)
+	}
+	if first[1].dedup == second[1].dedup {
+		t.Errorf("the repeated change has the same key %q", first[1].dedup)
 	}
 	if first[1].dedup == first[0].dedup {
 		t.Errorf("automation key %q equals the main key", first[1].dedup)
@@ -219,7 +226,7 @@ func TestRowsMemberJoin(t *testing.T) {
 		t.Fatalf("texts = %q, want %q", texts, want)
 	}
 	for i, r := range rows[1:] {
-		if r.Actor != ActorUser || r.Who != "田中 太郎" || r.SHA != rows[0].SHA || !r.At.Equal(rows[0].At) || r.Key != fmt.Sprintf("%s:%04d", c.SHA, i+1) {
+		if r.Actor != ActorUser || r.Who != "田中 太郎" || r.SHA != rows[0].SHA || !r.At.Equal(rows[0].At) || r.Key != fmt.Sprintf("%s:%06d", c.SHA, i+1) {
 			t.Errorf("member row %d = %+v", i, r)
 		}
 		if len(r.Workspaces) != 0 || !r.Storewide || r.Item != nil || r.Project != nil {
@@ -294,7 +301,7 @@ func TestRowsRepairWithoutOpRows(t *testing.T) {
 	assertTarget(t, "Item", rows[0].Item, &Target{Display: "HH-2", Link: "current"})
 }
 
-// 行のない、bot が作者のコミット(のせ直しの修復)は、実行者「同期」で、重なりの鍵は件名で決まる。
+// 行のない、bot が作者のコミット(のせ直しの修復)は、実行者「同期」で、重なりの鍵は件名と消したもので決まる。
 func TestRowsBotWithoutRows(t *testing.T) {
 	f := newFixture(t)
 	c := port.Commit{SHA: "abcdef0123456789", Summary: "スプリント「Sprint 25」を計画中に戻す", Author: change.BotLogin, At: f.clock.Now()}
@@ -303,6 +310,13 @@ func TestRowsBotWithoutRows(t *testing.T) {
 	a, b := f.rowsOf(t, c), f.rowsOf(t, d)
 	if len(a) != 1 || a[0].Actor != ActorSync || a[0].Who != "同期" || a[0].dedup == "" || a[0].dedup != b[0].dedup {
 		t.Errorf("rows = %+v, %+v", a, b)
+	}
+	// 行がなく件名が同じでも、消したものが違えば別の鍵(同じものを 2 度消すことはない)。
+	x, y := c, d
+	x.Removed = []change.Ref{{Kind: change.KindItem, ID: apptest.SampleTask}}
+	y.Removed = []change.Ref{{Kind: change.KindItem, ID: apptest.SampleEpic}}
+	if kx, ky := f.rowsOf(t, x)[0].dedup, f.rowsOf(t, y)[0].dedup; kx == ky || kx == a[0].dedup {
+		t.Errorf("dedup with removed = %q, %q; want different keys", kx, ky)
 	}
 }
 

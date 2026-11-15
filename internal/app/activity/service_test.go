@@ -148,12 +148,20 @@ func TestPageOrdersByTime(t *testing.T) {
 	}
 }
 
+// 人でない実行者の同じ変更は、複数のマシンから届いたもの(Prev が同じ)だけ 1 行にまとめる(06 :538)。順に起きた
+// 繰り返しは別の行。行のない保存は、件名と消したものが同じときだけまとめる。
 func TestPageMergesNonHumanDuplicates(t *testing.T) {
 	f := newPageFixture(t)
 	f.addRule(t)
 	f.setStatusByRule(t, "1 回目")
+	first := f.commit(t, "1 回目")
 	f.setItem(t, "戻す", apptest.SampleTask, change.NewSet("status", apptest.SampleStatusDone, apptest.SampleStatusTodo))
 	f.setStatusByRule(t, "2 回目")
+	second := f.commit(t, "2 回目")
+	// 別のマシンが「1 回目」と同じ版から作った同じ保存(時刻はあと)。
+	twin := first
+	twin.SHA, twin.At = strings.Repeat("c", 40), first.At.Add(time.Second)
+	f.commits.add(s1, twin)
 	const reset = "スプリント「Sprint 25」を計画中に戻す"
 	at := f.clock.Now()
 	f.commits.add(s1, port.Commit{SHA: strings.Repeat("b", 40), Summary: reset, Author: change.BotLogin, At: at.Add(time.Second)})
@@ -162,28 +170,36 @@ func TestPageMergesNonHumanDuplicates(t *testing.T) {
 	const reset26 = "スプリント「Sprint 26」を計画中に戻す"
 	f.commits.add(s1, port.Commit{SHA: strings.Repeat("9", 40), Summary: reset26, Author: change.BotLogin, At: at})
 	f.commits.add(s1, port.Commit{SHA: strings.Repeat("8", 40), Summary: reset26, Author: change.BotLogin, At: at})
+	// 件名が同じでも、消したものが違う行のない保存はまとめない。
+	const purge = "完全に削除(祖先が完全に削除)"
+	for i, id := range []change.ID{apptest.SampleTask, apptest.SampleEpic} {
+		f.commits.add(s1, port.Commit{SHA: strings.Repeat(fmt.Sprint(i+6), 40), Summary: purge, Author: change.BotLogin, At: at, Removed: []change.Ref{{Kind: change.KindItem, ID: id}}})
+	}
 	f.setItem(t, "HH-1 のタイトルを変更", apptest.SampleEpic, change.NewSet("title", "認証", "二段階認証"))
 	f.setItem(t, "HH-1 のタイトルを変更", apptest.SampleEpic, change.NewSet("title", "認証", "二段階認証"))
 
-	rows := f.page(t, Query{}).Rows
+	rows := f.page(t, Query{})
 	auto := "「進行中なら完了」でステータスを Done に変更"
-	first := f.commit(t, "1 回目")
-	if countText(rows, auto) != 1 {
-		t.Errorf("automation rows = %d, want 1", countText(rows, auto))
-	}
-	for _, r := range rows {
-		if r.Text == auto && r.SHA != first.SHA[:7] {
-			t.Errorf("automation row sha = %q, want the earliest %q", r.SHA, first.SHA[:7])
+	var autoSHAs []string
+	for _, r := range rows.Rows {
+		if sha, _, _ := strings.Cut(r.Key, ":"); r.Text == auto {
+			autoSHAs = append(autoSHAs, sha)
 		}
 		if r.Text == reset && r.SHA != "aaaaaaa" || r.Text == reset26 && r.SHA != "8888888" {
 			t.Errorf("%s: sha = %q, want the earliest", r.Text, r.SHA)
 		}
 	}
-	if countText(rows, reset) != 1 || countText(rows, reset26) != 1 || countText(rows, "HH-1 のタイトルを変更") != 2 {
-		t.Errorf("reset rows = %d, title rows = %d; want 1 and 2", countText(rows, reset), countText(rows, "HH-1 のタイトルを変更"))
+	if want := []string{second.SHA, first.SHA}; !slices.Equal(autoSHAs, want) {
+		t.Errorf("automation rows = %q, want %q (the twin merged, the repeat kept)", autoSHAs, want)
 	}
-	// まとめてから絞り込む: 「自動化だけ」でも 1 行。
-	if got := f.page(t, Query{Kind: KindAutomation}).Rows; countText(got, auto) != 1 {
+	if countText(rows.Rows, reset) != 1 || countText(rows.Rows, reset26) != 1 || countText(rows.Rows, purge) != 2 {
+		t.Errorf("reset rows = %d, %d, purge rows = %d; want 1, 1 and 2", countText(rows.Rows, reset), countText(rows.Rows, reset26), countText(rows.Rows, purge))
+	}
+	if countText(rows.Rows, "HH-1 のタイトルを変更") != 2 {
+		t.Errorf("title rows = %d, want 2", countText(rows.Rows, "HH-1 のタイトルを変更"))
+	}
+	// まとめてから絞り込む: 「自動化だけ」でも 2 行(双子はまとめたまま)。
+	if got := f.page(t, Query{Kind: KindAutomation}).Rows; countText(got, auto) != 2 {
 		t.Errorf("automation rows in the automation filter = %q", texts(got))
 	}
 }
