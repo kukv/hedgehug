@@ -523,6 +523,15 @@ git add docs
 git commit -m "docs: トラック E の分け方を E3a・E3b に書き換え、E7 との境目を書く(E3a Task 10)"
 ```
 
+## 実装で計画から変えたこと
+
+- ツリーのキー操作は `web/app/src/screens/tree/treeKeyboard.ts`(`createTreeKeyboard<T>`。依存に行の鍵を作る `keyOf` を含む)と `treeTabStops.ts` に置いた。`screens/project/` には置かない。
+- 検索のツリーの画面は `web/app/src/screens/tree/SearchTree.svelte` と `SearchTreeBody.svelte`。つなぎは `web/app/src/searchTree.ts`(`openTreeMenu`・`treeScreen` もここ)。検索の画面は `screens/search/SearchBody.svelte`・`SearchToolbar.svelte` に分け、切り替えは ui の `LayoutSwitch.svelte`(`fieldset aria-label="レイアウト"`)。
+- 書き込みのあとのツリーの読み直しは、`reloads.ts` に `itemChanges` の集まりを足し、`itemRefresh` を使う区画が登録する形にした。
+- core: `treeEmptyText`、`ProjectEditor.renameOrMessage`、`renameDialog.ts`、`projectMenu.ts`(`projectMenu`・`canMoveProject`・`createProjectMover`)、`searchTree.ts`・`searchTreeData.ts`、`layout.ts`(`layoutNote`・`deletedTreeText`・`readSearchState`)。`web/packages/core/src/searchIndex.ts` から公開する。
+- テーブルで開く入口は、ナビゲーションが成功してから `search.showTable()` を呼ぶ(サイドバーは app の `search.ts` の `openSearchTable`、パレットは依存の `showSearchTable`)。
+- e2e は `search-tree.spec.ts`・`search-tree-keys.spec.ts`・`search-tree-helpers.ts`・`search-layout.spec.ts`。e2e のサーバーは、閲覧のみの Store に 2 つ目のプロジェクト HH-P2「閲覧の計画」を足している。
+
 ## E3b・E4〜E7 に渡すもの
 
 ### E3b(保存したビュー)
@@ -533,16 +542,16 @@ git commit -m "docs: トラック E の分け方を E3a・E3b に書き換え、
 
 ### E4(マイタスクと概要)
 
-- ワークスペースの概要のプロジェクトの一覧の行にも、プロジェクトのメニューを付ける(04 の 84 行)。`projectRows.ts` の `openProjectMenu` と、core の `projectMenu`・`canMoveProject` を使う。
+- ワークスペースの概要のプロジェクトの一覧の行にも、プロジェクトのメニューを付ける(04 の 84 行)。`web/app/src/projectRows.ts` の `openProjectMenu` と、core の `projectMenu`・`canMoveProject` を使う。
 
 ### E5(カンバン)・E6(ガント)
 
-- `layoutChoices` と `SearchLayout` に値を足し、04 の並び(ツリー・カンバン・テーブル・ガント)の位置に置く。画面の状態の読み方(`readSearchState`)に、そのレイアウトの設定の読み方を足す。
+- `layoutChoices` と `SearchLayout`(core の `layout.ts`)に値を足し、04 の並び(ツリー・カンバン・テーブル・ガント)の位置に置く。画面の状態の読み方(`readSearchState`)に、そのレイアウトの設定の読み方を足す。`LayoutSwitch` は `layoutChoices` を並べるだけなので、ボタンは自動で増える。
 - `is:deleted` の案内(`deletedTreeText`・「テーブルで開く」)は、カンバン・ガントでも同じものを出す(04 の 314 行)。
 - 注記は `layoutNote`。ガントはツリーと同じ文、カンバンは 04 の 452 行の文を足す。サーバーの応答の `hasSort`・`group` を使い、画面で解析しない。
 
 ### E7(ドラッグとツリーのタブ)
 
-- ワークスペースの画面の「ツリー」タブは `screens/tree/` の `ProjectRow`・`createTreeKeyboard`(`moveProject` を渡す)を使う。プロジェクトのメニューは `projectRows.ts` の `openProjectMenu`。
-- ツリーのタブの絞り込みは、E3a の刈り込み(一致したアイテムと祖先、一致しない祖先は薄く、クエリがあるときは一致のないプロジェクトを隠す)と同じ規則にする。
+- ワークスペースの画面の「ツリー」タブは `web/app/src/screens/tree/` の `ProjectRow`・`createTreeKeyboard`(`moveProject` を渡す。行の鍵を作る `keyOf` も渡す)を使う。プロジェクトのメニューは `projectRows.ts` の `openProjectMenu`。
+- ツリーのタブの絞り込みは、E3a の刈り込み(一致したアイテムと祖先、一致しない祖先は薄く、クエリがあるときは一致のないプロジェクトを隠す。core の `buildSearchTree`)と同じ規則にする。
 - ツリーのタブの開閉を画面の状態に残す(E3a-21)。鍵は E2c が決めたものを使う。
