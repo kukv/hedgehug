@@ -4,6 +4,7 @@ package syncstatus
 
 import (
 	"fmt"
+	"math"
 	"time"
 )
 
@@ -99,6 +100,9 @@ const SkewLimit = 5 * time.Minute
 // SkewMinutes は、警告の分を返す。d は「GitHub の時刻 − このマシンの時計」。
 // 正はこのマシンの時計が進んでいる、負は遅れている、0 は警告なし(ずれが SkewLimit 未満)。分は 0 に向けて切り捨てる。
 func SkewMinutes(d time.Duration) int {
+	if d == math.MinInt64 { // time.Sub が頭打ちにした値は、符号を替えると桁があふれる
+		d++
+	}
 	m := -d
 	if m > -SkewLimit && m < SkewLimit {
 		return 0

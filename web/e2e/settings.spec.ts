@@ -1,6 +1,5 @@
 import { expect, test } from "./fixtures";
-import { sidebar, tokenUrl } from "./helpers";
-import { send } from "./search-table-helpers";
+import { send, sidebar, tokenUrl } from "./helpers";
 
 test("the gear in the sidebar opens the settings, and a reload keeps them", async ({
   page,
@@ -33,7 +32,7 @@ test("the clock warning shows in the general tab and on the sync card, and goes 
     await expect(tabs.nth(1)).toHaveText("アカウントとメンバー");
 
     await skew(-420);
-    await tabs.nth(0).click();
+    await page.getByRole("tab", { name: "一般" }).click();
     await expect(page).toHaveURL(/\/settings\/general$/);
     await expect(page.getByText(warning("進んで", 7))).toBeVisible();
     const side = await sidebar(page, info);

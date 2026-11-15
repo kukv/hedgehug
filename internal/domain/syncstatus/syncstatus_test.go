@@ -1,6 +1,7 @@
 package syncstatus_test
 
 import (
+	"math"
 	"slices"
 	"testing"
 	"time"
@@ -100,6 +101,7 @@ func TestSkewMinutes(t *testing.T) {
 		{"進み 7 分 30 秒", -7*time.Minute - 30*time.Second, 7},
 		{"遅れ 6 分 10 秒", 6*time.Minute + 10*time.Second, -6},
 		{"進み 3 時間", -3 * time.Hour, 180},
+		{"GitHub の時刻が頭打ち(時計が進んでいる)", time.Duration(math.MinInt64), int(time.Duration(math.MaxInt64) / time.Minute)},
 	}
 	for _, c := range cases {
 		if got := syncstatus.SkewMinutes(c.d); got != c.want {

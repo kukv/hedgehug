@@ -3,6 +3,7 @@ package syncing_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"slices"
 	"testing"
@@ -109,7 +110,7 @@ func TestSyncAllAndStatus(t *testing.T) {
 // 決定 C5d-9: 同期の状態の API が、時計のずれの警告の分を返す。
 func TestSyncStatusReportsClockSkew(t *testing.T) {
 	e := newEnv(t)
-	get := func(e env) int {
+	get := func() int {
 		t.Helper()
 		res := e.api.Get("/api/sync")
 		if res.Code != http.StatusOK {
@@ -117,16 +118,24 @@ func TestSyncStatusReportsClockSkew(t *testing.T) {
 		}
 		return decode[syncing.SyncStatusList](t, res.Body.Bytes()).ClockSkew
 	}
-	if got := get(e); got != 0 {
+	if got := get(); got != 0 {
 		t.Errorf("測っていない: clockSkew = %d, want 0", got)
 	}
 	e.skew.Observe(-7 * time.Minute)
-	if got := get(e); got != 7 {
+	if got := get(); got != 7 {
 		t.Errorf("時計が進んでいる: clockSkew = %d, want 7", got)
 	}
 	e.skew.Observe(6 * time.Minute)
-	if got := get(e); got != -6 {
+	if got := get(); got != -6 {
 		t.Errorf("時計が遅れている: clockSkew = %d, want -6", got)
+	}
+}
+
+func TestSyncStatusFailsWhenSkewFails(t *testing.T) {
+	e := newEnv(t)
+	e.skew.Records.(*apptest.ClockSkews).SkewErr = errors.New("読めない")
+	if res := e.api.Get("/api/sync"); res.Code != http.StatusInternalServerError {
+		t.Errorf("status = %d, want 500: %s", res.Code, res.Body)
 	}
 }
 
