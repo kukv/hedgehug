@@ -438,3 +438,21 @@ Expected: PASS
 git add docs web
 git commit -m "docs: トラック E の分け方を E4a・E4b に書き換える(E4a Task 8)"
 ```
+
+## 実装で計画から変えたこと
+
+- API: `web/packages/api/src/generated.ts` は `make generate` では作り直されない(作り直されるのは `api/openapi.yaml` だけ)。`pnpm -C web/packages/api gen` で作る。api の行の写しは `rowOf`(`search.ts`)に分け、マイタスクの口も使う。マイタスクの行は列を持たない(`collect` に列 nil)。
+- 最後の画面: `last-screen` の `path` が `/`(home)に解釈されるときは、移り続けないようマイタスクへ移る。マイタスクに解決したときは、打ったアドレスではなく `/my-tasks` を覚える。
+- `createMyTasks` は、画面の状態を読み終える前の `setFilter`・`setGroupBy` を積んでおき、読んだ値に重ねて 1 回書き、1 回問い合わせる(E3a-23 と同じ)。
+- 削除済みの行の判定は `row.deleted !== null`(`deleted` は生きている行で null)。削除済みの行はステータスをボタンにせず文字で出す(ボタンの「閲覧のみの Store です」を出さないため)。マイタスクの画面の候補の元を Store の変化で読み直すため、`search.ts` に `reloadCandidates()` を足した。e2e の絞り込みの印は `unique` ではなく空白のない `prefixOf` で作る。
+- `Deps.Version` は huma の設定(`huma.DefaultConfig`)が読むので残した。core の `model/system.ts` は削除した。
+- サーバーの「最後の画面がもうない」とき理由のトーストが出るのは転送の記録があるとき(01)なので、e2e はワークスペースを別の Store へ移してから削除する形にした。転送の記録のない削除では、トーストなしでマイタスクを出し、アドレスは打ったまま残る(解決できないアドレスを打ったときと同じ)。
+- `search.spec.ts` の「再読み込みで絞り込みが残る」は、絞り込みを含む PUT を待つ形に直した(`tokenUrl()` の初めのパスを替えたことで出た待ち方の不安定さ)。
+- 時計は `web/app/src/clock.ts`(`syncNow`・`today`・`tickClock`。30 秒ごとの進め方はモジュールを読んだときに始める)。`wire.ts` は `export { syncNow } from "./clock"` で公開を保つ(299 行)。`Reflection.queue(kind)` を足し、日付の変わり目に `queue("store")` を呼ぶ。e2e は、絞り込み欄にフォーカスがあると読み直しを待つため、日付を進める前に欄からフォーカスを外す。
+
+## E4b に渡すもの
+
+- 今日の日付は `web/app/src/clock.ts` の `today`。概要の期限の判定もこれを使う。
+- ui の `LayoutSwitch` は `label` を受け取る。概要など、画面が 2 つ以上のレイアウトの切り替えを持つときは、切り替えごとに名前を付ける。
+- 概要の「期限切れ」カードの件数は、日付の変わり目の `reflection.queue("store")` で、`reloads` と同じく読み直される。カード側で日付を見張る仕組みは足さない。
+- ワークスペースの概要のプロジェクトの一覧の行のプロジェクトのメニュー(04 の 84 行)は、E3a の `openProjectMenu`(`web/app/src/projectRows.ts`)を使う。
