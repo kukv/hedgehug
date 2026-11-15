@@ -35,6 +35,8 @@ export interface ActionDeps {
   // here は、いま開いている画面のワークスペースとプロジェクト。
   here(): Here;
   mac: boolean;
+  // showSearchTable は、検索の画面をテーブルにする(E3a-9。コマンド「検索を開く」で移れたあとに呼ぶ)。
+  showSearchTable(): void;
   // close は、パレットを閉じる(パレットが渡す)。
   close(): void;
 }
@@ -50,6 +52,16 @@ export const closing =
 // moveTo は、画面を移す候補(Ctrl+Enter では同じ行き先を新しいタブで開く。A5c-12)。
 export function moveTo(d: ActionDeps, key: string, group: GroupId, label: string, route: Route) {
   return { key, group, label, route, run: closing(d, () => d.navigation.go(route)) };
+}
+
+// openSearchTable は、コマンド「検索を開く」。テーブルで開く入口(E3a-9)なので、移れたら(すでに検索の画面でも)
+// テーブルにする。「入力を破棄」の確認で断られたら切り替えない。Ctrl+Enter の新しいタブは、画面の状態のレイアウトで開く。
+function openSearchTable(d: ActionDeps): Candidate {
+  const route: Route = { name: "search" };
+  const run = closing(d, async () => {
+    if (await d.navigation.go(route)) d.showSearchTable();
+  });
+  return { key: "command:search", group: "command", label: "検索を開く", route, run };
 }
 
 function findWorkspace(stores: StoreNode[], id?: string) {
@@ -72,7 +84,7 @@ export function commandCandidates(d: ActionDeps): Candidate[] {
       run: closing(d, () => d.itemDialog.open()),
     },
     moveTo(d, "command:inbox", g, "受信箱を開く", { name: "inbox" }),
-    moveTo(d, "command:search", g, "検索を開く", { name: "search" }),
+    openSearchTable(d),
     moveTo(d, "command:settings", g, "設定を開く", { name: "settings", tab: "accounts" }),
     {
       key: "command:sync",

@@ -1,6 +1,7 @@
 <script lang="ts">
   import {
     allReadOnly,
+    deletedTreeText,
     emptyText,
     nextSort,
     readOnlyNote,
@@ -14,15 +15,17 @@
   import { itemDialog } from "../../wire";
   import { bulkChange, bulkDelete } from "../../wireActions";
   import ItemTable from "../table/ItemTable.svelte";
-  import TableToolbar from "../table/TableToolbar.svelte";
   import SearchTree from "../tree/SearchTree.svelte";
+  import SearchToolbar from "./SearchToolbar.svelte";
 
-  // 検索の画面の本体(04「検索」)。レイアウトがツリーならツリー(E3a)、そうでなければテーブル(E2a)を出す。
-  // どちらも、空のときは本体の代わりに文を出す。
+  // 検索の画面の本体(04「検索」)。ツールバーと、レイアウトがツリーならツリー(E3a)、そうでなければテーブル(E2a)を出す。
+  // どちらも、空のときは本体の代わりに文を出す。ツリーで is:deleted の検索をしたときは、ツリーの代わりに案内を出す(E3a-7)。
   const view = search.state;
   const rows = $derived($view.result?.rows ?? []);
   const errors = $derived($view.result?.errors ?? []);
   const columns = $derived($view.result?.columns ?? []);
+  // deleted は、ツリーで削除済みの案内を出すとき(書いてあるかは応答から決める。画面は解析しない)。
+  const deleted = $derived($view.layout === "tree" && ($view.result?.deleted ?? false));
   // 最初の検索が終わるまでは、空の表示を出さない(開いた直後に「まだ何もありません」がちらつかない)。
   const empty = $derived($view.result ? emptyText($view.query, rows.length, errors) : null);
   const picked = searchSelection.rows;
@@ -34,15 +37,22 @@
       ? treeEmptyText({ hasProjects: tree.hasProjects, rows: tree.nodes.length }, tree.errors)
       : null,
   );
+  // ツリーを出していないあいだは、描いた木を捨てる(また出したとき、組み直すまで前の件数や空の文を出さない)。
+  $effect(() => {
+    if ($view.layout !== "tree" || deleted) tree = null;
+  });
 </script>
 
-{#if $view.layout === "tree"}
-  <!-- ツリーには設定がないので、件数だけを出す(E3a-6・7) -->
-  <div class="toolbar">
-    {#if tree}
-      <span class="count">{tree.matched} 件</span>
-    {/if}
+<SearchToolbar treeCount={deleted ? 0 : (tree?.matched ?? null)} />
+
+{#if deleted}
+  <div class="content">
+    <div class="empty">
+      <p class="empty-note">{deletedTreeText}</p>
+      <Button size="sm" onclick={() => search.setLayout("table")}>テーブルで開く</Button>
+    </div>
   </div>
+{:else if $view.layout === "tree"}
   <div class="content">
     {#if treeEmpty}
       <div class="empty">
@@ -56,12 +66,6 @@
     <SearchTree bind:view={tree} />
   </div>
 {:else}
-  <TableToolbar
-    count={$view.result ? rows.length : null}
-    {columns}
-    table={$view.table}
-    onchange={(next) => search.setTable(next)}
-  />
   {#if $picked.length > 0}
     <SelectionBar
       text={selectedText($picked.length)}
@@ -99,16 +103,6 @@
 {/if}
 
 <style>
-  .toolbar {
-    display: flex;
-    align-items: center;
-    padding: 8px 24px;
-    min-height: 44px;
-  }
-  .count {
-    color: var(--muted);
-    font-size: 12.5px;
-  }
   .content {
     flex: 1;
     overflow: auto;
@@ -133,7 +127,6 @@
     margin-top: 12px;
   }
   @container frame (max-width: 860px) {
-    .toolbar,
     .content {
       padding-left: max(16px, env(safe-area-inset-left, 0px));
       padding-right: max(16px, env(safe-area-inset-right, 0px));

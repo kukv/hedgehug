@@ -11,17 +11,19 @@
   import { pressWhileOpen } from "../item/pressWhileOpen";
 
   // テーブルのツールバー(04「列」「グループ」、E2a-14・E2a-15)。左から「表示する列」・「グループ」・件数。
+  // lead を渡すと、その左に置く(検索の画面のレイアウトの切り替え。E3a)。
   interface Props {
     count: number | null;
     // columns は対象の列すべて。
     columns: SearchColumn[];
     table: TableSettings;
     onchange: (next: TableSettings) => void;
-    // children は、画面ごとの操作。
+    // lead は、左端に置く部品。children は、画面ごとの操作。
+    lead?: Snippet;
     children?: Snippet;
   }
 
-  let { count, columns, table, onchange, children }: Props = $props();
+  let { count, columns, table, onchange, lead, children }: Props = $props();
   let menu = $state<{ x: number; y: number } | null>(null);
   // メニューは外を押すと閉じる(ボタンも含む)。開いているときにボタンを押したら、開き直さず閉じたままにする。
   let wasOpen = false;
@@ -39,6 +41,7 @@
 </script>
 
 <div class="toolbar">
+  {@render lead?.()}
   <Button
     size="sm"
     onpointerdown={() => pressWhileOpen(menu !== null, (v) => (wasOpen = v))}

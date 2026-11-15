@@ -5,6 +5,7 @@
     candidateSource,
     caretTerm,
     type FilterCandidate,
+    layoutNote,
     readOnlyBands,
   } from "@hedgehug/core";
   import { FilterInput, PageHead, ReadOnlyBand } from "@hedgehug/ui";
@@ -26,6 +27,8 @@
   const rows = $derived($view.result?.rows ?? []);
   const errors = $derived($view.result?.errors ?? []);
   const bands = $derived(readOnlyBands(rows));
+  // note は、ツリーで sort:・group: が書かれているときの注記(E3a-8)。エラーとは別に、絞り込み欄の下に灰色で出す。
+  const note = $derived(layoutNote($view.layout, $view.result));
   let help = $state(false);
   // パレットの「選んでいるアイテム」は、ちょうど 1 行を選んでいるときの行(E2a-18)。
   $effect(() => selection.provide(2, selectedOne));
@@ -95,6 +98,9 @@
     onchoose={(i) => void onchoose(i)}
     onhelp={() => (help = true)}
   />
+  {#if note}
+    <p class="note">{note}</p>
+  {/if}
 </div>
 <SearchBody />
 <SearchHelp open={help} onclose={() => (help = false)} />
@@ -102,6 +108,11 @@
 <style>
   .filter {
     padding: 12px 24px 0;
+  }
+  .note {
+    margin: 6px 0 0;
+    color: var(--muted);
+    font-size: 12px;
   }
   @container frame (max-width: 860px) {
     .filter {

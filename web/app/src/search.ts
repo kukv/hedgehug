@@ -172,6 +172,12 @@ export async function openSearch(query: string): Promise<boolean> {
   return moved;
 }
 
+// openSearchTable は、サイドバーの「検索」(テーブルで開く入口。E3a-9)。移れたら(すでに検索の画面でも)テーブルにする。
+// 「入力を破棄」の確認で断られたら切り替えない(残った切り替えが、あとで開いたときに働かないように)。
+export async function openSearchTable(): Promise<void> {
+  if (await navigation.go({ name: "search" })) search.showTable();
+}
+
 // bulkChangeAll は、パレットの「{N} 件をまとめて変更…」(E2a-19)。
 export const bulkChangeAll = createChangeAll({
   openSearch,

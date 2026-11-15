@@ -4,6 +4,7 @@
   import { SvelteSet } from "svelte/reactivity";
   import { inbox } from "../inbox";
   import type { Links } from "../links";
+  import { openSearchTable } from "../search";
   import { isMac } from "../tab";
   import { itemDialog, sync, syncNow } from "../wire";
   import SidebarStore from "./SidebarStore.svelte";
@@ -22,6 +23,7 @@
   const hint = syncAllHint(isMac());
   const settings: Route = { name: "settings", tab: "accounts" };
   const inboxRoute: Route = { name: "inbox" };
+  // 「検索」はテーブルで開く入口(E3a-9)。修飾キーのない主ボタンのクリックで移れたときだけテーブルにする。
   const searchRoute: Route = { name: "search" };
   const unread = inbox.unread;
 
@@ -73,7 +75,7 @@
     class="nav-row"
     href={links.href(searchRoute)}
     aria-current={current?.name === "search" ? "page" : undefined}
-    onclick={(e) => links.click(e, searchRoute)}
+    onclick={(e) => links.click(e, searchRoute, () => void openSearchTable())}
     onauxclick={(e) => links.click(e, searchRoute)}
   >
     <span>検索</span>

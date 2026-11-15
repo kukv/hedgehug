@@ -206,6 +206,7 @@ export async function setup(o: Opts = {}) {
       return true;
     },
     bulkChangeAll: async (...a) => rec("bulkChangeAll")(...a),
+    showSearchTable: rec("showSearchTable"),
   });
   return { palette, calls, toasts, route, planRequest, catalog, timer, searched };
 }

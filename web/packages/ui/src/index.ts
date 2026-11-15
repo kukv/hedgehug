@@ -9,6 +9,7 @@ export { default as ConfirmDialog } from "./patterns/ConfirmDialog.svelte";
 export { type DragRowsOptions, type DropTarget, dragRows } from "./patterns/dragRows";
 export { default as FilterInput } from "./patterns/FilterInput.svelte";
 export { default as KindIcon } from "./patterns/KindIcon.svelte";
+export { default as LayoutSwitch } from "./patterns/LayoutSwitch.svelte";
 export { default as Markdown } from "./patterns/Markdown.svelte";
 export { default as OfflineBand } from "./patterns/OfflineBand.svelte";
 export { default as ProgressBar } from "./patterns/ProgressBar.svelte";
