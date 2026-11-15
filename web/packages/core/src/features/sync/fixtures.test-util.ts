@@ -4,7 +4,7 @@ import type { SyncPort } from "../../port/sync";
 export function fakeSyncPort(over: Partial<SyncPort> = {}): SyncPort & { calls: string[] } {
   const calls: string[] = [];
   const port: SyncPort = {
-    status: async () => ({ auto: true, stores: [] }),
+    status: async () => ({ auto: true, clockSkew: 0, stores: [] }),
     syncStore: async () => ({ result: "synced", message: "", mirrorWarning: "" }),
     syncAll: async () => ({ result: "synced", lines: [] }),
     hold: async () => {},

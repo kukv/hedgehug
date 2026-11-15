@@ -20,6 +20,7 @@ type env struct {
 	api  humatest.TestAPI
 	rep  *apptest.Replicator
 	auto *appsyncing.Auto
+	skew *appsyncing.Skew
 }
 
 func newEnv(t *testing.T) env {
@@ -43,9 +44,10 @@ func newEnv(t *testing.T) env {
 		Clock:      apptest.NewClock(time.Date(2026, 11, 13, 10, 0, 0, 0, time.UTC)),
 	}
 	auto := appsyncing.NewAuto(svc, &apptest.SyncSettings{Value: port.SyncTiming{Auto: true, Interval: 5 * time.Minute, AfterWrite: 30 * time.Second}})
+	skew := &appsyncing.Skew{Records: apptest.NewClockSkews(), Events: &apptest.Events{}}
 	_, api := humatest.New(t)
-	syncing.Register(api, syncing.Services{Sync: svc, Auto: auto})
-	return env{api: api, rep: rep, auto: auto}
+	syncing.Register(api, syncing.Services{Sync: svc, Auto: auto, Skew: skew})
+	return env{api: api, rep: rep, auto: auto, skew: skew}
 }
 
 func decode[T any](t *testing.T, body []byte) T {
@@ -101,6 +103,47 @@ func TestSyncAllAndStatus(t *testing.T) {
 	}
 	if s := st.Stores[1]; s.Store != "S3" || s.Error != "remote への書き込みが許可されていません" || s.LastSuccess != "" {
 		t.Errorf("S3 = %+v", s)
+	}
+}
+
+// 決定 C5d-9: 同期の状態の API が、時計のずれの警告の分を返す。
+func TestSyncStatusReportsClockSkew(t *testing.T) {
+	e := newEnv(t)
+	get := func(e env) int {
+		t.Helper()
+		res := e.api.Get("/api/sync")
+		if res.Code != http.StatusOK {
+			t.Fatalf("status: %d %s", res.Code, res.Body)
+		}
+		return decode[syncing.SyncStatusList](t, res.Body.Bytes()).ClockSkew
+	}
+	if got := get(e); got != 0 {
+		t.Errorf("測っていない: clockSkew = %d, want 0", got)
+	}
+	e.skew.Observe(-7 * time.Minute)
+	if got := get(e); got != 7 {
+		t.Errorf("時計が進んでいる: clockSkew = %d, want 7", got)
+	}
+	e.skew.Observe(6 * time.Minute)
+	if got := get(e); got != -6 {
+		t.Errorf("時計が遅れている: clockSkew = %d, want -6", got)
+	}
+}
+
+func TestSyncStatusReportsClockSkewWithoutTargets(t *testing.T) {
+	skew := &appsyncing.Skew{Records: apptest.NewClockSkews(), Events: &apptest.Events{}}
+	svc := &appsyncing.Service{
+		Targets: &apptest.SyncTargets{}, Tokens: &apptest.SyncTokens{}, Replicator: &apptest.Replicator{},
+		State: apptest.NewSyncState(), Events: &apptest.Events{}, Clock: apptest.NewClock(time.Date(2026, 11, 13, 10, 0, 0, 0, time.UTC)),
+	}
+	auto := appsyncing.NewAuto(svc, &apptest.SyncSettings{Value: port.SyncTiming{Auto: true}})
+	_, api := humatest.New(t)
+	syncing.Register(api, syncing.Services{Sync: svc, Auto: auto, Skew: skew})
+	skew.Observe(-7 * time.Minute)
+	res := api.Get("/api/sync")
+	got := decode[syncing.SyncStatusList](t, res.Body.Bytes())
+	if res.Code != http.StatusOK || got.ClockSkew != 7 || len(got.Stores) != 0 {
+		t.Errorf("%d %+v", res.Code, got)
 	}
 }
 

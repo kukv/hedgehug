@@ -19,6 +19,7 @@ import (
 type Services struct {
 	Sync *appsyncing.Service
 	Auto *appsyncing.Auto
+	Skew *appsyncing.Skew
 }
 
 type storeInput struct {
@@ -48,7 +49,11 @@ func Register(api huma.API, s Services) {
 		if err != nil {
 			return nil, err
 		}
-		return &statusOutput{Body: toStatusList(st, timing.Auto)}, nil
+		skew, err := s.Skew.Minutes(ctx)
+		if err != nil {
+			return nil, err
+		}
+		return &statusOutput{Body: toStatusList(st, timing.Auto, skew)}, nil
 	})
 	huma.Register(api, huma.Operation{
 		OperationID: "sync-all", Method: http.MethodPost, Path: "/api/sync",
@@ -90,8 +95,8 @@ func registerAuto(api huma.API, a *appsyncing.Auto) {
 	})
 }
 
-func toStatusList(st []appsyncing.StoreStatus, auto bool) SyncStatusList {
-	out := SyncStatusList{Auto: auto, Stores: []SyncStoreStatus{}}
+func toStatusList(st []appsyncing.StoreStatus, auto bool, skew int) SyncStatusList {
+	out := SyncStatusList{Auto: auto, ClockSkew: skew, Stores: []SyncStoreStatus{}}
 	for _, s := range st {
 		last := ""
 		if !s.LastSuccess.IsZero() {

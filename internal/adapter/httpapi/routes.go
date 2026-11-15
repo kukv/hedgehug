@@ -174,7 +174,7 @@ func NewAPI(mux *http.ServeMux, deps Deps) huma.API {
 	}, deps.Screens)
 	ghapi.Register(api, githubServices(deps))
 	events.Register(api, hub)
-	syncapi.Register(api, syncapi.Services{Sync: deps.Sync, Auto: deps.Auto})
+	syncapi.Register(api, syncapi.Services{Sync: deps.Sync, Auto: deps.Auto, Skew: deps.ClockSkew})
 
 	return api
 }

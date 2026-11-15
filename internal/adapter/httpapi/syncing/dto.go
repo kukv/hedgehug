@@ -13,8 +13,9 @@ type SyncStoreStatus struct {
 
 // SyncStatusList は、同期の状態の一覧(サイドバーの並び。非表示の Store も含む)と、自動同期のオン・オフ。
 type SyncStatusList struct {
-	Auto   bool              `json:"auto" doc:"「裏で自動的に同期する」がオンか(オフラインの帯の文を選ぶ)"`
-	Stores []SyncStoreStatus `json:"stores" nullable:"false"`
+	Auto      bool              `json:"auto" doc:"「裏で自動的に同期する」がオンか(オフラインの帯の文を選ぶ)"`
+	ClockSkew int               `json:"clockSkew" doc:"時計のずれの警告の分。正はこのマシンの時計が進んでいる、負は遅れている。0 は警告なし"`
+	Stores    []SyncStoreStatus `json:"stores" nullable:"false"`
 }
 
 // SyncStoreResult は、1 つの Store を手動で同期した結果(決定 C2-21)。

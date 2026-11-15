@@ -17,7 +17,7 @@ function store(over: Partial<SyncStoreStatus>): SyncStoreStatus {
     ...over,
   };
 }
-const status = (...stores: SyncStoreStatus[]): SyncStatus => ({ auto: true, stores });
+const status = (...stores: SyncStoreStatus[]): SyncStatus => ({ auto: true, clockSkew: 0, stores });
 
 describe("syncCard (06「同期の状態の表示」)", () => {
   it("is absent without a visible store that has a remote", () => {
