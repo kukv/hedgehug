@@ -183,6 +183,7 @@ export {
   stepNone,
   stepParent,
 } from "./model/workspace";
+export * from "./myTasksIndex";
 export * from "./notesIndex";
 export * from "./paletteIndex";
 export * from "./planningIndex";
