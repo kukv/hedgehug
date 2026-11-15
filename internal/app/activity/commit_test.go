@@ -2,6 +2,7 @@ package activity
 
 import (
 	"errors"
+	"fmt"
 	"slices"
 	"testing"
 	"time"
@@ -121,7 +122,7 @@ func TestRowsUserSave(t *testing.T) {
 	if r.Actor != ActorUser || r.Who != "田中 太郎" || r.Avatar != "田中 太郎" || r.Text != "HH-1 のタイトルを変更" {
 		t.Errorf("actor %q who %q avatar %q text %q", r.Actor, r.Who, r.Avatar, r.Text)
 	}
-	if r.Key != c.SHA+":0" || r.SHA != c.SHA[:7] || len(r.SHA) != 7 || !r.At.Equal(c.At) || r.Store != s1Info || r.dedup != "" {
+	if r.Key != c.SHA+":0000" || r.SHA != c.SHA[:7] || len(r.SHA) != 7 || !r.At.Equal(c.At) || r.Store != s1Info || r.dedup != "" {
 		t.Errorf("key %q sha %q at %v store %+v dedup %q", r.Key, r.SHA, r.At, r.Store, r.dedup)
 	}
 	if !slices.Equal(r.Workspaces, []workspace.ID{apptest.SampleWorkspace}) || r.Workspace != "Web" || r.Storewide {
@@ -174,7 +175,7 @@ func TestRowsAutomation(t *testing.T) {
 	if a.Actor != ActorAutomation || a.Who != "自動化" || a.Avatar != "" || a.Text != want || a.Text != "「進行中なら完了」でステータスを Done に変更" {
 		t.Errorf("automation actor %q who %q avatar %q text %q", a.Actor, a.Who, a.Avatar, a.Text)
 	}
-	if a.SHA != rows[0].SHA || !a.At.Equal(rows[0].At) || a.Key != c.SHA+":1" || a.dedup == "" {
+	if a.SHA != rows[0].SHA || !a.At.Equal(rows[0].At) || a.Key != c.SHA+":0001" || a.dedup == "" {
 		t.Errorf("automation sha %q at %v key %q dedup %q", a.SHA, a.At, a.Key, a.dedup)
 	}
 	if !slices.Equal(a.Workspaces, []workspace.ID{apptest.SampleWorkspace}) || a.Workspace != "Web" || a.Storewide {
@@ -218,7 +219,7 @@ func TestRowsMemberJoin(t *testing.T) {
 		t.Fatalf("texts = %q, want %q", texts, want)
 	}
 	for i, r := range rows[1:] {
-		if r.Actor != ActorUser || r.Who != "田中 太郎" || r.SHA != rows[0].SHA || !r.At.Equal(rows[0].At) || r.Key != c.SHA+":"+string(rune('1'+i)) {
+		if r.Actor != ActorUser || r.Who != "田中 太郎" || r.SHA != rows[0].SHA || !r.At.Equal(rows[0].At) || r.Key != fmt.Sprintf("%s:%04d", c.SHA, i+1) {
 			t.Errorf("member row %d = %+v", i, r)
 		}
 		if len(r.Workspaces) != 0 || !r.Storewide || r.Item != nil || r.Project != nil {

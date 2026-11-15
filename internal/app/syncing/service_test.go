@@ -371,6 +371,32 @@ func TestRunLogsSyncLine(t *testing.T) {
 	}
 }
 
+// failingLog は、Add がいつも失敗する同期の行の記録。
+type failingLog struct{ port.SyncLog }
+
+func (failingLog) Add(context.Context, port.StoreID, time.Time, int, int) error {
+	return errors.New("disk full")
+}
+
+// 同期の行を書けなくても、同期は成功として返り、ミラーへの送信・AfterSuccess・知らせを続ける(同期の行は記録にすぎない)。
+func TestRunSucceedsWhenTheSyncLineFails(t *testing.T) {
+	f := newFixture(t)
+	f.svc.Log = failingLog{}
+	out, err := f.svc.SyncStore(t.Context(), "S1")
+	if err != nil || !out.OK() || out.Sent != 2 || out.Received != 1 {
+		t.Fatalf("SyncStore = %+v, %v", out, err)
+	}
+	if calls := f.rep.Calls(); len(calls) != 2 || !calls[1].Mirror {
+		t.Errorf("calls = %+v, want the mirror after the sync", calls)
+	}
+	if got := f.afterCalls(); !slices.Equal(got, []port.StoreID{"S1"}) {
+		t.Errorf("AfterSuccess = %v", got)
+	}
+	if evs := f.events.List(); len(evs) != 1 || evs[0] != (port.Event{Kind: port.EventSync, Store: "S1"}) {
+		t.Errorf("events = %+v", evs)
+	}
+}
+
 func waitFor(t *testing.T, cond func() bool) {
 	t.Helper()
 	deadline := time.Now().Add(2 * time.Second)

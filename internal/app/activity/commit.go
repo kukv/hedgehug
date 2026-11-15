@@ -59,7 +59,7 @@ func (v *view) rows(store port.StoreInfo, c port.Commit) ([]Row, error) {
 	}
 	out = append(out, memberRows(base, store.ID, actor, recs, refs, v.names)...)
 	for i := range out {
-		out[i].Key = fmt.Sprintf("%s:%d", c.SHA, i)
+		out[i].Key = fmt.Sprintf("%s:%04d", c.SHA, i)
 	}
 	return out, nil
 }

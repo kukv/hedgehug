@@ -34,7 +34,7 @@ type Target struct {
 
 // Row は、アクティビティの 1 行。
 type Row struct {
-	Key        string // "{SHA}:{連番}" か "sync:{ID}"
+	Key        string // "{SHA}:{連番(4 桁の 0 埋め)}" か "sync:{ID}"
 	At         time.Time
 	Store      port.StoreInfo
 	Actor      ActorKind

@@ -311,6 +311,36 @@ func TestPageWorkspaceFilter(t *testing.T) {
 	}
 }
 
+// 11 行以上あるコミットでも、コミットの中は作った順の逆(メンバーの追加の最後の行から本体へ)に並ぶ。
+func TestPageOrdersRowsWithinALongCommit(t *testing.T) {
+	f := newPageFixture(t)
+	f.write(t, change.User("taro"), "HH-1 を 11 人で変更", func(tx port.Tx) error {
+		joins := make([]change.Draft, 0, 11)
+		for i := range 11 {
+			joins = append(joins, member.Join(fmt.Sprintf("user%02d", i)))
+		}
+		return errors.Join(
+			tx.WriteMembers().Append(joins...),
+			tx.WriteItems().Append(apptest.SampleEpic, change.NewSet("title", "認証", "二段階認証")),
+		)
+	})
+	sha := f.commit(t, "HH-1 を 11 人で変更").SHA
+	var got []string
+	for _, r := range f.page(t, Query{}).Rows {
+		if strings.HasPrefix(r.Key, sha+":") {
+			got = append(got, r.Text)
+		}
+	}
+	want := []string{"HH-1 を 11 人で変更"}
+	for i := range 11 {
+		want = append(want, fmt.Sprintf("メンバー user%02d を追加", i))
+	}
+	slices.Reverse(want)
+	if !slices.Equal(got, want) {
+		t.Errorf("rows of the commit = %q, want %q", got, want)
+	}
+}
+
 func TestPageHiddenStore(t *testing.T) {
 	f := newPageFixture(t)
 	f.sync(t, s3, 5, 5)
