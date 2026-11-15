@@ -528,7 +528,7 @@ git commit -m "docs: トラック E の分け方を E3a・E3b に書き換え、
 - ツリーのキー操作は `web/app/src/screens/tree/treeKeyboard.ts`(`createTreeKeyboard<T>`。依存に行の鍵を作る `keyOf` を含む)と `treeTabStops.ts` に置いた。`screens/project/` には置かない。
 - 検索のツリーの画面は `web/app/src/screens/tree/SearchTree.svelte` と `SearchTreeBody.svelte`。つなぎは `web/app/src/searchTree.ts`(`openTreeMenu`・`treeScreen` もここ)。検索の画面は `screens/search/SearchBody.svelte`・`SearchToolbar.svelte` に分け、切り替えは ui の `LayoutSwitch.svelte`(`fieldset aria-label="レイアウト"`)。
 - 書き込みのあとのツリーの読み直しは、`reloads.ts` に `itemChanges` の集まりを足し、`itemRefresh` を使う区画が登録する形にした。
-- core: `treeEmptyText`、`ProjectEditor.renameOrMessage`、`renameDialog.ts`、`projectMenu.ts`(`projectMenu`・`canMoveProject`・`createProjectMover`)、`searchTree.ts`・`searchTreeData.ts`、`layout.ts`(`layoutNote`・`deletedTreeText`・`readSearchState`)。`web/packages/core/src/searchIndex.ts` から公開する。
+- core: `features/search/view.ts` の `treeEmptyText`、`features/search/searchTree.ts`・`features/search/searchTreeData.ts`、`features/search/layout.ts`(`layoutNote`・`deletedTreeText`・`readSearchState`)は、`web/packages/core/src/searchIndex.ts` から公開する。`features/projects/projectMenu.ts`(`projectMenu`・`canMoveProject`・`createProjectMover`)、`features/projects/renameDialog.ts`(`createRenameProjectDialog`)、`features/items/progress.ts` の `projectProgress` は、`web/packages/core/src/index.ts` から公開する。`features/projects/editor.ts` の `ProjectEditor` にメソッド `renameOrMessage` を足した(公開物は増えない)。
 - テーブルで開く入口は、ナビゲーションが成功してから `search.showTable()` を呼ぶ(サイドバーは app の `search.ts` の `openSearchTable`、パレットは依存の `showSearchTable`)。
 - e2e は `search-tree.spec.ts`・`search-tree-keys.spec.ts`・`search-tree-helpers.ts`・`search-layout.spec.ts`。e2e のサーバーは、閲覧のみの Store に 2 つ目のプロジェクト HH-P2「閲覧の計画」を足している。
 
