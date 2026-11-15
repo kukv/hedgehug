@@ -1,5 +1,6 @@
 import type { Locator, Page } from "@playwright/test";
 import { expect, test } from "./fixtures";
+import { tokenUrl } from "./helpers";
 import { auth, base, e2eStore, openWith, rowOf, seed, send } from "./search-table-helpers";
 
 // 検索のテーブルのセルの編集の通しのテスト(E2b。04「セル」)。作ったアイテムのタイトルにテストごとの印を入れて絞り込む。
@@ -58,6 +59,36 @@ test("changes the priority from the cell menu", async ({ page }, info) => {
   ).json();
   const high = settings.settings.priorities.find((p: { name: string }) => p.name === "High");
   expect(saved.priority).toBe(high.id);
+});
+
+// 保存したビューの画面のテーブルでも、セルを編集できる(画面ごとの検索の流れで、選択肢の元を読み、読み直す)。
+test("changes the priority on a saved view", async ({ page }, info) => {
+  const { mark, prefix, storyId } = await seed(page, info);
+  const table = { columns: ["id", "title", "priority"], group: "none", sort: null };
+  const view = await send(page, "post", "/api/views", {
+    name: `表のビュー ${prefix}`,
+    content: { query: mark, layout: "table", table },
+  });
+  await page.goto(tokenUrl(`/views/${view.id}`));
+  await expect(page.getByRole("heading", { name: `表のビュー ${prefix}` })).toBeVisible();
+  const row = rowOf(page, `${mark} B`);
+  await saved(page, async () => {
+    await row.getByRole("button", { name: /^優先度: Medium/ }).click();
+    await page
+      .getByRole("menu", { name: "優先度" })
+      .getByRole("menuitemcheckbox", { name: "Low", exact: true })
+      .click();
+  });
+  await expect(row.getByRole("button", { name: /^優先度: Low/ })).toBeVisible();
+  await expect(toast(page)).toBeHidden();
+  await expect(page.getByText("未保存の変更", { exact: true })).toBeHidden();
+  const settings = await (
+    await page.request.get(`${base}/workspaces/${(await item(page, storyId)).workspace}`, {
+      headers: auth,
+    })
+  ).json();
+  const low = settings.settings.priorities.find((p: { name: string }) => p.name === "Low");
+  expect((await item(page, storyId)).priority).toBe(low.id);
 });
 
 test("clears points by emptying the input", async ({ page }, info) => {

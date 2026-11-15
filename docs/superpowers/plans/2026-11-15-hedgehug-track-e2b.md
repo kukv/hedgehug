@@ -42,10 +42,10 @@ E2a の計画の Global Constraints をすべて引き継ぐ。加えて次を�
 | E2b-5 | 部品は詳細パネルの `PropertyField` をそのまま使う(ステータスは中で `StatusButton`。遷移の制約とプロジェクトの使うステータスは 02 の「ステータスの変更」どおり)。スプリント・リリースは ui の `Select` に core の `sprintChoices`・`releaseChoices`・`chosen`・`asOptions`。URL の型のセルは E2a のリンクの表示のまま(編集は詳細パネル) | 04 の 697〜712 行は 02 の 58〜72 行の表と同じ部品を指す。URL は 04 の 709 行 |
 | E2b-6 | 編集できないセル: ID・種類・タイトル・プロジェクト・親・作成日・更新日(E2a のまま)、`unused` の列(「—」)、削除済みの行のすべてのセル(E2a の表示のまま。削除済みのピルと日数を添えているので、「閲覧のみの Store です」は添えない)、選択肢の元を読めていない行。閲覧のみの Store の行は、部品を出して無効にし、`title` に「閲覧のみの Store です」 | 04 の 312・482・483・713 行、03 の 246 行。削除済みの見せ方はマイタスクの行(E4a)と同じ |
 | E2b-7 | 保存: プロパティは `items.setProperty(storeId, itemId, propertyId, value)`、関連システム・複数選択は `addValue`・`removeValue`、スプリント・リリースは `planning.setItemSprint`・`setItemRelease`(空は null)。いまの値と同じなら送らない(プロパティは `PropertyField` が、スプリント・リリースは `chosen` と比べて)。成功してもトーストは出さない。断られたらその文、ほかの失敗(404・通信)は「保存できませんでした」をエラーのトーストに出す。成否にかかわらず、`itemRefresh.afterChange()` とテーブルの読み直しをする | 04 の 713 行、E2a の申し送り(パレットの「ステータスを変更」と同じ出し方)、F1-18 |
-| E2b-8 | 保存できなかったセルは、その行の部品を作り直して保存済みの値に戻す(詳細パネルの `version` と同じ)。読み直しで値が変わらないと入力欄に断られた文字が残るため | 詳細パネルの `DetailProperties.svelte` と同じ |
+| E2b-8 | 保存できなかったセルは、そのセルの部品だけを作り直して保存済みの値に戻す(詳細パネルの `version` と同じ。同じ行のほかのセルの入力中の文字は残す)。読み直しで値が変わらないと入力欄に断られた文字が残るため | 詳細パネルの `DetailProperties.svelte` と同じ |
 | E2b-9 | グループの行は、グループの見出しとアイテム(Store と内部 ID)で見分ける(E2a はグループの位置と行の位置)。同じ見出しが 2 つあるとき(別の Store の同じ ID とタイトルの親など)は、2 つ目から `#2`・`#3` を付ける。セルを編集して並べ替えやグループが変わっても、入力中の文字や開いているメニューが別のアイテムの行に移らない。関連システムのグループで、開いているメニューから外した値のグループの行は、そのグループから消えるのでメニューも閉じる(ほかのグループの同じアイテムの行は残る) | 04 の 691 行(同じアイテムが複数のグループに出る)。行を描き直さずにメニューを残すと、選択肢のチェックが保存と食い違う |
 | E2b-10 | 担当者のセルは、`PropertyField` の `user` のセレクト(「未割り当て」、メンバー、あなたに「(あなた)」、いまの人がメンバーにいなければ「不明なユーザー」)。E2a のアバターの表示は、選択肢の元を読めていない行と削除済みの行だけに残す | 04 の 703 行、01 |
-| E2b-11 | テーブルの部品 `ItemTable` は、セルの編集の元 `cells: TableCells` と読み直し `reload: () => Promise<void>` を props で受ける(検索の画面は `searchCells` と `search.reload`)。E2c のワークスペース・プロジェクトのタブは、同じ `createTableCells` で自分の `TableCells` を作って渡す | E2c が同じ部品を使う(E2a の申し送り) |
+| E2b-11 | テーブルの部品 `ItemTable` は、セルの編集の元 `cells: TableCells` と読み直し `reload: () => Promise<void>` を props で受ける(検索の画面と保存したビューの画面は `searchCells` と、画面の `search` の `reload`)。`ItemTable` は出している行が変わるたびに `cells.load(rows)` を呼び、`reset` は最後に `load` した行の元を読み直す。E2c のワークスペース・プロジェクトのタブは、同じ `createTableCells` で自分の `TableCells` を作って渡す | E2c が同じ部品を使う(E2a の申し送り) |
 | E2b-12 | E3b(PR #233)が develop に入っていたら、Task 6 で取り込み、`SearchBody` が props の `search` の `reload` を `ItemTable` に渡すようにする(ビューの画面のテーブルも同じ編集になる) | 04 の 661 行(検索とビューのテーブルは同じ)。CLAUDE.md の「残タスクを残さない」 |
 
 ## Review Focus
@@ -54,7 +54,7 @@ E2a の計画の Global Constraints をすべて引き継ぐ。加えて次を�
 2. **グループ分けの列を編集すると、入力が別の行に移る。** 優先度でグループ分けしたテーブルで行の優先度を変えると、行は別のグループに移る。移ったあとのその位置の別の行に、前の行のメニューや入力中の文字が残らない(E2b-9)。Task 2 の `groupKeys`、Task 5 の e2e `editing the grouped column moves the row without carrying the menu` に入れる。
 3. **Tab で次のセルに移る途中で読み直す。** 開始日を入れて Tab で終了日の欄に移ると、開始日の保存と読み直しが走る。読み直しで終了日の欄の入力中の文字が消えない(`PropertyField` の `editing`)。Task 4 の e2e `tab from start to end saves both` に入れる。
 4. **関連システムのメニューが、保存のたびに閉じる。** 関連システムのセルのメニューで 2 つ続けて選ぶと、どちらも保存され、メニューは開いたまま(04 の 707 行)。Task 4 の e2e `the systems menu stays open while choosing two` に入れる。
-5. **保存の前にほかで削除された。** 別のタブで削除したアイテムのセルを変えると、「保存できませんでした」が出て、テーブルを読み直すと行が消える。Task 3 の `save shows the save failure for a not-found item`、Task 5 の e2e `a row deleted elsewhere shows the save failure` に入れる。
+5. **保存の前にほかで削除された。** 別のタブで削除したアイテムのセルを変えると、保存して削除を取り消し、トースト「{ID} は別の画面で削除されていましたが、変更を保存したため、削除を取り消しました」が出て、行は削除済みにならずに残る(06 の 185 行)。別のタブでワークスペースごと削除したときは、「保存できませんでした」が出て、テーブルを読み直すと行が消える。Task 3 の `save shows the save failure for a not-found item`、Task 5 の e2e `saving a cell of a row deleted elsewhere restores it and shows the toast`・`a row whose workspace was deleted elsewhere shows the save failure` に入れる。
 
 ---
 
@@ -172,9 +172,9 @@ git commit -m "feat(core): テーブルのセルの列と行から、詳細パ�
     // loaded は、選択肢の元を読み終えるたびに増える(行が描き直すため)。
     loaded: Readable<number>;
     context(storeId: string, workspaceId: string): Context | undefined;
-    // load は、まだ読んでいない行のワークスペースの元を読み始める。
+    // load は、まだ読んでいない行のワークスペースの元を読み始める(テーブルが出している行が変わるたびに呼ぶ)。
     load(rows: SearchRow[]): void;
-    // reset は、元を捨てる(次の load で読み直す。読み終えるまでは前の元を返す)。
+    // reset は、元を捨て、最後に load した行の元を読み直す(読み終えるまでは前の元を返す)。
     reset(): void;
     // save は、1 回保存する。保存したら true。成否にかかわらず changed() と reload() を待つ。
     save(row: SearchRow, edit: CellEdit, reload: () => Promise<void>): Promise<boolean>;
@@ -194,6 +194,7 @@ git commit -m "feat(core): テーブルのセルの列と行から、詳細パ�
 `tableCells.test.ts`(ポートは `vi.fn` の偽物):
 - `loads each workspace once`: 同じワークスペースの行 2 つと別のワークスペースの行 1 つで `load` → `workspaces.get` が 2 回。読み終えると `context` が返り、`loaded` が増える。
 - `keeps the old context until reloaded`: `reset` のあと `load` して読み終えるまでは前の `context`、読み終えたら新しいもの。`reset` の前に始めた読み込みの結果は入れない。
+- `reads the last loaded rows again on reset`: `load` のあと `reset` すると、最後に `load` した行のワークスペースの元を読み直す。
 - `retries a failed workspace`: 1 回目の `get` が失敗したら、次の `load` で読み直す。
 - `save property`: `{ kind: "property", propertyId: "pri", value: "v2" }` → `items.setProperty("s1", "i1", "pri", "v2")`、トーストなし、`changed` と `reload` を 1 回ずつ、true。
 - `save toggle`: on なら `addValue`、off なら `removeValue`。
@@ -232,10 +233,10 @@ git commit -m "feat(core): テーブルのセルの選択肢の元をワーク�
 - Create: `web/e2e/search-table-edit.spec.ts`
 
 **Interfaces:**
-- Consumes: Task 2 の `cellEditor`、Task 3 の `createTableCells`・`TableCells`・`CellEdit`、`PropertyField`(`screens/item/PropertyField.svelte`)、ui の `Select`、`itemRefresh`(`wireActions.ts`)、`reloads`(`reloads.ts`)、`search`(`search.ts`)。
+- Consumes: Task 2 の `cellEditor`、Task 3 の `createTableCells`・`TableCells`・`CellEdit`、`PropertyField`(`screens/item/PropertyField.svelte`)、ui の `Select`、`itemRefresh`(`wireActions.ts`)、`reloads`(`reloads.ts`)。
 - Produces:
-  - `web/app/src/tableCells.ts`: `export const searchCells: TableCells`(`createTableCells({ items: itemsPort, planning: planningPort, workspaces: workspacesPort, catalogPort, toasts, changed: () => itemRefresh.afterChange() })`。`search.state` の行が変わるたびに `load`、`reloads` に `reset` を登録)
-  - `ItemTable` の props に `cells: TableCells`、`reload: () => Promise<void>`
+  - `web/app/src/tableCells.ts`: `export const searchCells: TableCells`(`createTableCells({ items: itemsPort, planning: planningPort, workspaces: workspacesPort, catalogPort, toasts, changed: () => itemRefresh.afterChange() })`。`reloads` に `reset` を登録。行の `load` は `ItemTable` が出している行で呼ぶ)
+  - `ItemTable` の props に `cells: TableCells`、`reload: () => Promise<void>`。行が変わるたびに `$effect` で `cells.load(rows)`
   - `TableEditCell.svelte` の props: `row: SearchRow`、`column: SearchColumn`、`now: Date`、`cells: TableCells`、`reload: () => Promise<void>`。`cellEditor` が `display` なら E2a の表示(ステータスは点と名前、担当者はアバターと名前、ほかは `TableCell`)、`property` なら `PropertyField`(`disabled={row.readOnly}`、`onchange` → `{ kind: "property" }`、`ontoggle` → `{ kind: "toggle" }`)、`plan` なら `Select`(名前は列の名前、`disabled`・`title` は閲覧のみのとき)
 
 - [ ] **Step 1: 失敗する e2e を書く**
@@ -274,12 +275,12 @@ git commit -m "feat(web): 検索のテーブルのセルを、04 の表どおり
 ### Task 5: 編集できないセル・断られた入力・グループの行
 
 **Files:**
-- Modify: `web/app/src/screens/table/TableRow.svelte`(保存できなかったら行の部品を作り直す `version`)、`TableEditCell.svelte`(`save` の結果を返す)、`ItemTable.svelte`(グループの行の鍵)
+- Modify: `web/app/src/screens/table/TableEditCell.svelte`(保存できなかったらそのセルの部品を作り直す `version`)、`ItemTable.svelte`(グループの行の鍵)
 - Modify: `web/e2e/search-table-edit.spec.ts`
 
 **Interfaces:**
 - Consumes: Task 2 の `groupKeys`、Task 3 の `save` の真偽。
-- Produces: `TableEditCell` の props に `onfail: () => void`(保存が false のとき)。`TableRow` は `version` を持ち、編集のセルを `{#key version}` で包む。`ItemTable` のグループは `{#each groups as group, g (keys[g])}`、行は `(\`${keys[g]}/${row.storeId}/${row.itemId}\`)`(`keys = groupKeys(groups)`)。
+- Produces: `TableEditCell` は `version` を持ち、`cells.save` が false のとき上げて、自分の部品を `{#key version}` で包む(行のほかのセルは作り直さない)。`ItemTable` のグループは `{#each groups as group, g (keys[g])}`、行は `(\`${keys[g]}/${row.storeId}/${row.itemId}\`)`(`keys = groupKeys(groups)`)。
 
 - [ ] **Step 1: 失敗する e2e を書く**
 
@@ -287,7 +288,8 @@ git commit -m "feat(web): 検索のテーブルのセルを、04 の表どおり
 - `deleted rows show values without editors`: アイテムを API で削除して `is:deleted {mark}` → 優先度のセルにボタンがなく、名前の文字だけ。
 - `a refused end date goes back to the saved value`: 開始日 2026-11-20 のアイテムの終了日に 2026-11-10 を入れて Tab → トースト「終了日は開始日以降にしてください」、終了日の欄は空。
 - `editing the grouped column moves the row without carrying the menu`: グループを「優先度」にして、2 行のうち 1 行の優先度を変える → その行が別の見出しの下に移り、メニューは閉じ、もう 1 行の優先度のボタンは元の名前のまま。
-- `a row deleted elsewhere shows the save failure`: 表示したあと API でアイテムを削除し、そのポイントの欄に入力して Enter → 「保存できませんでした」、行が消える。
+- `saving a cell of a row deleted elsewhere restores it and shows the toast`: 表示したあと API でアイテムを削除し、そのポイントの欄に 7 を入れて Enter → トースト「{ID} は別の画面で削除されていましたが、変更を保存したため、削除を取り消しました」、「保存できませんでした」は出ず、行は削除済みにならずに残り、ポイントは 7(06 の 185 行)。
+- `a row whose workspace was deleted elsewhere shows the save failure`: 表示したあと API でワークスペースを削除し、そのポイントの欄に入力して Enter → 「保存できませんでした」、行が消える。
 
 - [ ] **Step 2: 落ちることを確かめる**
 
@@ -296,7 +298,7 @@ Expected: FAIL(断られた終了日が欄に残る、グループの行の鍵�
 
 - [ ] **Step 3: 実装する**
 
-`TableEditCell` は `cells.save` の結果が false なら `onfail()`。`TableRow` は `onfail` で `version += 1`。`ItemTable` のグループの鍵を `groupKeys` にする。
+`TableEditCell` は `cells.save` の結果が false なら自分の `version += 1`。`ItemTable` のグループの鍵を `groupKeys` にする。
 
 - [ ] **Step 4: 通ることを確かめる**
 
@@ -344,5 +346,6 @@ git commit -m "docs: E2b で足したセルの編集を、トラック E・E1・
 
 ## E2c に渡すもの
 
-- `ItemTable` は `cells: TableCells` と `reload` を props で受ける。ワークスペース・プロジェクトのタブは、`createTableCells` を画面ごとに 1 つ作り(`web/app/src/tableCells.ts` の `searchCells` と同じ組み立て)、その画面の結果の行で `load`、`reloads` で `reset` する。
+- `ItemTable` は `cells: TableCells` と `reload` を props で受け、出している行が変わるたびに自分で `cells.load(rows)` を呼ぶ(画面側で行を `load` しなくてよい)。検索の画面と保存したビューの画面は `searchCells` を共有し、`reload` は画面の `search` の `reload` を渡す。
+- ワークスペース・プロジェクトのタブは、`createTableCells` で自分の `TableCells` を作り(`web/app/src/tableCells.ts` の `searchCells` と同じ組み立て)、`reloads` に `reset` を登録する。`reset` は元を捨て、最後に `load` した行の元を読み直す。
 - 行は `values`(E2b-1)を持つので、範囲を足した検索の API の行もそのまま編集できる。

@@ -79,6 +79,17 @@ describe("createTableCells loading", () => {
     expect(cells.context("s1", "w1")).toBeUndefined();
   });
 
+  it("reads the last loaded rows again on reset", async () => {
+    const { deps, cells } = setup();
+    cells.load([row(), row({ workspaceId: "w2" })]);
+    await flush();
+    cells.reset();
+    await flush();
+    expect(deps.workspaces.get).toHaveBeenCalledTimes(4);
+    expect(cells.context("s1", "w2")).toBeDefined();
+    expect(get(cells.loaded)).toBe(4);
+  });
+
   it("retries a failed workspace", async () => {
     let fail = true;
     const { deps, cells } = setup(async () => {

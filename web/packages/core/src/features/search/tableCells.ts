@@ -22,9 +22,9 @@ export interface TableCells {
   // loaded は、選択肢の元を読み終えるたびに増える(行が描き直すため)。
   loaded: Readable<number>;
   context(storeId: string, workspaceId: string): Context | undefined;
-  // load は、まだ読んでいない行のワークスペースの元を読み始める。
+  // load は、まだ読んでいない行のワークスペースの元を読み始める(テーブルが出している行が変わるたびに呼ぶ)。
   load(rows: SearchRow[]): void;
-  // reset は、元を捨てる(次の load で読み直す。読み終えるまでは前の元を返す)。
+  // reset は、元を捨て、最後に load した行の元を読み直す(読み終えるまでは前の元を返す)。
   reset(): void;
   // save は、1 回保存する。保存したら true。成否にかかわらず changed() と reload() を待つ。
   save(row: SearchRow, edit: CellEdit, reload: () => Promise<void>): Promise<boolean>;
@@ -49,8 +49,11 @@ export function createTableCells(deps: TableCellsDeps): TableCells {
   const ready = new Map<string, Context>();
   let round = 0;
   const count = writable(0);
+  // last は、最後に load した行(reset で読み直す)。
+  let last: SearchRow[] = [];
 
   function load(rows: SearchRow[]) {
+    last = rows;
     for (const r of rows) {
       const key = keyOf(r.storeId, r.workspaceId);
       if (reading.has(key)) continue;
@@ -75,6 +78,7 @@ export function createTableCells(deps: TableCellsDeps): TableCells {
     round += 1;
     reading = new Map();
     contexts = createContexts(deps);
+    load(last);
   }
 
   async function write(row: SearchRow, edit: CellEdit): Promise<boolean> {
