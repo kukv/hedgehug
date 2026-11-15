@@ -55,6 +55,12 @@ func TestRenumbers(t *testing.T) {
 			[]repair.Renumber{{ID: "b", From: 3, To: 7}},
 		},
 		{
+			"時刻が同じなら、作成の行の ID ではなくアイテムの内部 ID で決める",
+			[]repair.Numbered{num("a", 3, "rb", 1), num("b", 3, "ra", 1)},
+			facts(nil, []change.ID{"ra", "rb"}), 7,
+			[]repair.Renumber{{ID: "b", From: 3, To: 7}},
+		},
+		{
 			"3 件のうち Ours が 2 件なら Ours の 2 件を内部 ID の順に",
 			[]repair.Numbered{num("c", 3, "rc", 0), num("b", 3, "rb", 9), num("a", 3, "ra", 8)},
 			facts([]change.ID{"ra", "rb"}, []change.ID{"rc"}), 7,
