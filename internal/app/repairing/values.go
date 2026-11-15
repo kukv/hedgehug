@@ -2,8 +2,6 @@ package repairing
 
 import (
 	"context"
-	"slices"
-	"strings"
 
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/domain/change"
@@ -43,10 +41,5 @@ func valueRestores(s snapshot, facts repair.Facts) []found {
 			}
 		}
 	}
-	out := make([]found, 0, len(byOp))
-	for _, f := range byOp {
-		out = append(out, f)
-	}
-	slices.SortFunc(out, func(a, b found) int { return strings.Compare(string(a.Op), string(b.Op)) })
-	return out
+	return sortedByOp(byOp)
 }

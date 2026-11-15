@@ -108,6 +108,7 @@ func TestRestoreReferencedEmptyCategory(t *testing.T) {
 }
 
 // 名前の変更と重なった削除を restoreOverlaps が取り消したら、この段は何も書かない。
+// restoreReferenced が、restoreOverlaps の取り消した op を飛ばすことの確かめ(二重の取り消しを防ぐ)。
 func TestRestoreReferencedAfterOverlap(t *testing.T) {
 	e := newEnv(t)
 	del := e.workspaceWrite(change.NewDelete(reviewRef))
