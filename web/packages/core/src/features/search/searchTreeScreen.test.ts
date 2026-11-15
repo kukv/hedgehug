@@ -3,7 +3,7 @@ import type { Item } from "../../model/item";
 import { settings } from "../items/settings.test-util";
 import { visibleRows } from "../items/siblings";
 import { buildSearchTree, type ProjectData, screenFor } from "./searchTree";
-import { it, match, store } from "./searchTree.test-util";
+import { itemWithId, match, store } from "./searchTree.test-util";
 
 // 検索のツリーの書き込みの画面(screenFor)。フォーカスのある行の Store・ワークスペースで決める。
 
@@ -20,9 +20,9 @@ function dataOf(table: Record<string, Item[]>) {
 }
 
 const data = dataOf({
-  "work/work-P1": [it("work", "work-P1", "x", "Epic", null)],
-  "work/work-P2": [it("work", "work-P2", "y", "Epic", null)],
-  "team/team-P1": [it("team", "team-P1", "x", "Epic", null)],
+  "work/work-P1": [itemWithId("work", "work-P1", "x", "Epic", null)],
+  "work/work-P2": [itemWithId("work", "work-P2", "y", "Epic", null)],
+  "team/team-P1": [itemWithId("team", "team-P1", "x", "Epic", null)],
   "team/team-P2": [],
 });
 const rows = visibleRows(buildSearchTree([work, team], [], false, data).nodes, new Set());
@@ -61,8 +61,8 @@ describe("screenFor", () => {
     const w2 = { ...w1, id: "work-W2", projects: [{ ...w1.projects[0], id: "work-Q1" }] };
     const two = { ...work, workspaces: [w1, w2] } as typeof work;
     const d = dataOf({
-      "work/work-P1": [it("work", "work-P1", "x", "Epic", null)],
-      "work/work-Q1": [{ ...it("work", "work-Q1", "z", "Epic", null), workspaceId: "work-W2" }],
+      "work/work-P1": [itemWithId("work", "work-P1", "x", "Epic", null)],
+      "work/work-Q1": [{ ...itemWithId("work", "work-Q1", "z", "Epic", null), workspaceId: "work-W2" }],
     });
     const visible = visibleRows(buildSearchTree([two], [], false, d).nodes, new Set());
     const s = screenFor(visible, "work/x", d);
@@ -71,9 +71,9 @@ describe("screenFor", () => {
   });
 
   test("rowsFor gives only visible siblings", () => {
-    const sib = (id: string, n: number) => it("work", "work-P1", id, "Story", "E", n);
+    const sib = (id: string, n: number) => itemWithId("work", "work-P1", id, "Story", "E", n);
     const items = [
-      it("work", "work-P1", "E", "Epic", null, 1),
+      itemWithId("work", "work-P1", "E", "Epic", null, 1),
       sib("HH-3", 3),
       sib("HH-4", 4),
       sib("HH-5", 5),

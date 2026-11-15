@@ -32,8 +32,8 @@ export function store(id: string, readOnly: boolean, projects = 2): StoreNode {
   };
 }
 
-// it は、内部 ID を指定したアイテム(同じ ID を 2 つの Store に置くため)。
-export function it(
+// itemWithId は、内部 ID を指定したアイテム(同じ ID を 2 つの Store に置くため)。
+export function itemWithId(
   storeId: string,
   projectId: string,
   id: string,

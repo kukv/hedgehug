@@ -3,7 +3,7 @@ import { projectProgress } from "../items/progress";
 import { settings } from "../items/settings.test-util";
 import type { TreeNodeOf } from "../items/tree";
 import { buildSearchTree, rowKey, type SearchTreeRow, treeScope } from "./searchTree";
-import { dataOf, it, match, store } from "./searchTree.test-util";
+import { dataOf, itemWithId, match, store } from "./searchTree.test-util";
 
 // flat は、木を上から順に「鍵(薄い行は ~ を付ける)」の並びにする。
 function flat(nodes: TreeNodeOf<SearchTreeRow>[]): string[] {
@@ -19,10 +19,10 @@ const team = store("team", true);
 describe("buildSearchTree", () => {
   test("unfiltered shows every project in sidebar order", () => {
     const data = dataOf({
-      "work/work-P1": [it("work", "work-P1", "a", "Epic", null)],
+      "work/work-P1": [itemWithId("work", "work-P1", "a", "Epic", null)],
       "work/work-P2": [],
-      "team/team-P1": [it("team", "team-P1", "b", "Epic", null)],
-      "team/team-P2": [it("team", "team-P2", "c", "Epic", null)],
+      "team/team-P1": [itemWithId("team", "team-P1", "b", "Epic", null)],
+      "team/team-P2": [itemWithId("team", "team-P2", "c", "Epic", null)],
     });
     // 空の絞り込みでは、サーバーは削除されていないすべての行を返す。
     const rows = [
@@ -49,10 +49,10 @@ describe("buildSearchTree", () => {
 
   test("filtered keeps matches and their ancestors", () => {
     const items = [
-      it("work", "work-P1", "E", "Epic", null, 1),
-      it("work", "work-P1", "S", "Story", "E", 2),
-      it("work", "work-P1", "T", "Task", "S", 3),
-      it("work", "work-P1", "U", "Task", "E", 4),
+      itemWithId("work", "work-P1", "E", "Epic", null, 1),
+      itemWithId("work", "work-P1", "S", "Story", "E", 2),
+      itemWithId("work", "work-P1", "T", "Task", "S", 3),
+      itemWithId("work", "work-P1", "U", "Task", "E", 4),
     ];
     const v = buildSearchTree(
       [work],
@@ -70,8 +70,8 @@ describe("buildSearchTree", () => {
 
   test("filtered hides projects without matches", () => {
     const data = dataOf({
-      "work/work-P1": [it("work", "work-P1", "a", "Epic", null)],
-      "work/work-P2": [it("work", "work-P2", "b", "Epic", null)],
+      "work/work-P1": [itemWithId("work", "work-P1", "a", "Epic", null)],
+      "work/work-P2": [itemWithId("work", "work-P2", "b", "Epic", null)],
     });
     const v = buildSearchTree([work], [match("work", "work-P2", "b")], true, data);
     expect(v.nodes.map((n) => n.item.id)).toEqual(["work/work-P2"]);
@@ -79,7 +79,7 @@ describe("buildSearchTree", () => {
   });
 
   test("heading only for workspaces with projects", () => {
-    const data = dataOf({ "team/team-P1": [it("team", "team-P1", "b", "Epic", null)] });
+    const data = dataOf({ "team/team-P1": [itemWithId("team", "team-P1", "b", "Epic", null)] });
     const v = buildSearchTree([work, team], [match("team", "team-P1", "b")], true, data);
     expect(v.sections.map((s) => s.workspace.id)).toEqual(["team-W1"]);
     const empty = buildSearchTree([store("none", false, 0)], [], false, data);
@@ -89,9 +89,9 @@ describe("buildSearchTree", () => {
 
   test("ignores sort order", () => {
     const items = [
-      it("work", "work-P1", "E", "Epic", null, 1),
-      it("work", "work-P1", "A", "Story", "E", 2),
-      it("work", "work-P1", "B", "Story", "E", 3),
+      itemWithId("work", "work-P1", "E", "Epic", null, 1),
+      itemWithId("work", "work-P1", "A", "Story", "E", 2),
+      itemWithId("work", "work-P1", "B", "Story", "E", 3),
     ];
     const rows = [match("work", "work-P1", "B"), match("work", "work-P1", "A")];
     const v = buildSearchTree([work], rows, true, dataOf({ "work/work-P1": items }));
@@ -100,8 +100,8 @@ describe("buildSearchTree", () => {
 
   test("keys are per store", () => {
     const data = dataOf({
-      "work/work-P1": [it("work", "work-P1", "x", "Epic", null)],
-      "team/team-P1": [it("team", "team-P1", "x", "Epic", null)],
+      "work/work-P1": [itemWithId("work", "work-P1", "x", "Epic", null)],
+      "team/team-P1": [itemWithId("team", "team-P1", "x", "Epic", null)],
     });
     const both = buildSearchTree([work, team], [], false, data);
     expect(flat(both.nodes)).toEqual(["work/work-P1", "work/x", "team/team-P1", "team/x"]);
@@ -112,9 +112,9 @@ describe("buildSearchTree", () => {
 
   test("matched counts only drawn matches", () => {
     const items = [
-      it("work", "work-P1", "E", "Epic", null, 1),
-      it("work", "work-P1", "S", "Story", "E", 2),
-      it("work", "work-P1", "O", "Task", "gone", 3),
+      itemWithId("work", "work-P1", "E", "Epic", null, 1),
+      itemWithId("work", "work-P1", "S", "Story", "E", 2),
+      itemWithId("work", "work-P1", "O", "Task", "gone", 3),
     ];
     const rows = [
       match("work", "work-P1", "S"),
@@ -127,7 +127,7 @@ describe("buildSearchTree", () => {
   });
 
   test("deleted rows are not matches", () => {
-    const items = [it("work", "work-P1", "E", "Epic", null)];
+    const items = [itemWithId("work", "work-P1", "E", "Epic", null)];
     const v = buildSearchTree(
       [work],
       [match("work", "work-P1", "E", true)],
@@ -140,18 +140,16 @@ describe("buildSearchTree", () => {
 
   test("progress counts unmatched children", () => {
     const items = [
-      it("work", "work-P1", "E", "Epic", null, 1),
-      it("work", "work-P1", "S", "Story", "E", 2),
-      it("work", "work-P1", "T", "Task", "S", 3),
-      it("work", "work-P1", "U", "Task", "S", 4),
+      itemWithId("work", "work-P1", "E", "Epic", null, 1),
+      itemWithId("work", "work-P1", "S", "Story", "E", 2),
+      itemWithId("work", "work-P1", "T", "Task", "S", 3),
+      { ...itemWithId("work", "work-P1", "U", "Task", "S", 4), status: "st3" },
     ];
     const data = dataOf({ "work/work-P1": items });
     const v = buildSearchTree([work], [match("work", "work-P1", "T")], true, data);
     const p = v.sections[0]?.projects[0];
-    expect(p?.data.items).toEqual(items);
-    expect(projectProgress(p?.data.items ?? [], settings)).toEqual(
-      projectProgress(items, settings),
-    );
+    // 一致しない S・U も数える(Epic は数えない)。完了は U だけ。
+    expect(projectProgress(p?.data.items ?? [], settings)).toEqual({ done: 1, total: 3 });
   });
 
   test("projects without data are not drawn", () => {

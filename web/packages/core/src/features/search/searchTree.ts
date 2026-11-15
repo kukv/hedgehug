@@ -131,9 +131,9 @@ export function buildSearchTree(
     for (const workspace of store.workspaces) {
       const projects: SearchTreeSection["projects"] = [];
       for (const project of workspace.projects) {
-        const d = scope.has(rowKey(store.id, project.id)) ? data(store.id, project.id) : undefined;
-        if (!d) continue;
         const key = rowKey(store.id, project.id);
+        const d = scope.has(key) ? data(store.id, project.id) : undefined;
+        if (!d) continue;
         const children = grow(buildTree(d.items), key, { store, workspace }, matches, filtered);
         if (filtered && children.length === 0) continue;
         const row: SearchTreeRow = {
