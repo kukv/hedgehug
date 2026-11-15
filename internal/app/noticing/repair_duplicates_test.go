@@ -88,9 +88,14 @@ func TestDuplicatesValue(t *testing.T) {
 		name, field, section string
 	}{
 		{"ステータス", pendingRef + "/name", "statuses"},
+		{"優先度", "priorities/01PRIO000000000000000000001/name", "priorities"},
+		{"関連システム", "systems/01SYSTEM000000000000000001/name", "systems"},
+		{"プロパティ", "properties/01PROP000000000000000001/name", "properties"},
 		{"選択肢", "choices/01PROP000000000000000001/01CHOICE000000000000000001/name", "properties"},
 		{"キー", "properties/01PROP000000000000000001/key", "properties"},
+		{"テンプレート", "templates/01TEMPLATE0000000000000001/name", "templates"},
 		{"スプリント", "sprints/" + string(sprintA) + "/name", "sprints"},
+		{"リリース", "releases/" + string(releaseA) + "/name", "releases"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -164,6 +169,7 @@ func TestDuplicatesOnceAcrossMachines(t *testing.T) {
 	create := f.lastRow(devRef, "name")
 	s := fixDuplicate(f, devRef, "name", "開発", "開発 (2)")
 	other := fixDuplicate(f, devRef, "name", "開発", "開発 (2)")
+	other.Entities[0].Rows[0].Prev = nil // 偽物の Store は順に書くので、同時に書いた行の prev をここで作る
 	f.judge(s)
 	if n := f.wantOne(); n.Source != "repair:duplicate:"+string(devWorkspace)+":name:"+create {
 		t.Errorf("source = %q", n.Source)
@@ -172,5 +178,26 @@ func TestDuplicatesOnceAcrossMachines(t *testing.T) {
 	f.judge(other)
 	if rows := f.rows(); len(rows) != 1 {
 		t.Errorf("rows = %+v, want one", rows)
+	}
+}
+
+// 2 台が同じ重なりを直し(ra・rb)、その間に hanako が名前を変えた(prev は ra)。rb は ra も名前の変更も見ずに
+// 書いたので、rb の行の prev は空(作った行のまま)。rb を判定しても、名前を決めた行は作った行で、鍵は ra と同じ。
+// hanako に 2 件目は出さない(決定 C5c1-10・C5c1-11)。
+func TestDuplicatesRenamedBetweenMachines(t *testing.T) {
+	f := setup(t)
+	createDev(f, "hanako")
+	create := f.lastRow(devRef, "name")
+	f.judge(fixDuplicate(f, devRef, "name", "開発", "開発 (2)"))
+	f.save(user("hanako"), appendRef(devRef, change.NewSet("name", "開発 (2)", "Web")))
+	rb := fixDuplicate(f, devRef, "name", "開発", "開発 (2)")
+	rb.Entities[0].Rows[0].Prev = nil // 偽物の Store は順に書くので、同時に書いた行の prev をここで作る
+	f.judge(rb)
+	rows := f.rows()
+	if len(rows) != 1 {
+		t.Fatalf("rows = %+v, want one", rows)
+	}
+	if want := "repair:duplicate:" + string(devWorkspace) + ":name:" + create; rows[0].Source != want {
+		t.Errorf("source = %q, want %q", rows[0].Source, want)
 	}
 }

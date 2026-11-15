@@ -1,6 +1,7 @@
 package noticing
 
 import (
+	"encoding/json"
 	"slices"
 	"strings"
 
@@ -22,7 +23,7 @@ func duplicates(r port.Reader, b batch, i int, me string) ([]port.Notice, error)
 			if row.T != change.Set || !namingField(e.Ref.Kind, row.F) {
 				continue
 			}
-			n, ok, err := duplicateNotice(r, b, i, e.Ref, row, me)
+			n, ok, err := duplicateNotice(r, b, e.Ref, row, me)
 			if err != nil {
 				return nil, err
 			}
@@ -66,12 +67,12 @@ func namingField(kind change.Kind, f string) bool {
 }
 
 // duplicateNotice は、ref の修復の行 row の通知。名前を決めた行が人の行で、その人があなたでなければ false。
-func duplicateNotice(r port.Reader, b batch, i int, ref change.Ref, row change.Record, me string) (port.Notice, bool, error) {
+func duplicateNotice(r port.Reader, b batch, ref change.Ref, row change.Record, me string) (port.Notice, bool, error) {
 	log, err := logOf(r, b, ref)
 	if err != nil {
 		return port.Notice{}, false, err
 	}
-	naming, ok := namingRowOf(log, b.without(log, i), row)
+	naming, ok := namingRowOf(log, row)
 	if !ok || naming.Actor.Kind != change.ActorUser || !same(naming.By, me) {
 		return port.Notice{}, false, nil
 	}
@@ -85,22 +86,23 @@ func duplicateNotice(r port.Reader, b batch, i int, ref change.Ref, row change.R
 	} else if id, ok := strings.CutPrefix(row.F, "rules/"); ok {
 		n.Rule = change.ID(strings.TrimSuffix(id, "/name"))
 	}
-	n.Text = "2 台で同時に「" + oneLine(idOf(row.From)) + "」が作られたため、あとから届いた方を「" + oneLine(idOf(row.To)) + "」に変更しました"
+	n.Text = "2 台で同時に「" + oneLine(valueName(row.From)) + "」が作られたため、あとから届いた方を「" + oneLine(valueName(row.To)) + "」に変更しました"
 	n.Source = "repair:duplicate:" + string(ref.ID) + ":" + row.F + ":" + string(naming.ID)
 	return n, true, nil
 }
 
-// namingRowOf は、修復の直前のログ before で、修復の行 row の項目の値を決めた行(決定 C5c1-3)。
-// 同じ直しを書いた人でない set の行(2 台が同じ修復をしたときの、先に届いた修復の行)は飛ばして、いまのログ log の
-// 行の prev をたどる(startRow と同じ)。set の行がなくなれば、before の作成の行。なければ false。
-func namingRowOf(log, before []change.Record, row change.Record) (change.Record, bool) {
-	creates := rowsWhere(before, func(c change.Record) bool { return c.T == change.Create })
-	cur, ok := repair.NamingRow(before, row.F)
-	seen := map[change.ID]bool{}
-	for ok && cur.T == change.Set && cur.Actor.Kind != change.ActorUser && sameValue(cur.To, row.To) && !seen[cur.ID] {
-		seen[cur.ID] = true
-		prev := rowsWhere(log, func(c change.Record) bool { return slices.Contains(cur.Prev, c.ID) })
-		cur, ok = repair.NamingRow(append(prev, creates...), row.F)
-	}
-	return cur, ok
+// namingRowOf は、修復の行 row の項目の値を決めた行(決定 C5c1-3・C5c1-10)。row の prev が指す行(修復を書いたときの
+// 項目の先端)から決め、prev がなければいまのログ log の作成の行。2 台が同じ修復をした間に名前が変わっても、
+// どちらの修復の行からも同じ行になる。なければ false。
+func namingRowOf(log []change.Record, row change.Record) (change.Record, bool) {
+	return repair.NamingRow(rowsWhere(log, func(c change.Record) bool {
+		return slices.Contains(row.Prev, c.ID) || c.T == change.Create
+	}), row.F)
+}
+
+// valueName は、行の値 raw(JSON の文字列)の名前・接頭辞・キー。文字列でなければ空。
+func valueName(raw json.RawMessage) string {
+	var name string
+	_ = json.Unmarshal(raw, &name)
+	return name
 }
