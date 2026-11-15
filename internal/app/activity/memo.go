@@ -40,3 +40,14 @@ func (m *Memo) put(id port.StoreID, version string, rows []Row) {
 	}
 	m.byStore[id] = memoEntry{version: version, rows: rows}
 }
+
+// keep は、infos(表示中の一覧)にない Store の覚えた行を捨てる。
+func (m *Memo) keep(infos []port.StoreInfo) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for id := range m.byStore {
+		if !slices.ContainsFunc(infos, func(i port.StoreInfo) bool { return i.ID == id }) {
+			delete(m.byStore, id)
+		}
+	}
+}

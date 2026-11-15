@@ -74,6 +74,26 @@ func TestPageReusesRowsWhileVersionHolds(t *testing.T) {
 	}
 }
 
+// 表示中の一覧から外した Store の覚えた行は、次の Page で捨てる(Store を絞った要求でも)。
+func TestPageForgetsHiddenStores(t *testing.T) {
+	f := newPageFixture(t)
+	svc := f.svc
+	svc.Versions, svc.Memo = f.stores, &Memo{}
+	if _, err := svc.Page(t.Context(), Query{}); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := svc.Memo.byStore[s2]; !ok {
+		t.Fatalf("memo = %v, want S2 remembered", svc.Memo.byStore)
+	}
+	svc.List = apptest.StoreList{Stores: []port.StoreInfo{s1Info}}
+	if _, err := svc.Page(t.Context(), Query{Store: s1}); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := svc.Memo.byStore[s2]; ok || len(svc.Memo.byStore) != 1 {
+		t.Errorf("memo keeps %v, want only S1", svc.Memo.byStore)
+	}
+}
+
 // コミットの行の時刻は、続きの印と同じミリ秒にそろえる(秒以下を持つコミットが、印で次のページから抜けない)。
 func TestPageCommitRowMillis(t *testing.T) {
 	svc, commits, _, base := newManyRows(t, 0)

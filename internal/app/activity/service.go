@@ -56,6 +56,9 @@ func (s Service) Page(ctx context.Context, q Query) (Page, error) {
 	if err != nil {
 		return Page{}, err
 	}
+	if s.Memo != nil {
+		s.Memo.keep(infos) // 一覧から外した Store の行を持ち続けない
+	}
 	var all []Row
 	for _, info := range infos {
 		if q.Store != "" && info.ID != q.Store {
