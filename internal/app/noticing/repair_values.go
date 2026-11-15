@@ -266,9 +266,9 @@ func finishedInitial(r port.Reader, b batch, i int, me string) ([]port.Notice, e
 // initialNotice は、初期ステータスを戻した修復の行 row の通知。
 func initialNotice(r port.Reader, ws workspace.ID, before []change.Record, row change.Record, me string) ([]port.Notice, error) {
 	x := idOf(row.From)
-	st, _ := workspace.SettingsFromLog(before)
+	st, ok := workspace.SettingsFromLog(before)
 	i := slices.IndexFunc(st.Statuses, func(v workspace.Value) bool { return string(v.ID) == x })
-	if i < 0 || !st.Finished(st.Statuses[i].ID) {
+	if !ok || i < 0 || !st.Finished(st.Statuses[i].ID) {
 		return nil, nil
 	}
 	set := lastSaved(rowsWhere(before, func(c change.Record) bool {

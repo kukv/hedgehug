@@ -344,14 +344,33 @@ func TestValueRefsRecipient(t *testing.T) {
 	}
 }
 
-// 行の持ち主のプロジェクト「アプリ」が同じ Store の別のワークスペースにあれば((9) の形)、(10) の通知を作らない。
-func TestValueRefsSkipsOrphanRepair(t *testing.T) {
+// mobileRuleOnDeleted は、hanako が、同じ Store のワークスペース「Mobile」にあるプロジェクト「アプリ」のワークフローの
+// 制約を「Web」のログに足し、taro がその値「Review」を削除した fixture。
+func mobileRuleOnDeleted(t *testing.T) *fixture {
+	t.Helper()
 	f := valueRefsSetup(t)
 	if err := apptest.SampleMobile(t.Context(), f.stores, store); err != nil {
 		t.Fatal(err)
 	}
 	wsRules(f, "hanako", change.NewAdd(projectrule.WorkflowField(apptest.SampleMobileProject, apptest.SampleStatusTodo), apptest.SampleStatusPending))
 	taroDeletes(f, pendingRef)
+	return f
+}
+
+// 「アプリ」のルールを外す修復 (9)(repair.Orphans の行)は、外した値が削除されていても (10) の通知を作らない。
+func TestValueRefsSkipsOrphanRepair(t *testing.T) {
+	f := mobileRuleOnDeleted(t)
+	orphans := repair.Orphans(wsLog(f), func(p project.ID) bool { return p != apptest.SampleMobileProject })
+	if len(orphans) != 1 || orphans[0].Project != apptest.SampleMobileProject {
+		t.Fatalf("orphans = %+v, want one for アプリ", orphans)
+	}
+	f.judge(wsRepair(f, orphans[0].Drafts...))
+	f.wantNone()
+}
+
+// 持ち主のプロジェクトが別のワークスペースにあれば、(10) の形の行でも通知を作らない。
+func TestValueRefsSkipsOtherWorkspaceProject(t *testing.T) {
+	f := mobileRuleOnDeleted(t)
 	saves := danglingSaves(f)
 	if len(saves) != 1 {
 		t.Fatalf("saves = %d, want 1", len(saves))
@@ -414,31 +433,52 @@ func TestValueRefsBothEndsSeparateOps(t *testing.T) {
 	}
 }
 
+// setInitial は、setters の順に、それぞれが初期ステータスを「Review」にする。最後の人のほかは、すぐ「Todo」に戻す。
+// 最後の「Review」にした行の ID を返す。
+func setInitial(f *fixture, setters ...string) change.ID {
+	f.t.Helper()
+	var id change.ID
+	for i, who := range setters {
+		s := f.save(user(who), appendRef(wsRef, change.NewSet("initial_status", apptest.SampleStatusTodo, apptest.SampleStatusPending)))
+		id = s.Entities[0].Rows[0].ID
+		if i < len(setters)-1 {
+			f.save(user(who), appendRef(wsRef, change.NewSet("initial_status", apptest.SampleStatusPending, apptest.SampleStatusTodo)))
+		}
+	}
+	return id
+}
+
 func TestFinishedInitialNotice(t *testing.T) {
+	const reset = "初期ステータスを「Todo」に戻しました"
 	for name, c := range map[string]struct {
-		setter string
-		want   bool
+		setters  []string
+		changer  change.Actor
+		category workspace.Category
+		text     string // 空なら作らない
 	}{
-		"初期ステータスにしたのが hanako": {"hanako", true},
-		"初期ステータスにしたのが taro":   {"taro", false},
+		"初期ステータスにしたのが hanako": {[]string{"hanako"}, user("taro"), workspace.CategoryDone, "「Review」は 太郎 が完了の分類にしたため、" + reset},
+		"中止の分類": {[]string{"hanako"}, user("taro"), workspace.CategoryCanceled, "「Review」は 太郎 が中止の分類にしたため、" + reset},
+		"分類を変えた行が人の行でない":         {[]string{"hanako"}, change.Actor{Kind: change.ActorSync}, workspace.CategoryDone, "「Review」は 不明なユーザー が完了の分類にしたため、" + reset},
+		"最後に初期ステータスにしたのが hanako": {[]string{"taro", "hanako"}, user("taro"), workspace.CategoryDone, "「Review」は 太郎 が完了の分類にしたため、" + reset},
+		"初期ステータスにしたのが taro":      {[]string{"taro"}, user("taro"), workspace.CategoryDone, ""},
+		"最後に初期ステータスにしたのが taro":   {[]string{"hanako", "taro"}, user("taro"), workspace.CategoryDone, ""},
 	} {
 		t.Run(name, func(t *testing.T) {
 			f := valueRefsSetup(t)
-			set := f.save(user(c.setter), appendRef(wsRef, change.NewSet("initial_status", apptest.SampleStatusTodo, apptest.SampleStatusPending)))
-			f.save(user("taro"), appendRef(wsRef, change.NewSet(statusList.Field(apptest.SampleStatusPending, "category"), workspace.CategoryTodo, workspace.CategoryDone)))
+			set := setInitial(f, c.setters...)
+			f.save(c.changer, appendRef(wsRef, change.NewSet(statusList.Field(apptest.SampleStatusPending, "category"), workspace.CategoryTodo, c.category)))
 			d, ok := repair.FinishedInitial(wsLog(f))
 			if !ok {
 				t.Fatal("no finished initial")
 			}
 			f.judge(wsRepair(f, d))
-			if !c.want {
+			if c.text == "" {
 				f.wantNone()
 				return
 			}
 			want := port.Notice{
 				Kind: port.NoticeRepair, Store: store, Workspace: apptest.SampleWorkspace, Section: "statuses",
-				Text:   "「Review」は 太郎 が完了の分類にしたため、初期ステータスを「Todo」に戻しました",
-				Source: "repair:initial:" + string(apptest.SampleWorkspace) + ":" + string(set.Entities[0].Rows[0].ID),
+				Text: c.text, Source: "repair:initial:" + string(apptest.SampleWorkspace) + ":" + string(set),
 			}
 			if n := f.wantOne(); !reflect.DeepEqual(n, want) {
 				t.Errorf("notice = %+v, want %+v", n, want)
