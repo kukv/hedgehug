@@ -29,6 +29,7 @@ func reasonText(r port.Reader, before []change.Record, f, target string, reason 
 	if reason.Field == "" {
 		return withParticle(target, "は") + workspace.CategoryName(reason.Category) + "の最後のステータスのため、削除を取り消しました", nil
 	}
+	// ReasonOf が true を返したので、f は値の項目(statuses/<ID>・priorities/<ID>)。
 	_, id, _ := strings.Cut(f, "/")
 	who, err := memberName(r, setter(before, reason.Field, id))
 	if err != nil {

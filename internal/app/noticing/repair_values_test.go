@@ -74,9 +74,13 @@ func TestRestoreTextDefault(t *testing.T) {
 
 func TestRestoreTextEmptyCategory(t *testing.T) {
 	f := setup(t)
-	prep := append(
-		workspace.ValueDrafts(statusList, workspace.Value{ID: valueClosed, Name: "Closed", Color: "gray", Category: workspace.CategoryDone, Rank: "b"}),
-		workspace.ValueDrafts(statusList, workspace.Value{ID: valueShip, Name: "Done", Color: "gray", Category: workspace.CategoryDone, Rank: "c"})...)
+	// 完了の分類に Closed と Done(valueShip)を足す。
+	closed := workspace.Value{ID: valueClosed, Name: "Closed", Color: "gray", Category: workspace.CategoryDone, Rank: "b"}
+	done := workspace.Value{ID: valueShip, Name: "Done", Color: "gray", Category: workspace.CategoryDone, Rank: "c"}
+	var prep []change.Draft
+	prep = append(prep, workspace.ValueDrafts(statusList, closed)...)
+	prep = append(prep, workspace.ValueDrafts(statusList, done)...)
+	// 既定を Closed にし、元の Done を削除し、Closed を完了から外すと、完了には valueShip だけが残る。
 	prep = append(prep,
 		change.NewSet("category_default/done", apptest.SampleStatusDone, valueClosed),
 		change.NewDelete(statusList.Ref(apptest.SampleStatusDone)),
