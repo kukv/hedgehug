@@ -53,6 +53,11 @@ func TestMoveProjectRoute(t *testing.T) {
 	api.Post(base, map[string]any{"title": "請求"})
 	check(t, "up at the edge", api.Post(one+"/move", map[string]any{"direction": "up"}), http.StatusNoContent, "")
 	check(t, "down", api.Post(one+"/move", map[string]any{"direction": "down"}), http.StatusNoContent, "")
+	// 下へ動かしたあとの並びは、請求・ログインの順。
+	list := api.Get(base).Body.String()
+	if i, j := strings.Index(list, `"title":"請求"`), strings.Index(list, `"title":"ログイン"`); i < 0 || j < 0 || i > j {
+		t.Errorf("order after down: %s", list)
+	}
 	check(t, "down at the edge", api.Post(one+"/move", map[string]any{"direction": "down"}), http.StatusNoContent, "")
 	check(t, "unknown direction", api.Post(one+"/move", map[string]any{"direction": "left"}), http.StatusUnprocessableEntity, "")
 }

@@ -131,6 +131,36 @@ func TestMoveProjectWithoutRanks(t *testing.T) {
 	}
 }
 
+// 同じ rank("V")の 2 件は内部 ID の順に並ぶ。動かすと、後ろの同じ rank を振り直してから動かす。
+func TestMoveProjectEqualRanks(t *testing.T) {
+	svc, _ := setupEdit(t)
+	twin := project.Project{ID: "01ZZZZ00000000000000000001", Place: project.Place{Workspace: apptest.SampleWorkspace, Number: 2}, Rank: "V", Title: "双子", Status: project.Todo}
+	op := port.Operation{Actor: change.User("taro"), Summary: "準備"}
+	if err := svc.Stores.Write(t.Context(), store, op, func(tx port.Tx) error {
+		return tx.WriteProjects().Append(twin.ID, project.Create(twin))
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := order(t, svc), []project.ID{apptest.SampleProject, twin.ID}; !slices.Equal(got, want) {
+		t.Fatalf("before move = %v, want %v", got, want)
+	}
+	if err := svc.MoveProject(t.Context(), store, apptest.SampleProject, false); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := order(t, svc), []project.ID{twin.ID, apptest.SampleProject}; !slices.Equal(got, want) {
+		t.Errorf("order = %v, want %v", got, want)
+	}
+	moved, err1 := svc.Get(t.Context(), store, apptest.SampleProject)
+	refilled, err2 := svc.Get(t.Context(), store, twin.ID)
+	if err := errors.Join(err1, err2); err != nil {
+		t.Fatal(err)
+	}
+	// 双子は前のもの(V)より大きい値に振り直し、動かしたものはその後ろの値にする。
+	if refilled.Rank != "W" || moved.Rank != "X" {
+		t.Errorf("ranks = %q, %q, want W, X", refilled.Rank, moved.Rank)
+	}
+}
+
 func TestMoveProjectOtherWorkspaceUntouched(t *testing.T) {
 	svc, _, ps := setupMove(t)
 	if err := apptest.SampleMobile(t.Context(), svc.Stores, store); err != nil {
