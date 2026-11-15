@@ -1,10 +1,13 @@
 package apptest
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"slices"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/domain/change"
@@ -22,6 +25,44 @@ type StoreList struct {
 
 func (l StoreList) List(context.Context) ([]port.StoreInfo, error) {
 	return slices.Clone(l.Stores), nil
+}
+
+// SyncLog は port.SyncLog の偽物(アクティビティの同期の行の材料)。ゼロ値で使える。
+type SyncLog struct {
+	mu    sync.Mutex
+	lines []port.SyncLine
+	seq   int64
+}
+
+func (l *SyncLog) Add(_ context.Context, store port.StoreID, at time.Time, sent, received int) error {
+	if sent == 0 && received == 0 {
+		return nil
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.seq++
+	l.lines = append(l.lines, port.SyncLine{ID: l.seq, Store: store, At: at, Sent: sent, Received: received})
+	return nil
+}
+
+func (l *SyncLog) List(_ context.Context, store port.StoreID) ([]port.SyncLine, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	out := []port.SyncLine{}
+	for _, line := range l.lines {
+		if line.Store == store {
+			out = append(out, line)
+		}
+	}
+	slices.SortFunc(out, func(a, b port.SyncLine) int { return cmp.Or(b.At.Compare(a.At), cmp.Compare(b.ID, a.ID)) })
+	return out, nil
+}
+
+func (l *SyncLog) ForgetStore(_ context.Context, store port.StoreID) error {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.lines = slices.DeleteFunc(l.lines, func(line port.SyncLine) bool { return line.Store == store })
+	return nil
 }
 
 // RunStoreCommitsContract は、port.StoreCommits が満たすべき振る舞いを確かめる。偽物(CommitLog)と本物の実装

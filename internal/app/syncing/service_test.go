@@ -321,6 +321,56 @@ func TestSyncStoreRecoversFromPanic(t *testing.T) {
 	}
 }
 
+// 決定 C4d-13: 送信か受信が 1 件以上あった成功した同期ごとに、同期を終えた時刻(Succeeded と同じ時刻)で同期の行を書く。
+// 手動の同期(run)と、書き込みのあとの同期(Deliver)のどちらでも書き、両方 0 件なら書かない。
+func TestRunLogsSyncLine(t *testing.T) {
+	f, _ := newDeliverFixture(t)
+	ctx := t.Context()
+	lines := func() []port.SyncLine {
+		t.Helper()
+		got, err := f.log.List(ctx, "S1")
+		if err != nil {
+			t.Fatal(err)
+		}
+		return got
+	}
+	if _, err := f.svc.SyncStore(ctx, "S1"); err != nil {
+		t.Fatal(err)
+	}
+	if got := lines(); len(got) != 1 || got[0].Sent != 2 || got[0].Received != 1 || !got[0].At.Equal(at) {
+		t.Fatalf("lines after SyncStore = %+v", got)
+	}
+	f.rep.Results["S1"] = port.SyncResult{Seen: "v3"}
+	if _, err := f.svc.SyncStore(ctx, "S1"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.svc.Deliver(ctx, "S1", deliverOp, addTaro); err != nil {
+		t.Fatal(err)
+	}
+	if got := lines(); len(got) != 1 {
+		t.Fatalf("lines after empty syncs = %+v, want 1", got)
+	}
+	f.clock.Advance(time.Minute)
+	f.rep.Results["S1"] = port.SyncResult{Sent: 1, Received: 4, Seen: "v4"}
+	if _, err := f.svc.Deliver(ctx, "S1", deliverOp, func(port.Tx) error { return nil }); err != nil {
+		t.Fatal(err)
+	}
+	if got := lines(); len(got) != 2 || got[0].Sent != 1 || got[0].Received != 4 || !got[0].At.Equal(at.Add(time.Minute)) {
+		t.Fatalf("lines after Deliver = %+v", got)
+	}
+	// Log がなければ書かずに同期する。
+	f.svc.Log = nil
+	if out, err := f.svc.SyncStore(ctx, "S1"); err != nil || !out.OK() {
+		t.Fatalf("SyncStore without Log = %+v, %v", out, err)
+	}
+	if _, err := f.svc.Deliver(ctx, "S1", deliverOp, func(port.Tx) error { return nil }); err != nil {
+		t.Fatal(err)
+	}
+	if got := lines(); len(got) != 2 {
+		t.Errorf("lines without Log = %+v, want 2", got)
+	}
+}
+
 func waitFor(t *testing.T, cond func() bool) {
 	t.Helper()
 	deadline := time.Now().Add(2 * time.Second)
