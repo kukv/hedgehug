@@ -2,6 +2,7 @@ package syncing_test
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"testing"
 	"time"
@@ -75,5 +76,53 @@ func TestSkewObserveIsSafeWhenCalledTogether(t *testing.T) {
 	}
 	if n := len(events.List()); n != 1 {
 		t.Fatalf("出来事 = %d 個, want 1", n)
+	}
+}
+
+func TestSkewRetriesTheWriteAfterAFailure(t *testing.T) {
+	records := apptest.NewClockSkews()
+	events := &apptest.Events{}
+	skew := &syncing.Skew{Records: records, Events: events}
+
+	records.SetErr = errors.New("書けない")
+	skew.Observe(-7 * time.Minute)
+	if records.Minutes != 0 || len(events.List()) != 0 {
+		t.Fatalf("失敗のあと: 記録 = %d, 出来事 = %d 個, want 0, 0", records.Minutes, len(events.List()))
+	}
+
+	records.SetErr = nil
+	skew.Observe(-7 * time.Minute)
+	if records.Minutes != 7 {
+		t.Fatalf("記録 = %d, want 7", records.Minutes)
+	}
+	got := events.List()
+	if len(got) != 1 || got[0] != (port.Event{Kind: port.EventSync}) {
+		t.Fatalf("出来事 = %+v, want 1 個の sync", got)
+	}
+}
+
+func TestSkewReloadsWhenTheFirstReadFails(t *testing.T) {
+	records := apptest.NewClockSkews()
+	records.Minutes = 7
+	events := &apptest.Events{}
+	skew := &syncing.Skew{Records: records, Events: events}
+
+	// 読めない間は 0 から続ける。0 のままなら書かない。
+	records.SkewErr = errors.New("読めない")
+	skew.Observe(time.Minute)
+	if records.Minutes != 7 || len(events.List()) != 0 {
+		t.Fatalf("読めないとき: 記録 = %d, 出来事 = %d 個, want 7, 0", records.Minutes, len(events.List()))
+	}
+
+	// 読めるようになったら読み直し、記録済みの 7 と同じなので書かない。
+	records.SkewErr = nil
+	skew.Observe(-7 * time.Minute)
+	if records.Minutes != 7 || len(events.List()) != 0 {
+		t.Fatalf("読み直したあと: 記録 = %d, 出来事 = %d 個, want 7, 0", records.Minutes, len(events.List()))
+	}
+
+	skew.Observe(time.Minute)
+	if records.Minutes != 0 || len(events.List()) != 1 {
+		t.Fatalf("警告が消えたとき: 記録 = %d, 出来事 = %d 個, want 0, 1", records.Minutes, len(events.List()))
 	}
 }

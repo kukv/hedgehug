@@ -33,6 +33,9 @@ func (c *Clock) Now() time.Time {
 type ClockSkews struct {
 	mu      sync.Mutex
 	Minutes int
+	// SkewErr と SetErr は、入れると Skew と SetSkew がそのエラーを返す(状態は変えない)。
+	SkewErr error
+	SetErr  error
 }
 
 func NewClockSkews() *ClockSkews { return &ClockSkews{} }
@@ -40,12 +43,18 @@ func NewClockSkews() *ClockSkews { return &ClockSkews{} }
 func (c *ClockSkews) Skew(context.Context) (int, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	if c.SkewErr != nil {
+		return 0, c.SkewErr
+	}
 	return c.Minutes, nil
 }
 
 func (c *ClockSkews) SetSkew(_ context.Context, minutes int) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	if c.SetErr != nil {
+		return c.SetErr
+	}
 	c.Minutes = minutes
 	return nil
 }
