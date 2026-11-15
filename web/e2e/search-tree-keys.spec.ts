@@ -17,14 +17,16 @@ import {
 
 // 検索の画面のツリーのキー操作とプロジェクトの行(E3a-16・17、04「ツリーのキー操作」)の通しのテスト。
 
-// moveRequests は、プロジェクトの並べ替えの API(E3a-15)を呼んだ回数を数える。
-function moveRequests(page: Page) {
+// writesTo は、アドレスが pattern に合う、GET 以外の要求を集める。
+function writesTo(page: Page, pattern: RegExp) {
   const seen: string[] = [];
   page.on("request", (r) => {
-    if (r.method() === "POST" && /\/projects\/[^/]+\/move$/.test(r.url())) seen.push(r.url());
+    if (r.method() !== "GET" && pattern.test(r.url())) seen.push(`${r.method()} ${r.url()}`);
   });
   return seen;
 }
+// moveRequests は、プロジェクトの並べ替えの API(E3a-15)を呼んだものを集める。
+const moveRequests = (page: Page) => writesTo(page, /\/projects\/[^/]+\/move$/);
 
 test("space and alt-up on item rows", async ({ page }, info) => {
   const s = await seed(page, info);
@@ -54,6 +56,7 @@ test("space and alt-up on item rows", async ({ page }, info) => {
 // サンプルを読むだけで、書き換えない(作成ダイアログは開いたら閉じる)。
 test("read-only row next to writable row", async ({ page }) => {
   const moves = moveRequests(page);
+  const readonlyWrites = writesTo(page, new RegExp(`/api/stores/${readonlyStore}/`));
   const tree = await openTree(page, "認証");
   const roEpic = rowOf(tree, readonlyStore, sampleEpic);
   const status = roEpic.getByRole("button", { name: /^ステータス: / });
@@ -76,7 +79,9 @@ test("read-only row next to writable row", async ({ page }) => {
   await expect(dialog).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(dialog).toBeHidden();
+  // ダイアログを開き閉じするあいだに、閲覧のみの Store へ書く要求が飛んでいれば、ここで分かる。
   expect(moves).toEqual([]);
+  expect(readonlyWrites).toEqual([]);
 });
 
 test("project row keys and menu", async ({ page }, info) => {

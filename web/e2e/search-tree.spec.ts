@@ -114,12 +114,9 @@ test("move up among visible siblings", async ({ page }, info) => {
   }
 
   const tree = await openTree(page, `${s.mark}合`);
-  expect(await titlesWith(tree, s.mark)).toEqual([
-    `${s.mark}親`,
-    `${s.mark}合 A`,
-    `${s.mark}合 C`,
-    `${s.mark}合 F`,
-  ]);
+  await expect
+    .poll(() => titlesWith(tree, s.mark))
+    .toEqual([`${s.mark}親`, `${s.mark}合 A`, `${s.mark}合 C`, `${s.mark}合 F`]);
   await tree.getByRole("button", { name: `${s.prefix}-4 のメニュー` }).click();
   await page.getByRole("menuitem", { name: /^上へ移動/ }).click();
   await expect(tree.getByRole("link").filter({ hasText: s.mark }).nth(1)).toHaveText(
@@ -127,13 +124,14 @@ test("move up among visible siblings", async ({ page }, info) => {
   );
 
   await search(page, s.mark);
-  await expect(tree.getByRole("link", { name: `${s.mark}別 B` })).toBeVisible();
-  expect(await titlesWith(tree, s.mark)).toEqual([
-    `${s.mark}親`,
-    `${s.mark}合 C`,
-    `${s.mark}合 A`,
-    `${s.mark}別 B`,
-    `${s.mark}別 D`,
-    `${s.mark}合 F`,
-  ]);
+  await expect
+    .poll(() => titlesWith(tree, s.mark))
+    .toEqual([
+      `${s.mark}親`,
+      `${s.mark}合 C`,
+      `${s.mark}合 A`,
+      `${s.mark}別 B`,
+      `${s.mark}別 D`,
+      `${s.mark}合 F`,
+    ]);
 });

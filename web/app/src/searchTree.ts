@@ -5,6 +5,7 @@ import {
   itemDisplayId,
   type ProjectNode,
   type Route,
+  type SearchTreeData,
   type SearchTreeRow,
   type SearchTreeView,
   type StoreNode,
@@ -16,14 +17,33 @@ import { catalog, itemDialog, itemsPort, listMembers, workspacesPort } from "./w
 
 // 検索の画面のツリー(E3a)の組み立て。search.ts がこれを読むので、ここから search.ts を読まない。
 
-// searchTreeData は、プロジェクトのアイテム・ワークスペースの設定・Store のメンバーを取っておく(E3a-3)。
-// Store が変わった知らせ(search.ts)と、ツリーを開いたとき・ツリーから書いたあと(SearchTree.svelte)に捨てて読み直す。
-export const searchTreeData = createSearchTreeData({
+const data = createSearchTreeData({
   catalog,
   items: itemsPort,
   workspaces: workspacesPort,
   members: listMembers,
 });
+// resets は、捨てた回数。
+let resets = 0;
+
+// searchTreeData は、プロジェクトのアイテム・ワークスペースの設定・Store のメンバーを取っておく(E3a-3)。
+// Store が変わった知らせ(search.ts)と、ツリーを開いたとき・ツリーから書いたあと(SearchTree.svelte)に捨てて読み直す。
+// load は、読んでいるあいだに捨てられたら読み直す(捨てる前に始めた読み込みは結果を入れないので、そのまま組むと
+// 木が空になる)。解けたときは、scope のうち読めたものがすべて入っている。
+export const searchTreeData: SearchTreeData = {
+  get: data.get,
+  async load(scope) {
+    let at: number;
+    do {
+      at = resets;
+      await data.load(scope);
+    } while (at !== resets);
+  },
+  reset() {
+    resets += 1;
+    data.reset();
+  },
+};
 
 // projectRoute は、プロジェクトの行の行き先(プロジェクトの概要。E3a-12)。
 export const projectRoute = (store: StoreNode, project: ProjectNode): Route => ({
