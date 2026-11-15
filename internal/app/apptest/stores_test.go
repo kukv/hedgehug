@@ -41,6 +41,18 @@ func TestStoresVersions(t *testing.T) {
 	if after["S2"] != before["S2"] {
 		t.Errorf("S2 version changed without a write: %q -> %q", before["S2"], after["S2"])
 	}
+	// テスト用の書き換え(保持日数・完全に削除の記録)でも、本物と同じく版が変わる。
+	for name, mutate := range map[string]func(){
+		"SetRetentionDays": func() { s.SetRetentionDays("S2", 7) },
+		"AddPurged":        func() { s.AddPurged("S2", port.Purged{Entity: "item", Target: "01PURGED", Display: "HH-9"}) },
+	} {
+		was, _ := s.Versions(t.Context())
+		mutate()
+		now, _ := s.Versions(t.Context())
+		if now["S2"] == was["S2"] {
+			t.Errorf("%s: S2 version did not change: %q", name, now["S2"])
+		}
+	}
 }
 
 func TestSample(t *testing.T) {

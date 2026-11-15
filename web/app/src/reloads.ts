@@ -13,3 +13,5 @@ export const inboxReloads = new Set<() => Promise<unknown>>();
 // itemChanges は、アイテムを変えたあとの読み直し(wireActions.ts の itemRefresh.afterChange)で読み直すもの(検索のツリー。
 // 削除・移動・並べ替えのあと、Store が変わった知らせを待たずに描き直す)。
 export const itemChanges = new Set<() => Promise<unknown>>();
+// syncReloads は、sync の知らせのときだけ読み直すもの(アクティビティの同期の行。C4d-15)。
+export const syncReloads = new Set<() => Promise<unknown>>();

@@ -36,6 +36,7 @@ type fixture struct {
 	tokens  *apptest.SyncTokens
 	rep     *apptest.Replicator
 	state   *apptest.SyncState
+	log     *apptest.SyncLog
 	events  *apptest.Events
 	clock   *testClock
 	svc     *syncing.Service
@@ -63,11 +64,12 @@ func newFixture(t *testing.T) *fixture {
 			UnsentN: map[port.StoreID]int{"S1": 4},
 		},
 		state:  apptest.NewSyncState(),
+		log:    &apptest.SyncLog{},
 		events: &apptest.Events{},
 		clock:  &testClock{now: at},
 	}
 	f.svc = &syncing.Service{
-		Targets: f.targets, Tokens: f.tokens, Replicator: f.rep, State: f.state, Events: f.events, Clock: f.clock,
+		Targets: f.targets, Tokens: f.tokens, Replicator: f.rep, State: f.state, Log: f.log, Events: f.events, Clock: f.clock,
 		AfterSuccess: func(_ context.Context, id port.StoreID) {
 			f.mu.Lock()
 			defer f.mu.Unlock()

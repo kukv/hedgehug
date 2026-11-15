@@ -31,7 +31,7 @@ func run() error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	context.AfterFunc(ctx, stop) // 止め始めたら、2 回目の Ctrl-C ですぐに終わるようにする
-	deps, err := wire(ctx)
+	deps, judged, err := wire(ctx)
 	if err != nil {
 		return err
 	}
@@ -42,7 +42,7 @@ func run() error {
 		return err
 	}
 	fmt.Printf("http://%s/#token=%s\n", ln.Addr(), token)
-	return serve(ctx, ln, wrap(token, deps, httpapi.New(token, web.Dist(), deps)))
+	return serve(ctx, ln, wrap(token, deps, judged, httpapi.New(token, web.Dist(), deps)))
 }
 
 // serve は、ctx が終わるまで ln で待ち受ける。終わったら、処理中の要求を(最大 5 秒)待ってから戻る。

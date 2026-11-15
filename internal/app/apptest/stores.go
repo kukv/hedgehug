@@ -31,7 +31,7 @@ type store struct {
 	logs map[change.Ref][]change.Record
 	// texts は、説明の本文(ない説明は入れない)。
 	texts map[change.Ref]string
-	// writes は、保存が成功した回数(Versions の印)。
+	// writes は、保存が成功した回数とテスト用の書き換え(SetRetentionDays・AddPurged)の回数(Versions の印)。
 	writes int
 	// retentionDays は、削除済みの保持日数。
 	retentionDays int
@@ -68,7 +68,7 @@ func (s *Stores) SetRetentionDays(id port.StoreID, days int) {
 	}
 	st.mu.Lock()
 	defer st.mu.Unlock()
-	st.retentionDays = days
+	st.retentionDays, st.writes = days, st.writes+1
 }
 
 // AddPurged は、Store の完全に削除したものの記録に 1 行足す(テスト用。本物は purged.jsonl)。
@@ -79,7 +79,7 @@ func (s *Stores) AddPurged(id port.StoreID, p port.Purged) {
 	}
 	st.mu.Lock()
 	defer st.mu.Unlock()
-	st.purged = append(st.purged, p)
+	st.purged, st.writes = append(st.purged, p), st.writes+1
 }
 
 // find は、Store を返す。ロックは呼んだ側が取る。

@@ -94,6 +94,109 @@ components:
         - goal
         - confirmed
       type: object
+    ActivityPage:
+      additionalProperties: false
+      properties:
+        more:
+          description: 続きがある。最後の行の cursor を before に渡して読む
+          type: boolean
+        rows:
+          items:
+            $ref: "#/components/schemas/ActivityRow"
+          nullable: true
+          type: array
+      required:
+        - rows
+        - more
+      type: object
+    ActivityRow:
+      additionalProperties: false
+      properties:
+        actor:
+          enum:
+            - user
+            - automation
+            - github
+            - sync
+            - none
+          type: string
+        at:
+          format: date-time
+          type: string
+        avatar:
+          description: アバターに渡す名前。人でないか、不明なユーザーは空
+          type: string
+        cursor:
+          description: 続きを読むときの before に渡す値。{時刻(RFC 3339、ミリ秒まで)}|{鍵}
+          type: string
+        item:
+          $ref: "#/components/schemas/ActivityTarget"
+        key:
+          description: 行の鍵。コミットの行は {SHA}:{連番}、同期の行は sync:{ID}
+          type: string
+        project:
+          $ref: "#/components/schemas/ActivityTarget"
+        sha:
+          description: 7 桁。同期の行は空
+          type: string
+        store:
+          $ref: "#/components/schemas/ActivityStore"
+        text:
+          type: string
+        who:
+          description: 実行者の名前。none は空
+          type: string
+        workspace:
+          description: ワークスペース名。行のワークスペースが 1 つのときだけ。ほかは空
+          type: string
+      required:
+        - key
+        - at
+        - cursor
+        - actor
+        - who
+        - avatar
+        - text
+        - store
+        - workspace
+        - sha
+      type: object
+    ActivityStore:
+      additionalProperties: false
+      properties:
+        color:
+          description: 画面のトークン --t-<色> の名前
+          type: string
+        id:
+          type: string
+        name:
+          type: string
+      required:
+        - id
+        - name
+        - color
+      type: object
+    ActivityTarget:
+      additionalProperties: false
+      properties:
+        display:
+          description: いまの ID か、旧 ID か、完全に削除したときの ID(HH-12・HH-P1)
+          type: string
+        link:
+          description: current は、いまの ID で開く。moved は、別の Store へ移した旧 ID で、転送記録から探して開く。空は文字だけ
+          enum:
+            - ""
+            - current
+            - moved
+          type: string
+        title:
+          description: プロジェクトのときだけ
+          type: string
+      required:
+        - display
+        - title
+        - link
+      type: object
     AddStep:
       additionalProperties: false
       properties:
@@ -906,6 +1009,9 @@ components:
         at:
           description: 時刻(ミリ秒までの RFC 3339)
           type: string
+        received:
+          description: 同期で受け取った保存の行か(このマシンで作った保存と、実行者が同期の行は false)
+          type: boolean
         text:
           description: 変更の文(作成・タイトルを「…」に変更 など)
           type: string
@@ -916,6 +1022,7 @@ components:
         - who
         - text
         - at
+        - received
       type: object
     ImpactOutputBody:
       additionalProperties: false
@@ -4736,6 +4843,58 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Internal Server Error
       summary: GitHub App 未導入の組織を読み直し、読めたものの記録を消す
+  /api/activity:
+    get:
+      operationId: list-activity
+      parameters:
+        - description: この Store の行だけ。空ならすべての Store
+          explode: false
+          in: query
+          name: store
+          schema:
+            description: この Store の行だけ。空ならすべての Store
+            type: string
+        - description: このワークスペースの行と、同じ Store の同期の行・Store 全体の行だけ。store と一緒に渡す。片方だけは 422
+          explode: false
+          in: query
+          name: workspace
+          schema:
+            description: このワークスペースの行と、同じ Store の同期の行・Store 全体の行だけ。store と一緒に渡す。片方だけは 422
+            type: string
+        - description: 種類の絞り込み。空は all
+          explode: false
+          in: query
+          name: kind
+          schema:
+            description: 種類の絞り込み。空は all
+            enum:
+              - ""
+              - all
+              - user
+              - sync
+              - automation
+            type: string
+        - description: 続きを読むとき、前のページの最後の行の cursor。読めない値は 422
+          explode: false
+          in: query
+          name: before
+          schema:
+            description: 続きを読むとき、前のページの最後の行の cursor。読めない値は 422
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ActivityPage"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Store のコミットと同期の行を、新しい順に 300 件
   /api/bulk-change:
     post:
       operationId: bulk-change

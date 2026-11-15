@@ -23,6 +23,7 @@
   const hint = syncAllHint(isMac());
   const settings: Route = { name: "settings", tab: "accounts" };
   const inboxRoute: Route = { name: "inbox" };
+  const activityRoute: Route = { name: "activity" };
   // 「検索」はテーブルで開く入口(E3a-9)。修飾キーのない主ボタンのクリックで移れたときだけテーブルにする。
   const searchRoute: Route = { name: "search" };
   const unread = inbox.unread;
@@ -70,6 +71,15 @@
     {#if $unread.all > 0}
       <span class="badge" role="img" aria-label="未読 {$unread.all} 件">{$unread.all}</span>
     {/if}
+  </a>
+  <a
+    class="nav-row"
+    href={links.href(activityRoute)}
+    aria-current={current?.name === "activity" ? "page" : undefined}
+    onclick={(e) => links.click(e, activityRoute)}
+    onauxclick={(e) => links.click(e, activityRoute)}
+  >
+    <span>アクティビティ</span>
   </a>
   <a
     class="nav-row"

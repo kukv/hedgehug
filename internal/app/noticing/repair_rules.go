@@ -100,11 +100,16 @@ func putter(log []change.Record, row change.Record) string {
 			return c.T == change.Set && c.F == row.F && sameValue(c.To, row.From)
 		}), "")
 	case row.T == change.Delete && strings.HasPrefix(row.F, "rules/"):
-		return lastSaver(rowsWhere(log, func(c change.Record) bool {
-			return c.T != change.Delete && c.T != change.Restore && (c.F == row.F || strings.HasPrefix(c.F, row.F+"/"))
-		}), "")
+		return ruleSaver(log, row.F)
 	}
 	return ""
+}
+
+// ruleSaver は、log でルール rule(rules/<ID>)の行(delete・restore を除く)を最後に保存した人。なければ空。
+func ruleSaver(log []change.Record, rule string) string {
+	return lastSaver(rowsWhere(log, func(c change.Record) bool {
+		return c.T != change.Delete && c.T != change.Restore && (c.F == rule || strings.HasPrefix(c.F, rule+"/"))
+	}), "")
 }
 
 // lastAdder は、add の行 adds を at の順(同じなら ID の順)にたどった、最後の人の add の人。そのあとに同期の add が

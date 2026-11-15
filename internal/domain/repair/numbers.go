@@ -48,17 +48,7 @@ func Renumbers(all []Numbered, f Facts, next int) []Renumber {
 
 // moved は、番号が重なった g のうち、振り直すものを、振り直す順で返す。
 func moved(g []Numbered, f Facts) []Numbered {
-	older := func(a, b Numbered) int {
-		if c := a.Create.At.Compare(b.Create.At); c != 0 {
-			return c
-		}
-		return strings.Compare(string(a.ID), string(b.ID))
-	}
-	pool := slices.DeleteFunc(slices.Clone(g), func(n Numbered) bool { return f.Side(n.Create.ID) == 1 })
-	if len(pool) == 0 {
-		pool = g
-	}
-	keep := slices.MinFunc(pool, older)
+	keep := keeper(g, func(n Numbered) change.Record { return n.Create }, func(n Numbered) string { return string(n.ID) }, f)
 	var out []Numbered
 	for _, n := range g {
 		if n.ID != keep.ID {

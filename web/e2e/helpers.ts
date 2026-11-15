@@ -70,6 +70,39 @@ export async function newTask(page: Page, info: TestInfo, title: string) {
   return { name, panel };
 }
 
+// apiTask は、サンプルの Epic の下に Task を API で作り、内部 ID と番号を返す。
+export async function apiTask(request: APIRequestContext, title: string) {
+  const res = await request.post(`/api/stores/${e2eStore}/items`, {
+    headers: { Authorization: "Bearer e2e-token" },
+    data: {
+      project: "01SAMPLEPR0000000000000001",
+      parent: "01SAMPLEIT0000000000000001",
+      kind: "Task",
+      title,
+    },
+  });
+  if (!res.ok()) throw new Error(`apiTask: ${res.status()} ${await res.text()}`);
+  return (await res.json()) as { id: string; number: number };
+}
+
+// renameByApi は、アイテムのタイトルを API で変える(保存の行が 1 つ増える)。
+export async function renameByApi(request: APIRequestContext, id: string, title: string) {
+  const res = await request.put(`/api/stores/${e2eStore}/items/${id}/title`, {
+    headers: { Authorization: "Bearer e2e-token" },
+    data: { title },
+  });
+  if (!res.ok()) throw new Error(`renameByApi: ${res.status()} ${await res.text()}`);
+}
+
+// receiveMark は、アイテムの最後の保存を「同期で受け取った」ものにする(POST /e2e/receive)。
+export async function receiveMark(request: APIRequestContext, id: string) {
+  const res = await request.post("/e2e/receive", {
+    headers: { Authorization: "Bearer e2e-token" },
+    data: { store: e2eStore, item: id },
+  });
+  if (res.status() !== 204) throw new Error(`receiveMark: ${res.status()} ${await res.text()}`);
+}
+
 // addProperty は、サンプルのワークスペースに追加プロパティを作る(B2 の API)。
 export async function addProperty(
   request: APIRequestContext,

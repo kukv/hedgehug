@@ -65,6 +65,11 @@ func overlaps(s snapshot, facts repair.Facts, moves projectMoves) []found {
 			}
 		}
 	}
+	return sortedByOp(byOp)
+}
+
+// sortedByOp は、byOp の値を削除の op の辞書順に並べる。
+func sortedByOp(byOp map[change.ID]found) []found {
 	out := make([]found, 0, len(byOp))
 	for _, f := range byOp {
 		out = append(out, f)

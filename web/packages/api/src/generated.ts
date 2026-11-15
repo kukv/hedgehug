@@ -92,6 +92,73 @@ export type ActiveSprint = {
   state: ActiveSprintState;
 } | null;
 
+export type ActivityRowActor = typeof ActivityRowActor[keyof typeof ActivityRowActor];
+
+
+export const ActivityRowActor = {
+  user: 'user',
+  automation: 'automation',
+  github: 'github',
+  sync: 'sync',
+  none: 'none',
+} as const;
+
+/**
+ * current は、いまの ID で開く。moved は、別の Store へ移した旧 ID で、転送記録から探して開く。空は文字だけ
+ */
+export type ActivityTargetLink = typeof ActivityTargetLink[keyof typeof ActivityTargetLink];
+
+
+export const ActivityTargetLink = {
+  '': '',
+  current: 'current',
+  moved: 'moved',
+} as const;
+
+export interface ActivityTarget {
+  /** いまの ID か、旧 ID か、完全に削除したときの ID(HH-12・HH-P1) */
+  display: string;
+  /** current は、いまの ID で開く。moved は、別の Store へ移した旧 ID で、転送記録から探して開く。空は文字だけ */
+  link: ActivityTargetLink;
+  /** プロジェクトのときだけ */
+  title: string;
+}
+
+export interface ActivityStore {
+  /** 画面のトークン --t-<色> の名前 */
+  color: string;
+  id: string;
+  name: string;
+}
+
+export interface ActivityRow {
+  actor: ActivityRowActor;
+  at: string;
+  /** アバターに渡す名前。人でないか、不明なユーザーは空 */
+  avatar: string;
+  /** 続きを読むときの before に渡す値。{時刻(RFC 3339、ミリ秒まで)}|{鍵} */
+  cursor: string;
+  item?: ActivityTarget;
+  /** 行の鍵。コミットの行は {SHA}:{連番}、同期の行は sync:{ID} */
+  key: string;
+  project?: ActivityTarget;
+  /** 7 桁。同期の行は空 */
+  sha: string;
+  store: ActivityStore;
+  text: string;
+  /** 実行者の名前。none は空 */
+  who: string;
+  /** ワークスペース名。行のワークスペースが 1 つのときだけ。ほかは空 */
+  workspace: string;
+}
+
+export interface ActivityPage {
+  /** 続きがある。最後の行の cursor を before に渡して読む */
+  more: boolean;
+  /** @nullable */
+  rows: ActivityRow[] | null;
+}
+
 export interface AddStep {
   title: string;
 }
@@ -617,6 +684,8 @@ export interface ErrorModel {
 export interface HistoryRow {
   /** 時刻(ミリ秒までの RFC 3339) */
   at: string;
+  /** 同期で受け取った保存の行か(このマシンで作った保存と、実行者が同期の行は false) */
+  received: boolean;
   /** 変更の文(作成・タイトルを「…」に変更 など) */
   text: string;
   /** 操作した人の表示(メンバーの名前・自動化・GitHub・同期・不明なユーザー) */
@@ -2820,6 +2889,28 @@ export type AccountEditImpactParams = {
   login?: string;
 };
 
+export type ListActivityParams = {
+  /** この Store の行だけ。空ならすべての Store */
+  store?: string;
+  /** このワークスペースの行と、同じ Store の同期の行・Store 全体の行だけ。store と一緒に渡す。片方だけは 422 */
+  workspace?: string;
+  /** 種類の絞り込み。空は all */
+  kind?: ListActivityKind;
+  /** 続きを読むとき、前のページの最後の行の cursor。読めない値は 422 */
+  before?: string;
+};
+
+export type ListActivityKind = typeof ListActivityKind[keyof typeof ListActivityKind];
+
+
+export const ListActivityKind = {
+  '': '',
+  all: 'all',
+  user: 'user',
+  sync: 'sync',
+  automation: 'automation',
+} as const;
+
 export type ListInboxParams = {
   /** all・mention・assign・watch・overwrite・automation・repair のどれか。ほかは 400 */
   tab?: string;
@@ -3118,6 +3209,37 @@ export const recheckAccount = async (id: string, options?: Parameters<typeof fet
   {
     ...options,
     method: 'POST'
+
+
+  }
+);}
+
+
+
+export const getListActivityUrl = (params?: ListActivityParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/activity?${stringifiedParams}` : `/api/activity`
+}
+
+/**
+ * @summary Store のコミットと同期の行を、新しい順に 300 件
+ */
+export const listActivity = async (params?: ListActivityParams, options?: Parameters<typeof fetcher>[1]): Promise<ActivityPage> => {
+
+  return fetcher<ActivityPage>(getListActivityUrl(params),
+  {
+    ...options,
+    method: 'GET'
 
 
   }

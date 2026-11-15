@@ -5,6 +5,7 @@ import (
 	"errors"
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/kukv/hedgehug/internal/app/apptest"
 	"github.com/kukv/hedgehug/internal/app/port"
@@ -15,6 +16,7 @@ var (
 	_ port.Hosts       = apptest.Hosts{}
 	_ port.StoreGitHub = (*apptest.StoreGitHub)(nil)
 	_ port.Secrets     = (*apptest.Secrets)(nil)
+	_ port.SyncLog     = (*apptest.SyncLog)(nil)
 )
 
 func TestFakeDeviceFlowPollsRepeatTheLast(t *testing.T) {
@@ -58,5 +60,35 @@ func TestInboxKeepsNotices(t *testing.T) {
 	in.Err = errors.New("full")
 	if err := in.Add(t.Context(), n); err == nil || len(in.Notices()) != 1 {
 		t.Errorf("Add with Err = %v, %d", err, len(in.Notices()))
+	}
+}
+
+// SyncLog の偽物は、本物(statedb)と同じく 0・0 を書かず、新しい順(同じ時刻なら後に書いたものが先)に返す。
+func TestFakeSyncLog(t *testing.T) {
+	ctx := context.Background()
+	l := &apptest.SyncLog{}
+	at := time.Date(2026, 11, 15, 9, 0, 0, 0, time.UTC)
+	adds := []struct {
+		store    port.StoreID
+		at       time.Time
+		sent, rc int
+	}{{"S1", at, 1, 0}, {"S1", at.Add(time.Second), 0, 0}, {"S1", at.Add(time.Minute), 0, 2}, {"S1", at, 3, 0}, {"S2", at, 1, 1}}
+	for _, a := range adds {
+		if err := l.Add(ctx, a.store, a.at, a.sent, a.rc); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got, _ := l.List(ctx, "S1")
+	if len(got) != 3 || got[0].Received != 2 || got[1].Sent != 3 || got[2].Sent != 1 || got[1].ID <= got[2].ID || got[0].Store != "S1" {
+		t.Errorf("List(S1) = %+v", got)
+	}
+	if err := l.ForgetStore(ctx, "S1"); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := l.List(ctx, "S1"); len(got) != 0 {
+		t.Errorf("List(S1) after ForgetStore = %+v", got)
+	}
+	if got, _ := l.List(ctx, "S2"); len(got) != 1 {
+		t.Errorf("List(S2) = %+v", got)
 	}
 }

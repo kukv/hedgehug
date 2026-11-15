@@ -10,7 +10,6 @@ import (
 	apphistory "github.com/kukv/hedgehug/internal/app/history"
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/domain/change"
-	dhistory "github.com/kukv/hedgehug/internal/domain/history"
 	"github.com/kukv/hedgehug/internal/domain/item"
 	"github.com/kukv/hedgehug/internal/domain/project"
 )
@@ -20,6 +19,8 @@ type HistoryRow struct {
 	Who  string `json:"who" doc:"操作した人の表示(メンバーの名前・自動化・GitHub・同期・不明なユーザー)"`
 	Text string `json:"text" doc:"変更の文(作成・タイトルを「…」に変更 など)"`
 	At   string `json:"at" doc:"時刻(ミリ秒までの RFC 3339)"`
+	// Received は、同期で受け取った保存の行か(02「履歴」の「同期で受信」。C4d-16)
+	Received bool `json:"received" doc:"同期で受け取った保存の行か(このマシンで作った保存と、実行者が同期の行は false)"`
 }
 
 type itemHistoryInput struct {
@@ -34,10 +35,10 @@ type projectHistoryInput struct {
 
 type historyOutput struct{ Body []HistoryRow }
 
-func historyRows(rows []dhistory.Row) *historyOutput {
+func historyRows(rows []apphistory.Row) *historyOutput {
 	out := &historyOutput{Body: []HistoryRow{}}
 	for _, r := range rows {
-		out.Body = append(out.Body, HistoryRow{Who: r.Who, Text: r.Text, At: r.At.Format(change.TimeLayout)})
+		out.Body = append(out.Body, HistoryRow{Who: r.Who, Text: r.Text, At: r.At.Format(change.TimeLayout), Received: r.Received})
 	}
 	return out
 }

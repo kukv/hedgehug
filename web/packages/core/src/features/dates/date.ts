@@ -20,3 +20,8 @@ export function dayOf(d: Date): string {
 export function formatDateTime(at: Date, now: Date): string {
   return `${formatDay(dayOf(at), now.getFullYear())} ${pad(at.getHours())}:${pad(at.getMinutes())}`;
 }
+
+// formatFullDay は、YYYY-MM-DD を年つきの「YYYY/MM/DD」にする(アクティビティの日付の見出し)。
+export function formatFullDay(ymd: string): string {
+  return ymd.replaceAll("-", "/");
+}

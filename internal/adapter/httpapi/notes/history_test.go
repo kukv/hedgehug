@@ -1,6 +1,7 @@
 package notes_test
 
 import (
+	"context"
 	"net/http"
 	"strings"
 	"testing"
@@ -15,7 +16,23 @@ import (
 	"github.com/kukv/hedgehug/internal/domain/change"
 )
 
+// receivedAll は apphistory.ReceivedOps の偽物。尋ねられた op をすべて、同期で受け取った保存のものとして返す。
+type receivedAll struct{}
+
+func (receivedAll) Received(_ context.Context, _ port.StoreID, ops []change.ID) (map[change.ID]bool, error) {
+	out := map[change.ID]bool{}
+	for _, op := range ops {
+		out[op] = true
+	}
+	return out, nil
+}
+
 func newHistoryAPI(t *testing.T) humatest.TestAPI {
+	t.Helper()
+	return newHistoryAPIWith(t, nil)
+}
+
+func newHistoryAPIWith(t *testing.T, received apphistory.ReceivedOps) humatest.TestAPI {
 	t.Helper()
 	ids := apptest.NewIDs()
 	clock := apptest.NewClock(time.Date(2026, 11, 13, 9, 0, 0, 0, time.UTC))
@@ -32,7 +49,7 @@ func newHistoryAPI(t *testing.T) humatest.TestAPI {
 		t.Fatal(err)
 	}
 	_, api := humatest.New(t)
-	notes.Register(api, notes.Services{History: apphistory.Service{Stores: s, StoreList: apptest.StoreList{Stores: []port.StoreInfo{{ID: "S1", Name: "main"}}}, Clock: clock}})
+	notes.Register(api, notes.Services{History: apphistory.Service{Stores: s, StoreList: apptest.StoreList{Stores: []port.StoreInfo{{ID: "S1", Name: "main"}}}, Clock: clock, Received: received}})
 	return api
 }
 
@@ -47,7 +64,7 @@ func TestItemHistory(t *testing.T) {
 	if newer < 0 || older < 0 || newer > older {
 		t.Errorf("新しい順に、タイトルの変更、作成: %s", body)
 	}
-	for _, want := range []string{`"who":"hanako"`, `"who":"taro"`, `"at":"2026-11-13T`} {
+	for _, want := range []string{`"who":"hanako"`, `"who":"taro"`, `"at":"2026-11-13T`, `"received":false`} {
 		if !strings.Contains(body, want) {
 			t.Errorf("lacks %s: %s", want, body)
 		}
@@ -65,5 +82,17 @@ func TestProjectHistoryAndNotFound(t *testing.T) {
 	}
 	if res := api.Get("/api/stores/S1/projects/01NOPE00000000000000000000/history"); res.Code != http.StatusNotFound {
 		t.Errorf("no such project: %d", res.Code)
+	}
+}
+
+// 同期で受け取った保存の行は received が true(C4d-16)。
+func TestHistoryReceived(t *testing.T) {
+	api := newHistoryAPIWith(t, receivedAll{})
+	for _, path := range []string{"/items/" + string(apptest.SampleTask), "/projects/" + string(apptest.SampleProject)} {
+		res := api.Get("/api/stores/S1" + path + "/history")
+		body := res.Body.String()
+		if res.Code != http.StatusOK || !strings.Contains(body, `"received":true`) || strings.Contains(body, `"received":false`) {
+			t.Errorf("%s: %d %s", path, res.Code, body)
+		}
 	}
 }

@@ -30,12 +30,12 @@ func restores(r port.Reader, b batch, i int, me string) ([]port.Notice, error) {
 		if !ok {
 			continue
 		}
-		who, err := memberName(r, repair.Changer(before, d, b.saves[i].Sides))
+		text, err := restoreText(r, ref, before, d, target.text, b.saves[i].Sides)
 		if err != nil {
 			return nil, err
 		}
 		n := target.base
-		n.Text = withParticle(target.text, "は") + " " + who + " が同時に変更したため、削除を取り消しました"
+		n.Text = text
 		n.Source = "repair:restore:" + string(op)
 		out = append(out, n)
 	}

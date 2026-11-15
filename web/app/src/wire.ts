@@ -48,7 +48,7 @@ import { hereOf } from "./here";
 import { browserHistory } from "./history";
 import { createLinks } from "./links";
 import { createNoteHistory } from "./noteHistory";
-import { githubReloads, inboxReloads, propertySaved, reloads } from "./reloads";
+import { githubReloads, inboxReloads, propertySaved, reloads, syncReloads } from "./reloads";
 import { held, online as isOnline, tabId, visible } from "./tab";
 import { palettePort, timer, toasts } from "./wireBase";
 
@@ -229,6 +229,7 @@ async function reflect(kinds: SyncEventKind[]) {
     jobs.push(...[...githubReloads].map((reload) => reload()));
   }
   if (kinds.includes("inbox")) jobs.push(...[...inboxReloads].map((reload) => reload()));
+  if (kinds.includes("sync")) jobs.push(...[...syncReloads].map((reload) => reload()));
   await Promise.allSettled(jobs);
 }
 

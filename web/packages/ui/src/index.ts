@@ -2,6 +2,7 @@ export { default as AppFrame } from "./layout/AppFrame.svelte";
 export { default as Brand } from "./layout/Brand.svelte";
 export { default as PageHead } from "./layout/PageHead.svelte";
 export { default as SidePanel } from "./layout/SidePanel.svelte";
+export { default as ActorIcon } from "./patterns/ActorIcon.svelte";
 export { default as Avatar } from "./patterns/Avatar.svelte";
 export { default as BlockedBadge } from "./patterns/BlockedBadge.svelte";
 export { default as CommandPalette } from "./patterns/CommandPalette.svelte";

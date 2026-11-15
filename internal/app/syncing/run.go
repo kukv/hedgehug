@@ -2,6 +2,7 @@ package syncing
 
 import (
 	"context"
+	"log/slog"
 	"time"
 
 	"github.com/kukv/hedgehug/internal/app/port"
@@ -43,6 +44,7 @@ func (s *Service) run(ctx context.Context, t port.SyncTarget) (Outcome, error) {
 	if err := s.State.Succeeded(ctx, t.ID, at, key, res.Seen); err != nil {
 		return out, err
 	}
+	s.logLine(ctx, t.ID, at, res)
 	out.Sent, out.Received = res.Sent, res.Received
 	if !t.ReadOnly {
 		if out.MirrorFailures, err = s.mirror(ctx, t, tok); err != nil {
@@ -54,6 +56,17 @@ func (s *Service) run(ctx context.Context, t port.SyncTarget) (Outcome, error) {
 	}
 	s.publish(t.ID)
 	return out, nil
+}
+
+// logLine は、成功した同期の結果を、同期を終えた時刻 at の同期の行として書く(決定 C4d-13)。送信・受信が両方 0 件なら
+// Log が書かない。Log が nil なら何もしない。同期の行は記録にすぎないので、書けなくてもログに残すだけで同期は続ける。
+func (s *Service) logLine(ctx context.Context, id port.StoreID, at time.Time, res port.SyncResult) {
+	if s.Log == nil {
+		return
+	}
+	if err := s.Log.Add(ctx, id, at, res.Sent, res.Received); err != nil {
+		slog.Warn("同期の行を記録できませんでした", "store", id, "error", err)
+	}
 }
 
 // token は、t の remote に使うトークン。アカウントがなければ理由 syncstatus.NoAccount、得られなければその理由。
