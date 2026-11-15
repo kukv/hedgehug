@@ -18,7 +18,7 @@
     current: Resolved | null;
     links: Links;
     // collapsed は、プロジェクトの行を隠しているワークスペースの内部 ID。
-    collapsed: Set<string>;
+    collapsed: { has(workspaceId: string): boolean };
     ontoggle: (workspaceId: string) => void;
   }
 

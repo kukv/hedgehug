@@ -14,6 +14,8 @@ import (
 
 // config は config.yaml の中身。
 type config struct {
+	Login    string        `yaml:"login,omitempty"`
+	Stores   []storeYAML   `yaml:"stores,omitempty"`
 	Accounts []accountYAML `yaml:"accounts"`
 	Hosts    []hostYAML    `yaml:"hosts,omitempty"`
 	Sync     syncYAML      `yaml:"sync,omitempty"`

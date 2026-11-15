@@ -174,11 +174,13 @@ func (r *Replicator) Unsent(_ context.Context, id port.StoreID) (int, error) {
 }
 
 // SyncSave は、1 つのロックの中で、受け取り・修復・保存・送信を行う(port.Replicator)。送信が他の人の更新と
-// 重なったら、保存を捨てて受け取りからやり直す(Sync と同じく最大 maxSendTries 回)。
+// 重なったら、保存を捨てて受け取りからやり直す(Sync と同じく最大 maxSendTries 回)。保存を捨てるあいだに別の
+// 保存が入らないよう、Sync と違い、通信のあいだもロックを持つ(決定 G1-10)。
 func (r *Replicator) SyncSave(ctx context.Context, id port.StoreID, remote port.Remote, op port.Operation, fn func(tx port.Tx) error) (port.SyncResult, error) {
 	if remote.ReceiveOnly {
 		return port.SyncResult{}, fmt.Errorf("%w: cannot save to a receive-only store", port.ErrInvalidOperation)
 	}
+	defer r.hold(id)()
 	ctx = withSkew(ctx, r.OnSkew, r.stores.clock.Now)
 	s, unlock, err := r.begin(id, remote)
 	if err != nil {
@@ -251,11 +253,8 @@ func (s syncRun) result(theirs, now plumbing.Hash, sent bool) (port.SyncResult, 
 		res.Seen = now.String()
 	}
 	if sent {
-		head, err := s.repo.Head()
-		if err != nil {
-			return port.SyncResult{}, err
-		}
-		if res.Sent, err = countSaves(s.repo, head.Hash(), theirs); err != nil {
+		var err error
+		if res.Sent, err = countSaves(s.repo, now, theirs); err != nil {
 			return port.SyncResult{}, err
 		}
 	}

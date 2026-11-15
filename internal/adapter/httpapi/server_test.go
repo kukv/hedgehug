@@ -273,6 +273,29 @@ func TestRestoredHeaderKeepsFlusher(t *testing.T) {
 	}
 }
 
+// メンバーへ足したログイン名は、2xx の応答に Hedgehug-Joined の 1 つのヘッダーで、", " で区切って付く。
+func TestJoinedHeader(t *testing.T) {
+	joining := func(status int) http.HandlerFunc {
+		return func(w http.ResponseWriter, r *http.Request) {
+			port.NoteJoined(r.Context(), "taro")
+			port.NoteJoined(r.Context(), "tarou")
+			w.WriteHeader(status)
+		}
+	}
+	h := serveRestored(t, joining(http.StatusOK))
+	if got := h.Values("Hedgehug-Joined"); !slices.Equal(got, []string{"taro, tarou"}) {
+		t.Errorf("200: %v", got)
+	}
+	h = serveRestored(t, joining(http.StatusConflict))
+	if got := h.Values("Hedgehug-Joined"); len(got) != 0 {
+		t.Errorf("409: %v", got)
+	}
+	h = serveRestored(t, func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) })
+	if got := h.Values("Hedgehug-Joined"); len(got) != 0 {
+		t.Errorf("足していない: %v", got)
+	}
+}
+
 // headerCounter は、WriteHeader が下の ResponseWriter に何回届いたかを数える。
 type headerCounter struct {
 	*httptest.ResponseRecorder

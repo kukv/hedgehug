@@ -77,7 +77,7 @@ export function parseRoute(path: string): Route {
       : { name: "home" };
   }
   if (segs[0] === "settings" && segs.length <= 2) {
-    const t = segs[1] ?? "accounts";
+    const t = segs[1] ?? "general";
     return settingsTabs.includes(t)
       ? { name: "settings", tab: t as SettingsTab }
       : { name: "mytasks" };

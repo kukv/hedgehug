@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { fetcher, onRestored } from "./fetcher";
+import { fetcher, onJoined, onRestored } from "./fetcher";
 
 function respond(status: number, headers: Record<string, string> = {}): void {
   vi.stubGlobal(
@@ -11,6 +11,7 @@ function respond(status: number, headers: Record<string, string> = {}): void {
 afterEach(() => {
   vi.unstubAllGlobals();
   onRestored(null);
+  onJoined(null);
 });
 
 describe("fetcher の Hedgehug-Restored", () => {
@@ -100,5 +101,32 @@ describe("fetcher の Hedgehug-Restored", () => {
   it("受け手がなくても成功する", async () => {
     respond(200, { "Hedgehug-Restored": "HH-1" });
     await expect(fetcher("/x")).resolves.toEqual({});
+  });
+});
+
+describe("fetcher の Hedgehug-Joined", () => {
+  it("成功した応答のヘッダーをログイン名の並びにして受け手に渡す", async () => {
+    const listener = vi.fn();
+    onJoined(listener);
+    respond(200, { "Hedgehug-Joined": "taro, tarou" });
+    await fetcher("/x");
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect(listener).toHaveBeenCalledWith(["taro", "tarou"]);
+  });
+
+  it("ヘッダーがない応答では呼ばない", async () => {
+    const listener = vi.fn();
+    onJoined(listener);
+    respond(200);
+    await fetcher("/x");
+    expect(listener).not.toHaveBeenCalled();
+  });
+
+  it("失敗した応答では呼ばない", async () => {
+    const listener = vi.fn();
+    onJoined(listener);
+    respond(422, { "Hedgehug-Joined": "taro" });
+    await expect(fetcher("/x")).rejects.toThrow();
+    expect(listener).not.toHaveBeenCalled();
   });
 });

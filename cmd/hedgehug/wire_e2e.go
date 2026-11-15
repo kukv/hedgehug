@@ -64,7 +64,9 @@ func wire(ctx context.Context) (httpapi.Deps, port.JudgedSaves, error) {
 	commits := apptest.NewCommitLog(stores, clock)
 	syncSvc := e2eSync(hub, stores, commits, state.SyncLog())
 	go (&syncing.Watch{Versions: stores, Events: hub}).Run(ctx, 500*time.Millisecond)
-	auto := syncing.NewAuto(syncSvc, &apptest.SyncSettings{Value: port.SyncTiming{Auto: false}})
+	// 自動の同期は動かさない(オフ)。ほかの項目は初期値にして、設定の「一般」が選択肢の値を出せるようにする
+	settings := &apptest.SyncSettings{Value: port.SyncTiming{Auto: false, Interval: 5 * time.Minute, AfterWrite: 30 * time.Second, GitHubEvery: 5 * time.Minute}}
+	auto := syncing.NewAuto(syncSvc, settings)
 	return e2eWithLinks(httpapi.Deps{
 		Stores:   commits,
 		Commits:  commits,
@@ -79,35 +81,39 @@ func wire(ctx context.Context) (httpapi.Deps, port.JudgedSaves, error) {
 			{ID: readonlyStore, Name: "readonly", Color: "orange", ReadOnly: true},
 			{ID: teamStore, Name: "team", Color: "teal"},
 		}},
-		Accounts:    accounts,
-		Checks:      apptest.NewChecks(),
-		GitHubReads: state.GitHubReads(),
-		PRScans:     state.PRScans(),
-		AppMissing:  state.AppMissing(),
-		Reports:     state.ReportSelections(),
-		Screens:     state.ScreenStates(),
-		Views:       state.Views(),
-		Secrets:     &apptest.Secrets{Tokens: e2eTokens},
-		GitHub:      e2eGitHub,
-		DeviceFlow:  e2eDeviceFlow,
-		Hosts:       apptest.Hosts{ID: "e2e-client"},
-		StoreGitHub: e2eStoreGitHub(),
-		Clock:       clock,
-		Sync:        syncSvc,
-		Auto:        auto,
-		Events:      hub,
-		ClockSkew:   &syncing.Skew{Records: state.ClockSkews(), Events: hub},
-		Delivery:    syncSvc,
-		SyncTargets: syncSvc.Targets,
-		Recent:      state.Recent(),
+		Accounts:     accounts,
+		Checks:       apptest.NewChecks(),
+		GitHubReads:  state.GitHubReads(),
+		PRScans:      state.PRScans(),
+		AppMissing:   state.AppMissing(),
+		Reports:      state.ReportSelections(),
+		Screens:      state.ScreenStates(),
+		Views:        state.Views(),
+		Secrets:      &apptest.Secrets{Tokens: e2eTokens},
+		GitHub:       e2eGitHub,
+		DeviceFlow:   e2eDeviceFlow,
+		Hosts:        apptest.Hosts{ID: "e2e-client"},
+		StoreGitHub:  e2eStoreGitHub(),
+		Clock:        clock,
+		Sync:         syncSvc,
+		Auto:         auto,
+		SyncSettings: settings,
+		Events:       hub,
+		ClockSkew:    &syncing.Skew{Records: state.ClockSkews(), Events: hub},
+		Delivery:     syncSvc,
+		SyncTargets:  syncSvc.Targets,
+		Recent:       state.Recent(),
 	}), state.JudgedSaves(), nil
 }
 
-// e2eStoreGitHub は、GitHub に使う Store(e2e は remote あり、readonly は閲覧のみ)。
+// e2eStoreGitHub は、Store の GitHub に関わる値の偽物。マシンのログイン名は taro。
+// e2e-local は、アカウントなしの非表示の Store で、ログイン名を変えたときの確認ダイアログの行になる(G1)。非表示なので
+// GitHub の自動の読み取りの対象にならず、アカウントに割り当てていないので、アカウントの削除・編集の確認の行は変わらない。
 func e2eStoreGitHub() *apptest.StoreGitHub {
 	return &apptest.StoreGitHub{Login: "taro", Stores: []port.StoreGitHubInfo{
 		{ID: e2eStore, Name: "e2e", Remote: true, Account: e2eAccount},
 		{ID: readonlyStore, Name: "readonly", Account: e2eAccount, ReadOnly: true},
+		{ID: "e2e-local", Name: "local", Hidden: true},
 	}}
 }
 

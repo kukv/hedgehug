@@ -1198,6 +1198,14 @@ export interface LocatedWorkspace {
   workspaceId?: string;
 }
 
+export interface LoginPreview {
+  lines: string[];
+}
+
+export interface LoginSetting {
+  login: string;
+}
+
 export interface Me {
   login: string;
 }
@@ -2529,6 +2537,17 @@ export interface SyncStoreResult {
   mirrorWarning: string;
   /** synced はトースト、skipped は案内、failed はエラーのトースト */
   result: SyncStoreResultResult;
+}
+
+export interface SyncTimingSetting {
+  /** 書き込みのあと同期するまで(秒)。10・30・60 のどれか。ほかは 422 */
+  afterWriteSeconds: number;
+  /** 裏で自動的に同期する */
+  auto: boolean;
+  /** GitHub を読む間隔(分)。5・15・30・60 のどれか。ほかは 422 */
+  githubMinutes: number;
+  /** 間隔(分)。1・5・15・30・60 のどれか。ほかは 422 */
+  intervalMinutes: number;
 }
 
 export interface TransferEpic {
@@ -4069,6 +4088,106 @@ return fetcher<SearchResult>(getSearchUrl(),
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
     body: JSON.stringify(searchQuery)
+  }
+);}
+
+
+
+export const getGetLoginUrl = () => {
+
+
+
+
+  return `/api/settings/login`
+}
+
+/**
+ * @summary マシンの設定「ログイン名」を返す
+ */
+export const getLogin = async ( options?: Parameters<typeof fetcher>[1]): Promise<LoginSetting> => {
+
+  return fetcher<LoginSetting>(getGetLoginUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export const getSetLoginUrl = () => {
+
+
+
+
+  return `/api/settings/login`
+}
+
+/**
+ * @summary マシンの設定「ログイン名」を保存する
+ */
+export const setLogin = async (loginSetting: LoginSetting, options?: Parameters<typeof fetcher>[1]): Promise<void> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return fetcher<void>(getSetLoginUrl(),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(loginSetting)
+  }
+);}
+
+
+
+export const getPreviewLoginUrl = () => {
+
+
+
+
+  return `/api/settings/login/preview`
+}
+
+/**
+ * @summary ログイン名を変えたときの確認の本文を返す
+ */
+export const previewLogin = async (loginSetting: LoginSetting, options?: Parameters<typeof fetcher>[1]): Promise<LoginPreview> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return fetcher<LoginPreview>(getPreviewLoginUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(loginSetting)
   }
 );}
 
@@ -8994,6 +9113,68 @@ return fetcher<void>(getSyncNetworkUrl(),
     method: 'PUT',
     headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
     body: JSON.stringify(syncNetworkBody)
+  }
+);}
+
+
+
+export const getGetSyncTimingUrl = () => {
+
+
+
+
+  return `/api/sync/timing`
+}
+
+/**
+ * @summary 同期のタイミングを返す
+ */
+export const getSyncTiming = async ( options?: Parameters<typeof fetcher>[1]): Promise<SyncTimingSetting> => {
+
+  return fetcher<SyncTimingSetting>(getGetSyncTimingUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export const getSetSyncTimingUrl = () => {
+
+
+
+
+  return `/api/sync/timing`
+}
+
+/**
+ * @summary 同期のタイミングを保存する
+ */
+export const setSyncTiming = async (syncTimingSetting: SyncTimingSetting, options?: Parameters<typeof fetcher>[1]): Promise<void> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return fetcher<void>(getSetSyncTimingUrl(),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(syncTimingSetting)
   }
 );}
 

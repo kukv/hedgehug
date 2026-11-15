@@ -1,7 +1,8 @@
-import { createPalettePort, createViewsPort, onRestored } from "@hedgehug/api";
+import { createPalettePort, createViewsPort, onJoined, onRestored } from "@hedgehug/api";
 import {
   createToasts,
   createViews,
+  joinedToast,
   restoredCommentToast,
   restoredNameToast,
   restoredToast,
@@ -30,4 +31,9 @@ onRestored((restored) => {
     else if (kind === "comment") toasts.show(restoredCommentToast());
     else toasts.show(restoredToast(text));
   }
+});
+
+// 「あなた」をメンバーに足した保存では、足したログイン名ごとにトーストを出す。
+onJoined((logins) => {
+  for (const login of logins) toasts.show(joinedToast(login));
 });

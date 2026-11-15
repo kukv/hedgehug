@@ -60,3 +60,16 @@ func TestEditLines(t *testing.T) {
 		t.Errorf("blank login: EditLines = %q", got)
 	}
 }
+
+func TestLoginLines(t *testing.T) {
+	uses := []StoreUse{{Name: "team-a"}}
+	if got := LoginLines("taro", "tarou", uses); !slices.Equal(got, []string{"team-a での あなた が @taro から tarou に変わります。"}) {
+		t.Errorf("LoginLines = %q", got)
+	}
+	if got := LoginLines("taro", "Taro", uses); len(got) != 0 {
+		t.Errorf("case only: LoginLines = %q", got)
+	}
+	if got := LoginLines("taro", "", uses); len(got) != 0 {
+		t.Errorf("empty to: LoginLines = %q", got)
+	}
+}

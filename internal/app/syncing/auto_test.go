@@ -9,6 +9,7 @@ import (
 	"github.com/kukv/hedgehug/internal/app/apptest"
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/app/syncing"
+	"github.com/kukv/hedgehug/internal/domain/syncstatus"
 )
 
 func newAuto(t *testing.T) (*fixture, *syncing.Auto, *apptest.SyncSettings) {
@@ -258,5 +259,116 @@ func TestAutoWaiting(t *testing.T) {
 	a.Network("t1", false)
 	if !a.Waiting() {
 		t.Error("not waiting while t1 is offline")
+	}
+}
+
+// recordFails は、同期の結果の記録(Succeeded・Failed)だけが失敗する SyncState。
+type recordFails struct{ port.SyncState }
+
+func (recordFails) Succeeded(context.Context, port.StoreID, time.Time, string, string) error {
+	return errors.New("disk full")
+}
+
+func (recordFails) Failed(context.Context, port.StoreID, time.Time, syncstatus.Reason) error {
+	return errors.New("disk full")
+}
+
+// 決定 G1-11: 記録に失敗しても、試みた時刻をメモリに持ち、毎秒は同期しない。間隔が過ぎたらもう一度試す。
+func TestAutoRemembersAttemptWhenRecordFails(t *testing.T) {
+	f, a, _ := newAuto(t)
+	f.svc.State = recordFails{f.state}
+	if err := a.Step(context.Background()); err == nil {
+		t.Fatal("record failure not reported")
+	}
+	if n := f.syncs()["S1"]; n != 1 {
+		t.Fatalf("first step: %d", n)
+	}
+	f.clock.Advance(time.Second)
+	_ = a.Step(context.Background())
+	if n := f.syncs()["S1"]; n != 1 {
+		t.Fatalf("synced again a second later: %d", n)
+	}
+	f.clock.Advance(5 * time.Minute)
+	_ = a.Step(context.Background())
+	if n := f.syncs()["S1"]; n != 2 {
+		t.Errorf("not synced at the interval: %d", n)
+	}
+}
+
+// 決定 G1-11: 書き込み後の契機で同期して記録に失敗しても、その書き込みで毎秒同期しない(試みたより前の書き込みは
+// 契機にしない)。試みたあとの書き込みは、書き込み後の契機で同期する。
+func TestAutoWriteBeforeAFailedRecordDoesNotRepeat(t *testing.T) {
+	f, a, _ := newAuto(t)
+	f.svc.State = recordFails{f.state}
+	_ = a.Step(context.Background())
+	f.clock.Advance(time.Minute)
+	a.Wrote("S1")
+	f.clock.Advance(30 * time.Second)
+	_ = a.Step(context.Background())
+	if n := f.syncs()["S1"]; n != 2 {
+		t.Fatalf("not synced after the write: %d", n)
+	}
+	for range 3 {
+		f.clock.Advance(time.Second)
+		_ = a.Step(context.Background())
+	}
+	if n := f.syncs()["S1"]; n != 2 {
+		t.Fatalf("synced again every second: %d", n)
+	}
+	a.Wrote("S1")
+	f.clock.Advance(30 * time.Second)
+	_ = a.Step(context.Background())
+	if n := f.syncs()["S1"]; n != 3 {
+		t.Errorf("write after the attempt not synced: %d", n)
+	}
+}
+
+// 戻ってこないタブは、1 日を過ぎたら覚えておかない(つながっても復帰の契機にならない)。
+func TestAutoForgetsLapsedTabAfterADay(t *testing.T) {
+	f, a, settings := newAuto(t)
+	step(t, a)
+	settings.Value.Interval = 1000 * time.Hour
+	a.Network("tab-1", false)
+	f.clock.Advance(2*time.Minute + time.Second)
+	a.Waiting() // 期限切れで lapsed へ移る
+	f.clock.Advance(25 * time.Hour)
+	a.Waiting() // 1 日を過ぎた項目を消す
+	a.Network("tab-1", true)
+	step(t, a)
+	if n := f.syncs(); n["S1"] != 1 {
+		t.Errorf("forgotten tab triggered a sync: %v", n)
+	}
+}
+
+// Store が対象から消えたら、試みた時刻のメモリも捨てる(同じ ID が戻ったら、記録がなければ待たずに試す)。
+func TestAutoDropsAttemptOfRemovedStore(t *testing.T) {
+	f, a, _ := newAuto(t)
+	f.svc.State = recordFails{f.state}
+	all := f.targets.Targets
+	_ = a.Step(context.Background())
+	f.targets.Targets = all[1:2] // S1 を外す
+	f.clock.Advance(time.Second)
+	_ = a.Step(context.Background())
+	f.targets.Targets = all
+	f.clock.Advance(time.Second)
+	_ = a.Step(context.Background())
+	if n := f.syncs()["S1"]; n != 2 {
+		t.Errorf("S1 syncs = %d, want 2", n)
+	}
+}
+
+// 決定 G1-12: オフラインの知らせが期限で消えたあとに、そのタブからオンラインの知らせが来ても、復帰の契機にする。
+func TestAutoOnlineAfterOfflineLapsed(t *testing.T) {
+	f, a, _ := newAuto(t)
+	step(t, a)
+	a.Network("tab-1", false)
+	f.clock.Advance(2*time.Minute + time.Second)
+	if a.Waiting() {
+		t.Fatal("expired offline still waiting")
+	}
+	a.Network("tab-1", true)
+	step(t, a)
+	if n := f.syncs(); n["S1"] != 2 || n["S4"] != 2 {
+		t.Errorf("not synced on the lapsed tab's online: %v", n)
 	}
 }

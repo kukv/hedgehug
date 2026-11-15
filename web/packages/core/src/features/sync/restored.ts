@@ -12,3 +12,8 @@ export function restoredNameToast(name: string): string {
 export function restoredCommentToast(): string {
   return "コメントは別の画面で削除されていましたが、変更を保存したため、削除を取り消しました";
 }
+
+// joinedToast は、書き込みと一緒に「あなた」をメンバーに足したときのトーストの文。
+export function joinedToast(login: string): string {
+  return `${login} をメンバーに追加しました`;
+}

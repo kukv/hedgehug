@@ -17,6 +17,9 @@ const holdFor = 30 * time.Second
 // タイマーを 1 分に 1 回ほどに間引くので、待つ条件より長くする。
 const offlineFor = 2 * time.Minute
 
+// lapsedKeep は、期限の切れたオフラインのタブを覚えておく時間。
+const lapsedKeep = 24 * time.Hour
+
 // Auto は、自動の同期(06「自動で同期する」)。契機は、間隔、アプリを開いたとき(作ったとき)、オンライン復帰
 // (Network)、書き込み後(Wrote)。見えているタブが待つ条件にあるあいだ(Hold)と、オフラインのタブがある
 // あいだ(Network)は始めない。結果は捨てる(自動の同期はトーストもアクティビティも出さない。決定 C2-24)。
@@ -29,6 +32,8 @@ type Auto struct {
 	wrote   map[port.StoreID]time.Time // Store ごとの最後の保存の時刻
 	holds   map[string]time.Time       // 待つ条件にあるタブと、知らせの期限
 	offline map[string]time.Time       // オフラインのタブと、知らせの期限
+	lapsed  map[string]time.Time       // オフラインの知らせが期限で消えたタブと、消えた時刻(つながったら復帰の契機にする。決定 G1-12)
+	tried   map[port.StoreID]time.Time // Store ごとの最後に試みた時刻(記録に失敗しても毎秒試みないため。決定 G1-11)
 }
 
 // NewAuto は、「アプリを開いたとき」の契機を持った Auto を作る。
@@ -36,6 +41,7 @@ func NewAuto(svc *Service, settings port.SyncSettings) *Auto {
 	return &Auto{
 		Service: svc, Settings: settings, all: true,
 		wrote: map[port.StoreID]time.Time{}, holds: map[string]time.Time{}, offline: map[string]time.Time{},
+		lapsed: map[string]time.Time{}, tried: map[port.StoreID]time.Time{},
 	}
 }
 
@@ -49,8 +55,11 @@ func (a *Auto) Network(tab string, online bool) {
 		a.offline[tab] = now.Add(offlineFor)
 		return
 	}
-	if _, was := a.offline[tab]; was {
+	_, was := a.offline[tab]
+	_, gone := a.lapsed[tab]
+	if was || gone {
 		delete(a.offline, tab)
+		delete(a.lapsed, tab)
 		a.all = true
 	}
 }
@@ -81,7 +90,7 @@ func (a *Auto) Waiting() bool {
 	now := a.Service.Clock.Now()
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	return waiting(a.holds, now) || waiting(a.offline, now) // take と同じ式(同じ知らせを消す)
+	return waiting(a.holds, now, nil) || waiting(a.offline, now, a.lapsed) // take と同じ式(同じ知らせを消す)
 }
 
 // Run は、ctx が終わるまで、1 秒ごとに Step を呼ぶ。Step の失敗は、ログに出して、次の Step でやり直す。
@@ -120,6 +129,11 @@ func (a *Auto) Step(ctx context.Context) error {
 		}
 		return err
 	}
+	a.mu.Lock()
+	for _, t := range picked {
+		a.tried[t.ID] = now
+	}
+	a.mu.Unlock()
 	var errs []error
 	for _, t := range picked {
 		if _, err := a.Service.once(ctx, t); err != nil {
@@ -141,7 +155,7 @@ func (a *Auto) take(now time.Time, auto bool) (all bool, wrote map[port.StoreID]
 		clear(a.wrote)
 		return false, nil, false
 	}
-	if waiting(a.holds, now) || waiting(a.offline, now) {
+	if waiting(a.holds, now, nil) || waiting(a.offline, now, a.lapsed) {
 		return false, nil, true
 	}
 	all, a.all = a.all, false
@@ -152,6 +166,7 @@ func (a *Auto) take(now time.Time, auto bool) (all bool, wrote map[port.StoreID]
 	return all, wrote, false
 }
 
+// pick は、いま同期する Store を選ぶ。保存の時刻 wrote は、最後に試みた時刻より後のものだけを書き込み後の契機にする。
 func (a *Auto) pick(ctx context.Context, now time.Time, all bool, wrote map[port.StoreID]time.Time, timing port.SyncTiming) ([]port.SyncTarget, error) {
 	targets, err := a.Service.Targets.List(ctx)
 	if err != nil {
@@ -165,17 +180,42 @@ func (a *Auto) pick(ctx context.Context, now time.Time, all bool, wrote map[port
 	for _, r := range records {
 		byStore[r.Store] = r
 	}
+	a.mergeTried(targets, byStore)
 	var picked []port.SyncTarget
 	for _, t := range targets {
-		if eligible(t) && (all || due(now, byStore[t.ID], wrote[t.ID], timing)) {
+		rec, w := byStore[t.ID], wrote[t.ID]
+		if !w.After(rec.LastAttempt) { // 最後に試みたより前の保存は、その試みで送ったか、記録に失敗して残っただけ(決定 G1-11)
+			w = time.Time{}
+		}
+		if eligible(t) && (all || due(now, rec, w, timing)) {
 			picked = append(picked, t)
 		}
 	}
 	return picked, nil
 }
 
-// waiting は、期限の切れていない知らせが 1 つでもあるか。切れた知らせは消す。
-func waiting(m map[string]time.Time, now time.Time) bool {
+// mergeTried は、記録とメモリの最後に試みた時刻の新しい方を byStore に入れる。targets にない Store の分は捨てる。
+func (a *Auto) mergeTried(targets []port.SyncTarget, byStore map[port.StoreID]port.SyncRecord) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	inTargets := make(map[port.StoreID]bool, len(targets))
+	for _, t := range targets {
+		inTargets[t.ID] = true
+	}
+	for id, at := range a.tried {
+		if !inTargets[id] {
+			delete(a.tried, id)
+			continue
+		}
+		if r := byStore[id]; at.After(r.LastAttempt) {
+			r.Store, r.LastAttempt = id, at
+			byStore[id] = r
+		}
+	}
+}
+
+// waiting は、期限の切れていない知らせが 1 つでもあるか。切れた知らせは消し、lapsed があればそこへ移す。
+func waiting(m map[string]time.Time, now time.Time, lapsed map[string]time.Time) bool {
 	held := false
 	for tab, until := range m {
 		if now.Before(until) {
@@ -183,6 +223,14 @@ func waiting(m map[string]time.Time, now time.Time) bool {
 			continue
 		}
 		delete(m, tab)
+		if lapsed != nil {
+			lapsed[tab] = now
+		}
+	}
+	for tab, at := range lapsed { // 戻ってこないタブを覚え続けない
+		if now.Sub(at) > lapsedKeep {
+			delete(lapsed, tab)
+		}
 	}
 	return held
 }

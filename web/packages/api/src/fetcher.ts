@@ -69,6 +69,21 @@ function notifyRestored(res: Response): void {
   if (restored.length > 0) restoredListener?.(restored);
 }
 
+let joinedListener: ((logins: string[]) => void) | null = null;
+
+// onJoined は、「あなた」をメンバーに足した保存の応答(Hedgehug-Joined ヘッダー)を受ける受け手を 1 つ置く。
+export function onJoined(listener: ((logins: string[]) => void) | null): void {
+  joinedListener = listener;
+}
+
+function notifyJoined(res: Response): void {
+  const logins = (res.headers.get("Hedgehug-Joined") ?? "")
+    .split(",")
+    .map((v) => v.trim())
+    .filter((v) => v !== "");
+  if (logins.length > 0) joinedListener?.(logins);
+}
+
 export async function fetcher<T>(url: string, init?: RequestInit): Promise<T> {
   const headers = new Headers(init?.headers);
   headers.set("Authorization", authHeader());
@@ -78,5 +93,6 @@ export async function fetcher<T>(url: string, init?: RequestInit): Promise<T> {
     throw new ApiError(res.status, detailOf(text) ?? `${res.status} ${res.statusText}`);
   }
   notifyRestored(res);
+  notifyJoined(res);
   return (text === "" ? undefined : JSON.parse(text)) as T;
 }

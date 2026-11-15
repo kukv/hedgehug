@@ -24,4 +24,6 @@ type StoreGitHub interface {
 	Unassign(ctx context.Context, id account.ID) error
 	// MachineLogin は、このマシンの設定「ログイン名」(01「「あなた」の決まり方」)。
 	MachineLogin(ctx context.Context) (string, error)
+	// SetMachineLogin は、マシンの設定「ログイン名」を書く。検査はしない(呼ぶ側が member.ValidLogin で確かめる)。
+	SetMachineLogin(ctx context.Context, login string) error
 }

@@ -6,6 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/go-git/go-git/v5/plumbing"
+
 	"github.com/kukv/hedgehug/internal/app/apptest"
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/domain/change"
@@ -203,4 +205,62 @@ func TestSyncGivesUpAfterThreeOverlaps(t *testing.T) {
 	a.sync(t, remote)
 	b.sync(t, remote)
 	sameFiles(t, a, b)
+}
+
+// TestSyncDoesNotHoldLockWhileFetching は、受け取りと送りの通信のあいだ、Store のロックを持たないことを確かめる
+// (決定 G1-10)。通信の途中で画面から保存しても、保存は同期の終わりを待たない。送ったあとの保存は次の同期で送る。
+func TestSyncDoesNotHoldLockWhileFetching(t *testing.T) {
+	remote := newRemote(t)
+	a := firstMachine(t, remote)
+	b := cloneMachine(t, remote, "B", t0.Add(time.Hour))
+	b.write(t, "b", set("rank", "a", "z"))
+	b.sync(t, remote)
+	// 保存は別の goroutine で行い、終わったことをチャネルで受ける。ロックを持ったままなら、ここで止まる。
+	writeNow := func(summary string, fn func(tx port.Tx) error) {
+		done := make(chan error, 1)
+		go func() {
+			done <- a.stores.Write(t.Context(), a.id, port.Operation{Actor: change.User("taro"), Summary: summary}, fn)
+		}()
+		if err := <-done; err != nil {
+			t.Fatal(err)
+		}
+	}
+	j := withJudge(a)
+	fetched, sent := false, false
+	var late plumbing.Hash // 送るあいだの保存
+	a.rep.duringFetch = func() {
+		if !fetched {
+			fetched = true
+			writeNow("fetch", set("title", "", "F"))
+		}
+	}
+	a.rep.duringSend = func() {
+		if !sent {
+			sent = true
+			writeNow("send", set("title", "F", "S"))
+			late = headOf(t, a)
+		}
+	}
+	if res := a.sync(t, remote); res != (port.SyncResult{Sent: 1, Received: 1}) || !fetched || !sent {
+		t.Errorf("a sync = %+v (fetched %v, sent %v), want the save during fetch sent and b's received", res, fetched, sent)
+	}
+	if n, err := a.rep.Unsent(t.Context(), a.id); err != nil || n != 1 {
+		t.Errorf("unsent = %d, %v, want the save during send left for the next sync", n, err)
+	}
+	// 送っていない保存は判定しない(判定は送った先端までで、いまの先端ではない)。
+	if j.known(t, a, late) != port.NotJudged {
+		t.Error("the save during send was judged before it was sent")
+	}
+	a.rep.duringFetch, a.rep.duringSend = nil, nil
+	if res := a.sync(t, remote); res != (port.SyncResult{Sent: 1}) {
+		t.Errorf("next sync = %+v, want the save during send sent", res)
+	}
+	if j.known(t, a, late) == port.NotJudged {
+		t.Error("the save during send was not judged after it was sent")
+	}
+	b.sync(t, remote)
+	sameFiles(t, a, b)
+	if got := title(t, b); got != "S" {
+		t.Errorf("b title = %q, want S", got)
+	}
 }
