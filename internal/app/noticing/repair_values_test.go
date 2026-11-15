@@ -290,6 +290,23 @@ func TestValueRefsRule(t *testing.T) {
 	}
 }
 
+// ルールが指すステータスが 2 つとも削除されていたら、値と鍵の op は automation.Statuses の順で最初のもの(きっかけの
+// 「Review」)。先に削除した「Done」ではない。
+func TestValueRefsRuleFirstStatus(t *testing.T) {
+	f := valueRefsSetup(t)
+	rule := notifyOnReview()
+	rule.Action, rule.Value = automation.ActionStatus, string(apptest.SampleStatusDone)
+	wsRules(f, "hanako", automation.Drafts(automation.Rule{}, rule)...)
+	taroDeletes(f, statusList.Ref(apptest.SampleStatusDone))
+	op := taroDeletes(f, pendingRef)
+	f.judge(danglingSaves(f)...)
+	n := f.wantOne()
+	if want := "自動化「レビューで通知」は、太郎 が「Review」を削除したため、無効にしました"; n.Text != want ||
+		n.Source != "repair:valueref:rule:"+string(notifyRule)+":"+string(op) {
+		t.Errorf("notice = %+v, want text %q", n, want)
+	}
+}
+
 // 外したもの・既定・ルールをあなたが入れていなければ作らない。
 func TestValueRefsRecipient(t *testing.T) {
 	rule := notifyOnReview()
