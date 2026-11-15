@@ -48,9 +48,9 @@
   let list = $state<HTMLElement>();
   // ほかの画面にいたあいだの変更を拾うため、開いたときは取っておいたものを捨てる。
   searchTreeData.reset();
-  // round は、組み直した回数。古い読み込みのあとでは組み直さない。building は、いちばん新しい組み直し。
-  // closed は、閉じたか。閉じたあとは組み直さない(読んでいる途中のものも refresh の続きも、view に古い木を書き戻さない)。
-  let [round, closed] = [0, false];
+  // round は組み直した回数、building は最新の組み直し、closed は閉じたか(古い読み込みのあと・閉じたあとは組み直さない)。
+  let round = 0;
+  let closed = false;
   let building: Promise<void> = Promise.resolve();
   // rebuild は、絞り込み(応答の元。E3a-3)で木に入れるプロジェクトを読み、読めたら組み直す。最後の検索が失敗して
   // 前の結果を残しているあいだ(resultQuery が null)は、前の木のままにする。

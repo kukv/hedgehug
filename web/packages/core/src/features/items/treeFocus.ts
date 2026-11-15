@@ -54,9 +54,9 @@ function settle<T extends TreeRowLike>(
   return (after ?? earlier)?.id ?? null;
 }
 
-// collapsed は、初めに閉じている行の ID。
+// initial は、初めに閉じている行の ID。
 export function createTreeFocus<T extends TreeRowLike = Item>(
-  collapsed: Iterable<string> = [],
+  initial: Iterable<string> = [],
 ): TreeFocus<T> {
   let tree: readonly TreeNodeOf<T>[] = [];
   // parentOf は、ツリーの全アイテムの親(閉じている行の下も)。hasKids は、子のある行。
@@ -64,7 +64,7 @@ export function createTreeFocus<T extends TreeRowLike = Item>(
   let hasKids = new Set<string>();
   const state = writable<TreeFocusState<T>>({
     rows: [],
-    collapsed: new Set(collapsed),
+    collapsed: new Set(initial),
     currentId: null,
   });
 
