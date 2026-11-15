@@ -36,6 +36,23 @@ var (
 	iss12 = itemlink.Ref{Kind: itemlink.Issue, Repo: "org/api", Number: 12}
 )
 
+// SameKey は Same と同じ比べ方(リポジトリの大文字小文字と種別は問わない)の鍵になる。
+func TestSameKey(t *testing.T) {
+	a := itemlink.Ref{Kind: itemlink.Issue, Repo: "Kukv/Web", Number: 5}
+	b := itemlink.Ref{Kind: itemlink.PR, Repo: "kukv/web", Number: 5}
+	if a.SameKey() != b.SameKey() || !a.Same(b) {
+		t.Errorf("大文字小文字・種別だけが違う: %q vs %q", a.SameKey(), b.SameKey())
+	}
+	for _, o := range []itemlink.Ref{
+		{Kind: itemlink.Issue, Repo: "kukv/web", Number: 6},
+		{Kind: itemlink.Issue, Repo: "kukv/api", Number: 5},
+	} {
+		if a.SameKey() == o.SameKey() || a.Same(o) {
+			t.Errorf("番号かリポジトリが違う: %q vs %q", a.SameKey(), o.SameKey())
+		}
+	}
+}
+
 func TestRefNames(t *testing.T) {
 	if pr41.Key() != "pr:org/web#41" || pr41.Display() != "org/web#41" {
 		t.Errorf("Key = %q, Display = %q", pr41.Key(), pr41.Display())

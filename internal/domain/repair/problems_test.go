@@ -123,11 +123,12 @@ func TestIssueTwice(t *testing.T) {
 		"a": {"o/r#1"}, "b": {"o/r#1"}, // 1 つの Issue に 2 件
 		"c": {"o/r#2", "o/r#3"},        // 1 件に 2 つの Issue
 		"d": {"o/r#4"}, "g": {"o/r#4"}, // 削除済みとの共有は数えない
-		"h": {"o/r#5", "o/r#5"}, // 同じ鍵の重複は 1 つ
+		"h": {"o/r#5", "o/r#5"}, // 同じ Issue への 2 本(大文字小文字だけが違うもの)も、1 件では 2 本と数える
 	}
 	got := repair.ItemProblems(repair.StoreState{Items: items, Issues: issues})
 	wantProblems(t, got, map[item.ID][]repair.Problem{
 		"a": {repair.ProblemIssueTwice}, "b": {repair.ProblemIssueTwice}, "c": {repair.ProblemIssueTwice},
+		"h": {repair.ProblemIssueTwice},
 	})
 }
 

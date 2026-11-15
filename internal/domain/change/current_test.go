@@ -89,3 +89,35 @@ func TestFirstIsTheRowThatDoesNotFollowAnother(t *testing.T) {
 		t.Error("First of a comment with no rows")
 	}
 }
+
+func TestListRow(t *testing.T) {
+	a := map[string]string{"repo": "a", "kind": "x"}
+	log := []change.Record{
+		create(map[string]any{"members": []string{"x"}}),
+		rec("a1", at(1), "taro", change.NewAdd("links", a), "c"),
+		rec("r1", at(2), "taro", change.NewRemove("links", a), "a1"),
+		rec("a2", at(3), "taro", change.NewAdd("links", a), "r1"),
+		rec("b1", at(4), "taro", change.NewAdd("links", map[string]string{"repo": "b"}), "c"),
+	}
+	if got, ok := change.ListRow(log, "links", []byte(`{"kind":"x","repo":"a"}`)); !ok || got.ID != "a2" {
+		t.Errorf("ListRow(a) = %v, %v; want a2", got.ID, ok)
+	}
+	if got, ok := change.ListRow(log, "links", []byte(`{ "kind": "x", "repo": "a" }`)); !ok || got.ID != "a2" {
+		t.Errorf("ListRow(whitespace-different a) = %v, %v; want a2", got.ID, ok)
+	}
+	if _, ok := change.ListRow(log, "links", []byte(`{"repo":"a","kind":"x"}`)); ok {
+		t.Error("a key-order-different value is a different value (same as Resolve) and must give false")
+	}
+	if got, ok := change.ListRow(log[:3], "links", []byte(`{"kind":"x","repo":"a"}`)); !ok || got.ID != "r1" {
+		t.Errorf("ListRow(removed a) = %v, %v; want the remove r1", got.ID, ok)
+	}
+	if _, ok := change.ListRow(log, "links", []byte(`{"repo":"zzz"}`)); ok {
+		t.Error("a value with no rows must give false")
+	}
+	if got, ok := change.ListRow(log, "members", []byte(`"x"`)); !ok || got.ID != "c" {
+		t.Errorf("ListRow(initial x) = %v, %v; want the create c", got.ID, ok)
+	}
+	if _, ok := change.ListRow(log, "members", []byte(`"y"`)); ok {
+		t.Error("a value not in the create must give false")
+	}
+}

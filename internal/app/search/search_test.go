@@ -242,3 +242,22 @@ func TestSearchGroupAndHasKey(t *testing.T) {
 		t.Errorf("キーなし: %+v", res)
 	}
 }
+
+func TestSearchHasSort(t *testing.T) {
+	f := newFixture(t)
+	must(t, apptest.Sample(t.Context(), f.stores, store1))
+	for _, c := range []struct {
+		text string
+		want bool
+	}{
+		{"sort:id", true},
+		{"kind:bug", false},
+		{"-sort:id", true},
+		{"sort:id kind:nosuchvalue zzz:1", true},
+		{"zzz:1", false},
+	} {
+		if got := searchOf(t, f, c.text).HasSort; got != c.want {
+			t.Errorf("%q: HasSort = %v, want %v", c.text, got, c.want)
+		}
+	}
+}

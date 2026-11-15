@@ -1,10 +1,13 @@
 import type { Kind } from "../model/item";
 import type { NewProject, Project, ProjectStatus } from "../model/project";
+import type { Direction } from "./workspaces";
 
 // プロジェクトの口。実装は api パッケージにある。
 export interface ProjectsPort {
   get(storeId: string, projectId: string): Promise<Project>;
   create(storeId: string, workspaceId: string, input: NewProject): Promise<Project>;
+  // move は、ワークスペースの中でプロジェクトを 1 つ上・下へ動かす。端なら何もしない。
+  move(storeId: string, projectId: string, direction: Direction): Promise<void>;
   // 概要の編集(02「概要の編集」)。1 項目を変えるごとに 1 回の保存。検査と断りはサーバーが行う。
   rename(storeId: string, projectId: string, title: string): Promise<Project>;
   setStatus(storeId: string, projectId: string, status: ProjectStatus): Promise<Project>;

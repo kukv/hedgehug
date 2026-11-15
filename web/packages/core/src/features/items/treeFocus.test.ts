@@ -21,6 +21,44 @@ function made(items = all) {
   return f;
 }
 
+describe("createTreeFocus with another row type", () => {
+  interface Row {
+    id: string;
+    parentId: string | null;
+    label: string;
+  }
+  const row = (id: string, parentId: string | null): Row => ({ id, parentId, label: id });
+  const tree = [
+    {
+      item: row("a", null),
+      children: [{ item: row("b", "a"), children: [] }],
+    },
+    { item: row("c", null), children: [] },
+  ];
+
+  it("works with any row type", () => {
+    const f = createTreeFocus<Row>();
+    f.setTree(tree);
+    f.enter();
+    f.move("down");
+    expect(get(f.state).currentId).toBe("b");
+    f.move("left");
+    expect(get(f.state).currentId).toBe("a");
+    f.move("left");
+    expect(get(f.state).rows.map((r) => r.label)).toEqual(["a", "c"]);
+    f.move("right");
+    expect(get(f.state).rows.map((r) => r.label)).toEqual(["a", "b", "c"]);
+    f.move("right");
+    expect(get(f.state).currentId).toBe("b");
+  });
+
+  it("starts with given collapsed", () => {
+    const f = createTreeFocus<Row>(["a"]);
+    f.setTree(tree);
+    expect(get(f.state).rows.map((r) => r.id)).toEqual(["a", "c"]);
+  });
+});
+
 describe("createTreeFocus", () => {
   it("has no current row until the tree is entered, then starts at the first row", () => {
     const f = made();

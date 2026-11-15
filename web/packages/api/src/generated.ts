@@ -1215,6 +1215,18 @@ export interface MovePreview {
   statuses: MovePreviewStatus[];
 }
 
+export type MoveProjectDirection = typeof MoveProjectDirection[keyof typeof MoveProjectDirection];
+
+
+export const MoveProjectDirection = {
+  up: 'up',
+  down: 'down',
+} as const;
+
+export interface MoveProject {
+  direction: MoveProjectDirection;
+}
+
 export type MoveWorkspaceItemDirection = typeof MoveWorkspaceItemDirection[keyof typeof MoveWorkspaceItemDirection];
 
 
@@ -2121,6 +2133,8 @@ export interface SearchResult {
   groups: SearchGroup[];
   /** キーのある語が 1 つ以上あるか */
   hasKey: boolean;
+  /** sort: の語があるか(サーバーが決める。ツリー・ガントの注記に使う) */
+  hasSort: boolean;
   rows: SearchRow[];
 }
 
@@ -5952,6 +5966,47 @@ export const listProjectLinks = async (store: string,
     method: 'GET'
 
 
+  }
+);}
+
+
+
+export const getMoveProjectUrl = (store: string,
+    project: string,) => {
+
+
+
+
+  return `/api/stores/${encodeURIComponent(String(store))}/projects/${encodeURIComponent(String(project))}/move`
+}
+
+/**
+ * @summary プロジェクトを上へ・下へ移動
+ */
+export const moveProject = async (store: string,
+    project: string,
+    moveProjectBody: MoveProject, options?: Parameters<typeof fetcher>[1]): Promise<void> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return fetcher<void>(getMoveProjectUrl(store,project),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(moveProjectBody)
   }
 );}
 

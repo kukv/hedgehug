@@ -9,14 +9,19 @@ export { createItemKind, type ItemKind, kindOptions } from "./features/items/kin
 export { createItemMenuHost, type ItemMenuHost, menuAt } from "./features/items/menuHost";
 export { createItemMove } from "./features/items/move";
 export { createItemRefresh } from "./features/items/refresh";
-export { createTreeFocus, type TreeFocus } from "./features/items/treeFocus";
+export { createTreeFocus, type TreeFocus, type TreeFocusState } from "./features/items/treeFocus";
 export {
   isQueuedAction,
   leftToTarget,
+  projectKeyAction,
   type TreeKeyAction,
   treeKeyAction,
 } from "./features/items/treeKeys";
-export { createTreeWrites } from "./features/items/treeWrites";
+export {
+  createTreeWrites,
+  type TreeScreen,
+  type TreeWritesDeps,
+} from "./features/items/treeWrites";
 export { createProjectDelete, leaveDeletedProject } from "./features/projects/delete";
 export { projectTabOf } from "./features/router/route";
 export { createAfterMoved } from "./features/transfers/afterMoved";

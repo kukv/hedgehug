@@ -48,6 +48,20 @@ func TestEditEndpoints(t *testing.T) {
 	check(t, "remove repo", api.Post(one+"/repos/remove", map[string]any{"repo": "example-org/web"}), http.StatusOK, `"repos":[]`)
 }
 
+func TestMoveProjectRoute(t *testing.T) {
+	api := newAPI(t)
+	api.Post(base, map[string]any{"title": "請求"})
+	check(t, "up at the edge", api.Post(one+"/move", map[string]any{"direction": "up"}), http.StatusNoContent, "")
+	check(t, "down", api.Post(one+"/move", map[string]any{"direction": "down"}), http.StatusNoContent, "")
+	// 下へ動かしたあとの並びは、請求・ログインの順。
+	list := api.Get(base).Body.String()
+	if i, j := strings.Index(list, `"title":"請求"`), strings.Index(list, `"title":"ログイン"`); i < 0 || j < 0 || i > j {
+		t.Errorf("order after down: %s", list)
+	}
+	check(t, "down at the edge", api.Post(one+"/move", map[string]any{"direction": "down"}), http.StatusNoContent, "")
+	check(t, "unknown direction", api.Post(one+"/move", map[string]any{"direction": "left"}), http.StatusUnprocessableEntity, "")
+}
+
 // リポジトリを追加したら、そのリポジトリをすぐ探す(D4b-9)。断られたら探さない。
 func TestAddRepoStartsScan(t *testing.T) {
 	api, gh := newAPIWithGitHub(t)

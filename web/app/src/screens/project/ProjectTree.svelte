@@ -1,6 +1,7 @@
 <script lang="ts">
   import {
     childKindOf,
+    createTreeFocus,
     get,
     type Item,
     itemDisplayId,
@@ -10,10 +11,10 @@
   } from "@hedgehug/core";
   import { selection } from "../../palette";
   import { detail, itemDialog, links, projectScreen } from "../../wire";
-  import { itemMenuHost } from "../../wireActions";
+  import { itemMenuHost, itemRefresh } from "../../wireActions";
+  import { createTreeKeyboard } from "../tree/treeKeyboard";
+  import { treeTabStops } from "../tree/treeTabStops";
   import TreeRow from "./TreeRow.svelte";
-  import { createTreeKeyboard } from "./treeKeyboard";
-  import { treeTabStops } from "./treeTabStops";
 
   // プロジェクトの「ツリー」のタブ。Epic を一番上の階層に並べる(04「ツリー」の「行」)。
   interface Props {
@@ -31,11 +32,32 @@
     item: itemDisplayId(view.workspace.prefix, it.number),
   });
   // 開閉と、キーのフォーカスのある行は、キー操作の部品が持つ(画面を出しているあいだだけ覚える。初めはすべて開いている)。
-  const keyboard = createTreeKeyboard({
-    view: () => view,
+  // 行の鍵はアイテムの内部 ID(keyOf はそのまま返す)。プロジェクトの行はないので moveProject は渡さない。
+  const treeFocus = createTreeFocus<Item>();
+  const keyboard = createTreeKeyboard<Item>({
+    focus: treeFocus,
     list: () => list,
-    routeOf: route,
+    itemOf: (it) => it,
+    screen: () => ({
+      storeId: view.store.id,
+      readOnly: view.store.readOnly,
+      settings: view.settings,
+      rows: get(treeFocus.state).rows,
+    }),
+    readOnly: () => view.store.readOnly,
+    open: (it) => void detail.open(view.store.id, it.id),
+    openTab: (it) => links.openTab(route(it)),
     openMenu: (it, rect) => openMenu(it, rect),
+    create: (it) =>
+      void itemDialog.open({
+        workspaceId: it.workspaceId,
+        projectId: it.projectId,
+        kind: it.kind,
+        parentId: it.parentId,
+      }),
+    setStatus: (it, s) => projectScreen.setStatus(it.id, s),
+    afterChange: () => itemRefresh.afterChange(),
+    keyOf: (id) => id,
   });
   const focus = keyboard.focus.state;
   // ツリーが変わったとき(読み直し・削除・移動)は、見えている行とフォーカスのある行を直す。描く前に済ませる。

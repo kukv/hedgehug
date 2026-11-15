@@ -271,9 +271,15 @@ export async function addRepo(page: Page, prefix: string, repo: string) {
   return section;
 }
 
-// resetSearchScreen は、検索の画面の状態(絞り込みとテーブルの設定)を初めの値に戻す。画面の状態はサーバーに残るので、
-// 同じサーバーを使うほかのテスト(worker ごとに 1 つ。fixtures.ts)が変えた列やグループを引き継がないようにする。
-export async function resetSearchScreen(request: APIRequestContext) {
+// resetSearchScreen は、検索の画面の状態(絞り込み・レイアウト・テーブルとツリーの設定)を初めの値に戻す。画面の状態は
+// サーバーに残るので、同じサーバーを使うほかのテスト(worker ごとに 1 つ。fixtures.ts)が変えた列やグループ、閉じた行を
+// 引き継がないようにする。layout は、開くときのレイアウト(初めの値は table。ツリーのテストは tree を渡す)。
+// query は、開くときの絞り込み。
+export async function resetSearchScreen(
+  request: APIRequestContext,
+  layout: "table" | "tree" = "table",
+  query = "",
+) {
   // 中身は core の defaultTable(features/search/table.ts)と同じ。e2e は core を読まないので書き写している。
   const table = {
     columns: ["id", "title", "status", "assignee", "priority", "end", "points"],
@@ -282,7 +288,7 @@ export async function resetSearchScreen(request: APIRequestContext) {
   };
   const res = await request.put("/api/screen-states/search", {
     headers: { Authorization: "Bearer e2e-token" },
-    data: { body: JSON.stringify({ query: "", table }) },
+    data: { body: JSON.stringify({ query, layout, table, tree: { collapsed: [] } }) },
   });
   if (res.status() !== 204)
     throw new Error(`resetSearchScreen: ${res.status()} ${await res.text()}`);

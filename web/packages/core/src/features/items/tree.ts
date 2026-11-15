@@ -2,10 +2,18 @@ import type { Item } from "../../model/item";
 
 // アイテムの親子(04「ツリー」の「行」)。兄弟は、並び順の値 → 作成の時刻 → 内部 ID の順(A2 の計画の決定 12)。
 
-export interface TreeNode {
-  item: Item;
-  children: TreeNode[];
+// TreeRowLike は、ツリーの行になれるものの最小の形(アイテム・検索のツリーのプロジェクトの行)。
+export interface TreeRowLike {
+  id: string;
+  parentId: string | null;
 }
+
+export interface TreeNodeOf<T extends TreeRowLike> {
+  item: T;
+  children: TreeNodeOf<T>[];
+}
+
+export type TreeNode = TreeNodeOf<Item>;
 
 export function compareSiblings(a: Item, b: Item): number {
   if (a.rank !== b.rank) return a.rank < b.rank ? -1 : 1;

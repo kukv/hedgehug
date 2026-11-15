@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { isQueuedAction, type KeyInput, leftToTarget, treeKeyAction } from "./treeKeys";
+import {
+  isQueuedAction,
+  type KeyInput,
+  leftToTarget,
+  projectKeyAction,
+  treeKeyAction,
+} from "./treeKeys";
 
 const key = (k: string, mods: Partial<KeyInput> = {}): KeyInput => ({
   key: k,
@@ -91,6 +97,30 @@ describe("treeKeyAction (write keys)", () => {
     expect(isQueuedAction("toggle-done")).toBe(false);
     expect(isQueuedAction("up")).toBe(false);
     expect(isQueuedAction(null)).toBe(false);
+  });
+});
+
+describe("projectKeyAction", () => {
+  it("maps the same keys as an item row for the shared ones", () => {
+    expect(projectKeyAction(key("ArrowUp"))).toBe("up");
+    expect(projectKeyAction(key("ArrowDown"))).toBe("down");
+    expect(projectKeyAction(key("ArrowRight"))).toBe("right");
+    expect(projectKeyAction(key("ArrowLeft"))).toBe("left");
+    expect(projectKeyAction(key("Enter"))).toBe("open");
+    expect(projectKeyAction(key("Enter", { ctrlKey: true }))).toBe("open-tab");
+    expect(projectKeyAction(key("c"))).toBe("create-sibling");
+    expect(projectKeyAction(key("ArrowUp", { altKey: true }))).toBe("move-up");
+    expect(projectKeyAction(key("ArrowDown", { altKey: true }))).toBe("move-down");
+    expect(projectKeyAction(key("ContextMenu"))).toBe("menu");
+    expect(projectKeyAction(key("F10", { shiftKey: true }))).toBe("menu");
+  });
+
+  it("ignores Space, S, K and Alt+Shift+arrows", () => {
+    expect(projectKeyAction(key(" "))).toBeNull();
+    expect(projectKeyAction(key("s"))).toBeNull();
+    expect(projectKeyAction(key("k"))).toBeNull();
+    expect(projectKeyAction(key("ArrowUp", { altKey: true, shiftKey: true }))).toBeNull();
+    expect(projectKeyAction(key("ArrowDown", { altKey: true, shiftKey: true }))).toBeNull();
   });
 });
 

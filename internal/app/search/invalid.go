@@ -33,7 +33,7 @@ func (s *snapshot) invalidSet() map[item.ID]bool {
 	for _, it := range item.Live(s.items) {
 		for _, l := range itemlink.FromLog(s.logs[it.ID]).Links {
 			if l.Kind == itemlink.Issue {
-				st.Issues[it.ID] = append(st.Issues[it.ID], l.Key())
+				st.Issues[it.ID] = append(st.Issues[it.ID], l.SameKey())
 			}
 		}
 	}

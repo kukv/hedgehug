@@ -34,6 +34,7 @@ function setup(reload: () => Promise<void> = async () => {}) {
     create: async () => {
       throw new Error("unused");
     },
+    move: unused,
     rename: (s, p, title) => done(`rename ${s} ${p} ${title}`),
     setStatus: (s, p, status) => done(`setStatus ${s} ${p} ${status}`),
     setOwner: (s, p, owner) => done(`setOwner ${s} ${p} ${owner}`),
@@ -91,6 +92,24 @@ describe("createProjectEditor", () => {
     expect(await editor.rename(base, "  決済  ")).toBe(true);
     expect(calls).toEqual(["rename S1 S1-P1 決済"]);
     expect(changed()).toBe(1);
+  });
+
+  // 断りは文言で返り、トーストには出ない。読み直しもしない。
+  it("renameOrMessage returns the refusal text without a toast", async () => {
+    const { editor, base, toasts, changed, refuseNext } = setup();
+    refuseNext("タイトルを入力してください");
+    expect(await editor.renameOrMessage(base, "x")).toBe("タイトルを入力してください");
+    expect(get(toasts.list)).toEqual([]);
+    expect(changed()).toBe(0);
+  });
+
+  it("renameOrMessage returns null when saved or unchanged", async () => {
+    const { editor, base, calls, toasts, changed } = setup();
+    expect(await editor.renameOrMessage(base, " 決済 ")).toBeNull();
+    expect(await editor.renameOrMessage(base, base.title)).toBeNull();
+    expect(calls).toEqual(["rename S1 S1-P1 決済"]);
+    expect(changed()).toBe(1);
+    expect(get(toasts.list)).toEqual([]);
   });
 
   it("sends nothing when the value is the same as the saved one", async () => {

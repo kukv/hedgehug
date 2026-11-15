@@ -25,6 +25,7 @@ async function setup() {
       sent.push({ storeId, workspaceId, input });
       return { ...project(storeId, workspaceId, 3), title: input.title };
     },
+    move: unused,
     rename: unused,
     setStatus: unused,
     setOwner: unused,

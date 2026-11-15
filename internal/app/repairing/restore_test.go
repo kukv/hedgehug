@@ -31,6 +31,7 @@ var (
 	byGitHub   = change.Actor{Kind: change.ActorGitHub}
 	byRule     = change.Actor{Kind: change.ActorAutomation, Login: "taro", Rule: "01RULE00000000000000000001"}
 	sampleRefs = []change.Ref{
+		{Kind: change.KindMembers}, // 先頭に置く。新しい行を rows()[before:] で取る検査が、末尾に並ぶ前提のため
 		{Kind: change.KindWorkspace, ID: apptest.SampleWorkspace},
 		{Kind: change.KindProject, ID: apptest.SampleProject},
 		{Kind: change.KindProject, ID: project2},

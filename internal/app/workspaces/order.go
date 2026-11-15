@@ -87,71 +87,33 @@ func (s Service) MoveWorkspace(ctx context.Context, store port.StoreID, ws works
 		if (up && i == 0) || (!up && i == len(list)-1) {
 			return unchanged(revived)
 		}
-		if err := fillRanks(tx, list); err != nil {
+		ranks, err := fillRanks(tx, list)
+		if err != nil {
 			return err
 		}
-		return tx.WriteWorkspaces().Append(ws, change.NewSet("rank", list[i].rank, movedRank(list, i, up)))
+		return tx.WriteWorkspaces().Append(ws, change.NewSet("rank", ranks[i], rank.Moved(ranks, i, up)))
 	})
 }
 
-// movedRank は、list[i] を 1 つ上(up)か下へ動かしたときの rank。新しい隣どうしのあいだの値。
-func movedRank(list []ranked, i int, up bool) string {
-	if up {
-		return rank.Between(rankAt(list, i-2), list[i-1].rank)
+// fillRanks は、rank が空か、前のもの以下(同じ値を含む)のワークスペースだけに、表示の順を保つ rank を振り
+// (rank.Refill)、同じ保存に書く。振ったあとの並びを返す。
+func fillRanks(tx port.Tx, list []ranked) ([]string, error) {
+	ranks := make([]string, len(list))
+	for i, r := range list {
+		ranks[i] = r.rank
 	}
-	return rank.Between(list[i+1].rank, rankAt(list, i+2))
-}
-
-// rankAt は list[i] の rank。範囲の外なら空(端)。
-func rankAt(list []ranked, i int) string {
-	if i < 0 || i >= len(list) {
-		return ""
-	}
-	return list[i].rank
-}
-
-// fillRanks は、rank が空か、前のもの以下(同じ値を含む)のワークスペースだけに、表示の順を保つ rank を振り、
-// 同じ保存に書く。list の rank も書き換える。空でなく厳密に増えている rank は変えない。
-// 変えるものの rank は、前に残るものと、次に残るもののあいだの値にする。
-func fillRanks(tx port.Tx, list []ranked) error {
-	keep := keptRanks(list)
-	prev := ""
-	for i := range list {
-		if keep[i] {
-			prev = list[i].rank
+	out, changed := rank.Refill(ranks)
+	for i, r := range list {
+		if !changed[i] {
 			continue
 		}
 		var from any
-		if list[i].rank != "" {
-			from = list[i].rank
+		if r.rank != "" {
+			from = r.rank
 		}
-		list[i].rank = rank.Between(prev, nextKept(list, keep, i))
-		prev = list[i].rank
-		if err := tx.WriteWorkspaces().Append(list[i].ID, change.NewSet("rank", from, list[i].rank)); err != nil {
-			return err
+		if err := tx.WriteWorkspaces().Append(r.ID, change.NewSet("rank", from, out[i])); err != nil {
+			return nil, err
 		}
 	}
-	return nil
-}
-
-// keptRanks は、rank を変えないもの(空でなく、前に残るものより大きい)を true にして返す。
-func keptRanks(list []ranked) []bool {
-	keep := make([]bool, len(list))
-	prev := ""
-	for i, r := range list {
-		if r.rank != "" && r.rank > prev {
-			keep[i], prev = true, r.rank
-		}
-	}
-	return keep
-}
-
-// nextKept は、list[i] より後ろで最初に残るものの rank。なければ空。
-func nextKept(list []ranked, keep []bool, i int) string {
-	for j := i + 1; j < len(list); j++ {
-		if keep[j] {
-			return list[j].rank
-		}
-	}
-	return ""
+	return out, nil
 }

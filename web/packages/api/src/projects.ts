@@ -5,6 +5,7 @@ import {
   addProjectRepo,
   createProject,
   getProject,
+  moveProject,
   removeProjectRepo,
   renameProject,
   resetProjectRules,
@@ -40,6 +41,8 @@ export function createProjectsPort(): ProjectsPort {
       call(async () => toProject(storeId, await getProject(storeId, projectId))),
     create: (storeId, workspaceId, input) =>
       call(async () => toProject(storeId, await createProject(storeId, workspaceId, input))),
+    move: (storeId, projectId, direction) =>
+      call(() => moveProject(storeId, projectId, { direction })),
     rename: (storeId, projectId, title) =>
       call(async () => toProject(storeId, await renameProject(storeId, projectId, { title }))),
     setStatus: (storeId, projectId, status) =>
