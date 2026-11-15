@@ -5,7 +5,6 @@ import {
   createPlanningPort,
   createProjectsPort,
   createSyncPort,
-  createSystemPort,
   createTransfersPort,
   createWorkspacesPort,
   rememberToken,
@@ -27,7 +26,6 @@ import {
   createScreen,
   createShell,
   createSync,
-  createSystemInfo,
   createTabSignals,
   createWatch,
   createWorklogs,
@@ -35,6 +33,7 @@ import {
   createWorkspaceMover,
   createWorkspaceSettings,
   get,
+  onDayChange,
   openMoved,
   readonly,
   routeOfProject,
@@ -43,23 +42,25 @@ import {
   type SyncEventKind,
   writable,
 } from "@hedgehug/core";
+import { tickClock, today } from "./clock";
 import { drafts, leaveItem } from "./drafts";
 import { hereOf } from "./here";
 import { browserHistory } from "./history";
 import { createLinks } from "./links";
 import { createNoteHistory } from "./noteHistory";
-import { githubReloads, inboxReloads, propertySaved, reloads, syncReloads } from "./reloads";
+import { eventReloads, propertySaved, reloads } from "./reloads";
 import { held, online as isOnline, tabId, visible } from "./tab";
-import { palettePort, timer, toasts } from "./wireBase";
+import { palettePort, timer, toasts, views } from "./wireBase";
 
 // 組み立て: api の実装を core に渡す(設計書 6 節)。画面はここで作った状態を使う。
+// syncNow は、相対時間と 24 時間の判定に使う時刻(実体は clock.ts)。
+export { syncNow } from "./clock";
 
 // トークンは、ほかの何よりも先に決める(アドレスからハッシュを消してから、履歴を読む)。A2 の計画の決定 5。
 const token = rememberToken(location, sessionStorage, (url) => history.replaceState(null, "", url));
 setToken(token);
 
 export const shell = createShell();
-export const system = createSystemInfo(createSystemPort());
 // drafts は書きかけの登録簿(実体は drafts.ts。tab.ts との循環を避けるため wire.ts の外に置く)。
 export { drafts };
 export const navigation = createNavigation(browserHistory(), drafts);
@@ -158,6 +159,7 @@ export const watch = createWatch({ notes, toasts, onChanged: () => void detail.r
 export const screen = createScreen({
   navigation,
   catalog,
+  views: views.list,
   items: itemsPort,
   transfers: transfersPort,
   toasts,
@@ -225,11 +227,7 @@ async function reflect(kinds: SyncEventKind[]) {
   if (kinds.includes("store") || kinds.includes("github")) {
     jobs.push(...[...reloads].map((reload) => reload()));
   }
-  if (kinds.includes("github")) {
-    jobs.push(...[...githubReloads].map((reload) => reload()));
-  }
-  if (kinds.includes("inbox")) jobs.push(...[...inboxReloads].map((reload) => reload()));
-  if (kinds.includes("sync")) jobs.push(...[...syncReloads].map((reload) => reload()));
+  for (const k of kinds) jobs.push(...[...(eventReloads[k] ?? [])].map((reload) => reload()));
   await Promise.allSettled(jobs);
 }
 
@@ -257,9 +255,6 @@ const signals = createTabSignals({
   now: () => Date.now(),
 });
 
-// syncNow は、相対時間と 24 時間の判定に使う時刻。30 秒ごとに進める(決定 S7)。
-const now = writable(new Date());
-export const syncNow = readonly(now);
 const onlineState = writable(isOnline());
 export const online = readonly(onlineState);
 
@@ -284,16 +279,19 @@ function startSync() {
   const recheck = () => {
     signals.check();
     reflection.wake();
+    tickClock();
   };
   setInterval(() => signals.check(), 1000);
-  setInterval(() => now.set(new Date()), 30_000);
+  // 日付が替わったら、日付で決まる結果(マイタスクほか)を読み直す(E4a-16)。
+  onDayChange(today, () => reflection.queue("store"));
   document.addEventListener("visibilitychange", recheck);
   document.addEventListener("focusout", () => setTimeout(recheck, 0));
   document.addEventListener("focusin", () => signals.check());
 }
 
-// 一覧を読んでから、アドレスの解決と同期(出来事・知らせ)を始める(一覧がないと Store 名と ID を解決できない)。
-void catalog.load().then(() => {
+// 一覧とビューの一覧を読んでから、アドレスの解決と同期(出来事・知らせ)を始める(一覧がないと Store 名と ID・ビューの
+// 識別子を解決できない)。
+void Promise.all([catalog.load(), views.load()]).then(() => {
   screen.start();
   startSync();
 });

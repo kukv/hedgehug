@@ -10,6 +10,7 @@ import { index, labels, named, pick, setup } from "./palette.test-util";
 const commands = [
   "# コマンド",
   "新規作成",
+  "マイタスクを開く",
   "受信箱を開く",
   "アクティビティを開く",
   "検索を開く",

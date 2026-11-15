@@ -12,7 +12,7 @@ export interface ReflectionDeps {
   held(): boolean;
   // visible は、このタブが見えているか。
   visible(): boolean;
-  // apply は、溜めた種類の画面を読み直す。順は store、sync、github。
+  // apply は、溜めた種類の画面を読み直す。順は store、sync、github、inbox、views。
   apply(kinds: SyncEventKind[]): Promise<void>;
 }
 
@@ -24,12 +24,14 @@ export interface Reflection {
   // wake は、見えるか・待つ条件が変わったかもしれないときに呼ぶ。見えていればつなぎ、見えていなければ
   // 切り(決定 S22)、溜めたものを確かめる。
   wake(): void;
+  // queue は、出来事と同じく kind を溜め、待つ条件になく見えているときに読み直す(日付が替わったとき。E4a-16)。
+  queue(kind: SyncEventKind): void;
 }
 
 const retryMs = 500;
 const firstBackoff = 1000;
 const maxBackoff = 10_000;
-const order: SyncEventKind[] = ["store", "sync", "github", "inbox"];
+const order: SyncEventKind[] = ["store", "sync", "github", "inbox", "views"];
 
 export function createReflection(deps: ReflectionDeps): Reflection {
   const pending = new Set<SyncEventKind>();
@@ -127,5 +129,6 @@ export function createReflection(deps: ReflectionDeps): Reflection {
       else disconnect();
       void flush();
     },
+    queue: (kind) => add(kind),
   };
 }

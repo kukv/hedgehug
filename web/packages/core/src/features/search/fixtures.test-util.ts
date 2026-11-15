@@ -3,7 +3,7 @@ import { vi } from "vitest";
 import type { ScreenStatesPort, SearchPort } from "../../port/search";
 import { createScreenStates } from "../screenstate/screenStates";
 import { createToasts, type Timer } from "../toasts/toasts";
-import { createSearch } from "./search";
+import { createSearch, type SearchDeps } from "./search";
 import { defaultTable } from "./table";
 import type { SearchResult } from "./types";
 
@@ -32,6 +32,7 @@ export const result = (...ids: string[]): SearchResult => ({
     storeId: "s1",
     storeName: "main",
     storeColor: "#000",
+    statusId: "",
     workspaceId: "w1",
     projectId: "p1",
     itemId: id,
@@ -64,7 +65,7 @@ export const result = (...ids: string[]): SearchResult => ({
   groups: [],
 });
 
-export function setup(saved: string | null = null) {
+export function setup(saved: string | null = null, extra: Partial<SearchDeps> = {}) {
   const prune = vi.fn();
   const clear = vi.fn();
   const search = vi.fn(async (q: string) => result(q));
@@ -80,6 +81,7 @@ export function setup(saved: string | null = null) {
     timer,
     toasts,
     selection: { prune, clear },
+    ...extra,
   });
   return { s, search, sp, toasts, prune, clear };
 }

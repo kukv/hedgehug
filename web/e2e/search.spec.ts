@@ -185,9 +185,13 @@ test("moves to the filter with the slash key, and opens and closes the search he
 test("keeps the filter after a reload", async ({ page }, info) => {
   const { mark } = await seed(page, info);
   const filter = await openSearch(page, info);
+  // 絞り込みを書いた PUT を待つ(サイドバーの「検索」がテーブルにする PUT が遅れて届くことがある)。
   const saved = page.waitForResponse(
     (r) =>
-      r.url().includes("/api/screen-states/search") && r.request().method() === "PUT" && r.ok(),
+      r.url().includes("/api/screen-states/search") &&
+      r.request().method() === "PUT" &&
+      r.ok() &&
+      (r.request().postData() ?? "").includes(mark),
   );
   await filter.fill(mark);
   await saved;

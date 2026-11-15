@@ -75,7 +75,7 @@ describe("resolveRoute of a project not in the catalog", () => {
     });
   });
 
-  it("gives the Gone of a gone project with home", async () => {
+  it("gives the Gone of a gone project with my tasks", async () => {
     const gone = {
       reason: "deleted",
       old: "HH-P7",
@@ -84,20 +84,20 @@ describe("resolveRoute of a project not in the catalog", () => {
     } as const;
     transfers.locatedProject = { kind: "gone", ...gone };
     expect(await resolveRoute(pRoute("HH-P7"), await stores(), itemsIn("S1"), transfers)).toEqual({
-      name: "home",
+      name: "mytasks",
       gone,
     });
   });
 
-  it("is plain home when locateProject has nothing (NotFound), and does not ask for an unreadable ID", async () => {
+  it("is plain my tasks when locateProject has nothing (NotFound), and does not ask for an unreadable ID", async () => {
     transfers.missing.add("HH-P9");
     const s = await stores();
     expect(await resolveRoute(pRoute("HH-P9"), s, itemsIn("S1"), transfers)).toEqual({
-      name: "home",
+      name: "mytasks",
     });
     transfers.calls.length = 0;
     expect(await resolveRoute(pRoute("HH-9"), s, itemsIn("S1"), transfers)).toEqual({
-      name: "home",
+      name: "mytasks",
     });
     expect(transfers.calls).toEqual([]);
   });
@@ -158,7 +158,7 @@ describe("resolveRoute of a project not in the catalog", () => {
     transfers.locatedProject = { kind: "found", storeId: "S1", projectId: "S1-P2", movedFrom };
     expect(
       await resolveRoute(pRoute("HH-P7"), await stores(), itemsIn("S1"), transfers, false),
-    ).toEqual({ name: "home" });
+    ).toEqual({ name: "mytasks" });
     expect(transfers.calls).toEqual([]);
   });
 });

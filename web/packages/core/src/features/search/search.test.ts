@@ -222,3 +222,68 @@ describe("createSearch (E1-19)", () => {
     expect(get(t.toasts.list)).toEqual([]);
   });
 });
+
+describe("createSearch の画面の状態の鍵と復元 (E3b)", () => {
+  const content = {
+    query: "kind:bug",
+    layout: "tree" as const,
+    table: { columns: ["id", "title"], group: "none", sort: null },
+  };
+
+  it("uses the given screen key", async () => {
+    const t = setup(null, { screen: "view:abc" });
+    await t.s.open();
+    expect(t.sp.get).toHaveBeenCalledWith("view:abc");
+    t.s.setQuery("kind:bug");
+    await vi.advanceTimersByTimeAsync(0);
+    expect(t.sp.put).toHaveBeenCalledWith("view:abc", kindBugBody);
+    expect(t.sp.put).not.toHaveBeenCalledWith("search", expect.anything());
+  });
+
+  it("fallback when nothing saved", async () => {
+    const t = setup(null, { fallback: () => content });
+    await t.s.open();
+    expect(get(t.s.state)).toMatchObject({ ...content, tree: { collapsed: [] } });
+    expect(t.search).toHaveBeenCalledTimes(1);
+    expect(t.search).toHaveBeenCalledWith("kind:bug", noTable);
+  });
+
+  it("saved state wins over fallback", async () => {
+    const fallback = vi.fn(() => content);
+    const t = setup('{"query":"a"}', { fallback });
+    await t.s.open();
+    expect(fallback).not.toHaveBeenCalled();
+    expect(get(t.s.state).query).toBe("a");
+  });
+
+  it("restore replaces content and searches", async () => {
+    const t = await opened('{"query":"a","layout":"tree","tree":{"collapsed":["s/1"]}}');
+    const table = { columns: ["id"], group: "kind", sort: { key: "id", desc: true } };
+    t.s.restore({ query: "x", layout: "table", table });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(get(t.s.state)).toMatchObject({ query: "x", layout: "table", table });
+    expect(JSON.parse(vi.mocked(t.sp.put).mock.calls.at(-1)?.[1] ?? "")).toEqual({
+      query: "x",
+      layout: "table",
+      table,
+      tree: { collapsed: ["s/1"] },
+    });
+    expect(t.search).toHaveBeenCalledTimes(1);
+    expect(t.search).toHaveBeenCalledWith("x", { sort: { key: "id", desc: true }, group: "kind" });
+  });
+  it("restore cancels a waiting search", async () => {
+    const t = await opened();
+    t.s.setQuery("p");
+    t.s.restore({ query: "x", layout: "table", table: content.table });
+    await vi.advanceTimersByTimeAsync(500);
+    expect(t.search).not.toHaveBeenCalledWith("p", expect.anything());
+    expect(t.search).toHaveBeenCalledTimes(1);
+    expect(t.search).toHaveBeenCalledWith("x", noTable);
+  });
+
+  it("restore clears the selection when it leaves the table", async () => {
+    const t = await opened();
+    t.s.restore({ query: "x", layout: "tree", table: content.table });
+    expect(t.clear).toHaveBeenCalledTimes(1);
+  });
+});

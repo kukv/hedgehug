@@ -23,8 +23,8 @@ import (
 	"github.com/kukv/hedgehug/internal/adapter/httpapi/search"
 	"github.com/kukv/hedgehug/internal/adapter/httpapi/stores"
 	syncapi "github.com/kukv/hedgehug/internal/adapter/httpapi/syncing"
-	"github.com/kukv/hedgehug/internal/adapter/httpapi/system"
 	"github.com/kukv/hedgehug/internal/adapter/httpapi/transfers"
+	"github.com/kukv/hedgehug/internal/adapter/httpapi/views"
 	"github.com/kukv/hedgehug/internal/adapter/httpapi/workspaces"
 	appactivity "github.com/kukv/hedgehug/internal/app/activity"
 	appautomations "github.com/kukv/hedgehug/internal/app/automations"
@@ -48,6 +48,7 @@ import (
 	appstores "github.com/kukv/hedgehug/internal/app/stores"
 	appsyncing "github.com/kukv/hedgehug/internal/app/syncing"
 	apptransfers "github.com/kukv/hedgehug/internal/app/transfers"
+	appviews "github.com/kukv/hedgehug/internal/app/views"
 	appwatching "github.com/kukv/hedgehug/internal/app/watching"
 	appworklogs "github.com/kukv/hedgehug/internal/app/worklogs"
 	appworkspaces "github.com/kukv/hedgehug/internal/app/workspaces"
@@ -113,16 +114,18 @@ type Deps struct {
 	Reports appreports.Selections
 	// 画面の状態の保存先(E1。state.db)
 	Screens appsearch.ScreenStates
+	// 保存したビューの保存先(E3b。state.db)
+	Views appviews.Store
 }
 
 // NewAPI は、mux に API を登録する。機能の API は httpapi/<機能> の Register を 1 行ずつ足す。
-// 本文の型には機能の名前を付ける(例: system.SystemInfo。OpenAPI のスキーマ名になる)。
+// 本文の型には機能の名前を付ける(例: stores.StoreInfo。OpenAPI のスキーマ名になる)。
 func NewAPI(mux *http.ServeMux, deps Deps) huma.API {
 	cfg := huma.DefaultConfig("hedgehug", deps.Version)
 	cfg.OpenAPIPath = "" // OpenAPI は make generate で api/openapi.yaml に書く。サーバーでは出さない
 	cfg.DocsPath = ""
 	cfg.SchemasPath = ""
-	// 既定の CreateHooks は、本文に $schema(出さないパスへのリンク)を足す。本文は {"version"} のような約束どおりにする
+	// 既定の CreateHooks は、本文に $schema(出さないパスへのリンク)を足す。本文は {"id", "name", …} のような約束どおりにする
 	cfg.CreateHooks = nil
 	api := humago.New(mux, cfg)
 
@@ -131,7 +134,6 @@ func NewAPI(mux *http.ServeMux, deps Deps) huma.API {
 		hub = events.NewHub()
 	}
 
-	system.Register(api, deps.Version)
 	stores.Register(api, appstores.Service{Stores: deps.StoreList})
 	stores.RegisterLogin(api, appstores.Login{GitHub: deps.StoreGitHub, Accounts: deps.Accounts, Events: hub})
 	members.Register(api, appmembers.Service{Stores: deps.Stores, Identity: deps.Identity})
@@ -172,15 +174,24 @@ func NewAPI(mux *http.ServeMux, deps Deps) huma.API {
 	})
 	planning.Register(api, appplanning.Service{Stores: deps.Stores, IDs: deps.IDs, Identity: deps.Identity, Clock: deps.Clock})
 	reports.Register(api, appreports.Service{Stores: deps.Stores, Selections: deps.Reports, Clock: deps.Clock})
-	search.Register(api, appsearch.Service{
-		Stores: deps.Stores, StoreList: deps.StoreList, SyncTargets: deps.SyncTargets, Identity: deps.Identity, Inbox: deps.Inbox, Clock: deps.Clock,
-	}, deps.Screens)
+	registerSearch(api, deps, hub)
 	ghapi.Register(api, githubServices(deps))
 	events.Register(api, hub)
 	syncapi.Register(api, syncapi.Services{Sync: deps.Sync, Auto: deps.Auto, Skew: deps.ClockSkew})
 	syncapi.RegisterTiming(api, deps.SyncSettings, hub)
 
 	return api
+}
+
+// registerSearch は、検索・画面の状態と保存したビューの API を登録する。ビューは検索のキーの一覧を使うので、検索の usecase を共有する。
+func registerSearch(api huma.API, deps Deps, hub port.Events) {
+	svc := appsearch.Service{
+		Stores: deps.Stores, StoreList: deps.StoreList, SyncTargets: deps.SyncTargets, Identity: deps.Identity, Inbox: deps.Inbox, Clock: deps.Clock,
+	}
+	search.Register(api, svc, deps.Screens)
+	views.Register(api, &appviews.Service{
+		Store: deps.Views, IDs: deps.IDs, Keys: svc.CustomKeys, HeldElsewhere: svc.KeyHeldElsewhere, Events: hub,
+	})
 }
 
 // githubServices は、GitHub 連携の usecase を組む。Session はサーバーに 1 つ(アプリを開いているあいだの状態)。

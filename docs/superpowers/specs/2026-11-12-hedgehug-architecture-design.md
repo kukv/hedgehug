@@ -149,12 +149,12 @@ type Tx interface {
 | 口 | すること | 実装 |
 |---|---|---|
 | `Inbox` | 通知と既読 | infra/statedb |
-| `Views` | 保存したビュー | infra/statedb |
+| `Views` | 保存したビュー(口は `internal/app/views` に置く) | infra/statedb |
 | `MachineSettings` | 一般の設定、アカウントの一覧、Store の一覧(色・非表示・アカウントの割り当てを含む) | infra/machineconfig(`config.yaml` 1 つ。2026-11-12 決定) |
 | `GitHub` | PR・Issue・リポジトリ・コラボレーターの読み取り、デバイスフロー | infra/github |
 | `Secrets` | トークン | infra/secret |
 | `Clock`・`IDs` | 現在時刻、内部 ID | infra/sysclock |
-| `Events` | 「Store が変わった」「受信箱が変わった」を画面に知らせる | adapter/httpapi(SSE) |
+| `Events` | 「Store が変わった」「受信箱が変わった」「保存したビューが変わった」を画面に知らせる | adapter/httpapi(SSE) |
 
 - `Events` だけは adapter が実装する。adapter は app を import してよいので、依存の向きは崩れない。CLI や他のタブが同じ Store に書いたときは、gitstore が変化を見つけて Events に流す。
 

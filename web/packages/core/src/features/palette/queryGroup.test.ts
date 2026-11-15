@@ -30,9 +30,10 @@ describe("このクエリで(E1-21)", () => {
     palette.input("kind:bug");
     timer.fire();
     await flush();
-    expect(labels(palette).slice(0, 3)).toEqual([
+    expect(labels(palette).slice(0, 4)).toEqual([
       "# このクエリで",
       "検索で開く",
+      "ビューとして保存…",
       "3 件をまとめて変更…",
     ]);
     await pick(palette, "3 件をまとめて変更…");
@@ -164,8 +165,33 @@ describe("このクエリで(E1-21)", () => {
     without.palette.input("todo:認証");
     expect(
       labels(withGroup.palette).filter(
-        (l) => l !== "# このクエリで" && l !== "検索で開く" && !l.endsWith("件をまとめて変更…"),
+        (l) =>
+          l !== "# このクエリで" &&
+          l !== "検索で開く" &&
+          l !== "ビューとして保存…" &&
+          !l.endsWith("件をまとめて変更…"),
       ),
     ).toEqual(labels(without.palette));
+  });
+});
+
+describe("ビューとして保存…(E3b-16)", () => {
+  test("「検索で開く」と「まとめて変更」のあいだに出し、選ぶと閉じて saveQueryAsView", async () => {
+    const { palette, calls, timer } = await setup({ search: async () => found(3) });
+    await palette.open();
+    palette.input("kind:bug");
+    timer.fire();
+    await flush();
+    expect(labels(palette).slice(0, 4)).toEqual([
+      "# このクエリで",
+      "検索で開く",
+      "ビューとして保存…",
+      "3 件をまとめて変更…",
+    ]);
+    await pick(palette, "ビューとして保存…");
+    expect(named(calls, "saveQueryAsView")).toEqual([
+      { name: "saveQueryAsView", args: ["kind:bug"], open: false },
+    ]);
+    expect(get(palette.state)).toBeNull();
   });
 });

@@ -33,15 +33,15 @@ test("deletes a workspace from the general settings after typing its name", asyn
   await expect(dialog.getByRole("alert")).toHaveCount(0);
   await dialog.getByRole("button", { name: "削除", exact: true }).click();
 
-  // トーストが出て、ホームへ移り、サイドバーからワークスペースが消える。
+  // トーストが出て、マイタスクへ移り、サイドバーからワークスペースが消える。
   await expect(page.getByText(`「${name}」を削除しました`)).toBeVisible();
-  await expect(page.getByRole("heading", { name: "hedgehug" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "マイタスク", level: 1 })).toBeVisible();
   const side = await sidebar(page, info);
   await expect(side.getByRole("link", { name, exact: true })).toHaveCount(0);
 
-  // 削除したワークスペースのアドレスはホームを開く。同じ名前と接頭辞で作り直せる。
+  // 削除したワークスペースのアドレスはマイタスクを開く。同じ名前と接頭辞で作り直せる。
   await page.goto(tokenUrl(`/s/e2e/w/${prefix}`));
-  await expect(page.getByRole("heading", { name: "hedgehug" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "マイタスク", level: 1 })).toBeVisible();
   await createWorkspace(page, info, name, prefix);
 });
 
@@ -79,7 +79,7 @@ test("disables deleting in a read-only store", async ({ page }, info) => {
   await expect(page.getByRole("menuitem", { name: "削除…" })).toBeDisabled();
 });
 
-test("a second page that kept the settings open moves to the home when it comes back after the delete", async ({
+test("a second page that kept the settings open moves to my tasks when it comes back after the delete", async ({
   page,
   context,
 }, info) => {
@@ -100,7 +100,7 @@ test("a second page that kept the settings open moves to the home when it comes 
   await dialog.getByRole("button", { name: "削除", exact: true }).click();
   await expect(page.getByText(`「${name}」を削除しました`)).toBeVisible();
 
-  // 2 つ目のページに戻ると、開いていた画面がなくなったので、ホームへ移る(01「画面のアドレス」)。
+  // 2 つ目のページに戻ると、開いていた画面がなくなったので、マイタスクへ移る(01「画面のアドレス」)。
   await other.bringToFront();
-  await expect(other.getByRole("heading", { name: "hedgehug" })).toBeVisible();
+  await expect(other.getByRole("heading", { name: "マイタスク", level: 1 })).toBeVisible();
 });

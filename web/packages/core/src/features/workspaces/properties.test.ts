@@ -115,6 +115,12 @@ describe("property rows", () => {
     expect(deletePropertyBody("顧客", 3)).toBe(
       "「顧客」を削除します。値の入っている 3 件から値が消えます。",
     );
+    expect(deletePropertyBody("顧客", 2, true)).toBe(
+      "「顧客」を削除します。値の入っている 2 件から値が消えます。このキーを使う保存したビューの検索条件は、キーがなくなるためエラーになります。",
+    );
+    expect(deletePropertyBody("顧客", 0, true)).toBe(
+      "「顧客」を削除します。このキーを使う保存したビューの検索条件は、キーがなくなるためエラーになります。",
+    );
   });
 
   it("keeps the texts of spec 03", () => {

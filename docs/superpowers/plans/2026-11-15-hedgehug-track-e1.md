@@ -813,14 +813,14 @@ E1 で作ったものと、それぞれの小計画・トラックが足すも�
 
 ### E3(保存したビュー)
 
-- 「このクエリで」の群に「ビューとして保存…」を足す(E1-21)。(E3b に回した)
+- 「このクエリで」の群に「ビューとして保存…」を足す(E1-21)。(E3b に回した。E3b で足した)
 - 検索の画面に、レイアウトの切り替え(テーブル・ボード・カレンダーなど)と、レイアウトごとの注記を足す。E1 の画面(`web/app/src/screens/search/SearchScreen.svelte`)の `.toolbar` に件数だけがあり、切り替えの置き場所を空けてある。(E3a で足した。切り替えは作ってあるレイアウト(ツリー・テーブル)だけで、カンバン・ガントは E5・E6 が足す。注記は `layoutNote`。検索の画面のツリーも E3a で作った)
-- 保存したビューを開くときは、`web/app/src/search.ts` の `search.setQuery` で絞り込みを入れ替え、`/search` を開く(パレットの「検索で開く」と同じ道)。(E3b に回した)
+- 保存したビューを開くときは、`web/app/src/search.ts` の `search.setQuery` で絞り込みを入れ替え、`/search` を開く(パレットの「検索で開く」と同じ道)。(E3b に回した。E3b ではビューに自分のアドレス(`/views/{id}`)と画面の状態(`view:{id}`)を持たせた(01 の 165 行、04 の 409〜420 行))
 
 ### E4(マイタスクなど)
 
-- 日付が変わったときに `today`・`-7d` のクエリを計算し直す仕組み(04 の 42 行)は E4 が作る。E1 は検索を出すたびにその時点の今日で計算する(E1-11、E1-23)。
-- `web/packages/core/src/features/search/candidates.ts` の `CandidateScope` は、E1 では `{ kind: "all" }` だけを使う。E4 は `{ kind: "workspace"; storeId; workspaceId }` で、ワークスペースの範囲の候補を使う。範囲を絞る処理は `scopedStores` と `itemEntries`・`memberEntries` に書いてあり、E1 のテスト(`candidates.test.ts`)で確かめてある。
+- 日付が変わったときに `today`・`-7d` のクエリを計算し直す仕組み(04 の 42 行)は E4 が作る。E1 は検索を出すたびにその時点の今日で計算する(E1-11、E1-23)。(E4a で足した。時計は `web/app/src/clock.ts`)
+- `web/packages/core/src/features/search/candidates.ts` の `CandidateScope` は、E1 では `{ kind: "all" }` だけを使う。E4 は `{ kind: "workspace"; storeId; workspaceId }` で、ワークスペースの範囲の候補を使う。範囲を絞る処理は `scopedStores` と `itemEntries`・`memberEntries` に書いてあり、E1 のテスト(`candidates.test.ts`)で確かめてある。(E4b に回した)
 
 ### E7(ツリー)
 
@@ -831,5 +831,5 @@ E1 で作ったものと、それぞれの小計画・トラックが足すも�
 - 診断の「無効なアイテム」は、E1 で作った `repair.ItemProblems`(`internal/domain/repair/problems.go`)を使う。`is:invalid` と食い違わないため、別の判定を作らない(E1-7)。
 - 設定の「削除済み」の残り日数は `change.Deletion.DaysLeft`(`internal/domain/change/`)を使う。検索の行の「あと N 日で完全に削除」と同じ数になる(E1-8)。
 - 削除済みの行のタイトルを押したら、設定の「削除済み」を開き、そのアイテムの行を選んだ状態にする(04 の 312 行)。E1 は押せない文字で出しているだけ(`SearchRow.svelte`)。
-- Store の名前を変えるとき、検索の画面の状態(`screen_states` の `search` の鍵の `query`)にある `store:旧名` を新しい名前に書き換える(E1-22)。
+- Store の名前を変えるとき、検索の画面の状態(`screen_states` の `search` の鍵の `query`)にある `store:旧名` を新しい名前に書き換える(E1-22)。保存したビューのクエリと `view:*` の画面の状態も同じく書き換える(E3b-21)。
 - 診断の「検索で開く」は、`screen_states` の `search` を書いて `/search` を開く(E1-22)。

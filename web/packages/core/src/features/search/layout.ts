@@ -100,6 +100,9 @@ export interface Search {
   // cancelPrepare は、prepareQuery の印を消す(検索の画面へ移れなかったとき)。画面の状態は前のまま。
   // 読む前なら、欄の絞り込みを読む前に打ったもの(なければ初めの値)に戻す。settled を待つものを解く。
   cancelPrepare(): void;
+  // restore は、絞り込み・レイアウト・テーブルの設定を置き換えて書き(ツリーの開閉はそのまま)、待っている検索を取り消して、
+  // 待たずに検索する。テーブル以外にするときは選択を解除する。open のあとに呼ぶ。
+  restore(content: { query: string; layout: SearchLayout; table: TableSettings }): void;
   // reload は、Store が変わった知らせ(reloads)で、いまの絞り込みのまま読み直す。
   reload(): Promise<void>;
   // setTable は、テーブルの設定を画面の状態に書く。並べ替えかグループが変わったときだけ、待たずに検索する。

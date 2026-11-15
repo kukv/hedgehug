@@ -92,6 +92,20 @@ func TestE2EWireStoresAndSample(t *testing.T) {
 	}
 }
 
+// 閲覧のみの Store のサンプルの Task HH-2 は、taro が担当している(マイタスクに出る。E4a-21)。
+func TestE2EWireReadonlyTaskAssignedToTaro(t *testing.T) {
+	deps := e2eDeps(t)
+	if err := deps.Stores.Read(t.Context(), readonlyStore, func(r port.Reader) error {
+		it, err := r.Items().Get(apptest.SampleTask)
+		if err == nil && it.Assignee != "taro" {
+			t.Errorf("担当者 = %q", it.Assignee)
+		}
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+}
+
 // 同じ Store の移動、別の Store(remote なし)への移動、remote あり(e2e の Store。偽の Replicator)への移動が、
 // 本物の Delivery(syncing.Service)で通る。
 func TestE2EWireMovesItemsWithinAndAcrossStores(t *testing.T) {

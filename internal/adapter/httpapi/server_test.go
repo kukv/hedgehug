@@ -69,15 +69,18 @@ func get(t *testing.T, url, token string) (int, string) {
 	return res.StatusCode, string(b)
 }
 
-func TestSystemNeedsToken(t *testing.T) {
-	srv := newServer(t)
+func TestAPINeedsToken(t *testing.T) {
+	srv := httptest.NewServer(httpapi.New("secret", fstest.MapFS{}, httpapi.Deps{
+		Version:   "test",
+		StoreList: apptest.StoreList{},
+	}))
+	t.Cleanup(srv.Close)
 	for _, token := range []string{"", "wrong"} {
-		if code, _ := get(t, srv.URL+"/api/system", token); code != http.StatusUnauthorized {
+		if code, _ := get(t, srv.URL+"/api/stores", token); code != http.StatusUnauthorized {
 			t.Errorf("token %q: status %d, want 401", token, code)
 		}
 	}
-	code, body := get(t, srv.URL+"/api/system", "secret")
-	if code != http.StatusOK || strings.TrimSpace(body) != `{"version":"v0.0.0-test"}` {
+	if code, body := get(t, srv.URL+"/api/stores", "secret"); code != http.StatusOK {
 		t.Errorf("status %d, body %s", code, body)
 	}
 }
@@ -158,7 +161,7 @@ func TestNoIndexIs404WithoutListing(t *testing.T) {
 func TestOpenAPIIsNotServed(t *testing.T) {
 	mux := http.NewServeMux()
 	httpapi.NewAPI(mux, httpapi.Deps{Version: "v0.0.0-test"})
-	for _, path := range []string{"/openapi.json", "/openapi.yaml", "/docs", "/schemas/SystemInfo.json", "/schemas/x.json"} {
+	for _, path := range []string{"/openapi.json", "/openapi.yaml", "/docs", "/schemas/StoreInfo.json", "/schemas/x.json"} {
 		rec := httptest.NewRecorder()
 		mux.ServeHTTP(rec, httptest.NewRequestWithContext(t.Context(), http.MethodGet, path, nil))
 		if rec.Code != http.StatusNotFound {
@@ -290,6 +293,41 @@ func TestJoinedHeader(t *testing.T) {
 	h = serveRestored(t, func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) })
 	if got := h.Values("Hedgehug-Joined"); len(got) != 0 {
 		t.Errorf("足していない: %v", got)
+	}
+}
+
+// headerCounter は、WriteHeader が下の ResponseWriter に何回届いたかを数える。
+type headerCounter struct {
+	*httptest.ResponseRecorder
+	calls int
+}
+
+func (c *headerCounter) WriteHeader(status int) {
+	c.calls++
+	c.ResponseRecorder.WriteHeader(status)
+}
+
+// huma は接続が切れたときに、書いたあとの応答へ 499 をもう一度書く。2 度目は下に渡さない。
+func TestRestoredHeaderDropsSecondFinalWriteHeader(t *testing.T) {
+	rec := &headerCounter{ResponseRecorder: httptest.NewRecorder()}
+	httpapi.RestoredHeader(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+		w.WriteHeader(499)
+	})).ServeHTTP(rec, httptest.NewRequestWithContext(t.Context(), http.MethodPut, "/", nil))
+	if rec.Code != http.StatusNoContent || rec.calls != 1 {
+		t.Errorf("status=%d calls=%d, want 204 and 1", rec.Code, rec.calls)
+	}
+}
+
+// 1xx は最終の応答ではないので、そのあとの最終の WriteHeader も下に届く。
+func TestRestoredHeaderForwardsInformational(t *testing.T) {
+	rec := &headerCounter{ResponseRecorder: httptest.NewRecorder()}
+	httpapi.RestoredHeader(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusEarlyHints)
+		w.WriteHeader(http.StatusOK)
+	})).ServeHTTP(rec, httptest.NewRequestWithContext(t.Context(), http.MethodPut, "/", nil))
+	if rec.calls != 2 {
+		t.Errorf("calls=%d, want 2", rec.calls)
 	}
 }
 

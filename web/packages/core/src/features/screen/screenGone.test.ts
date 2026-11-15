@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { get } from "../../reactive/store";
+import { get, writable } from "../../reactive/store";
 import { createCatalog } from "../catalog/catalog";
 import { fakeCatalogPort } from "../catalog/fixtures.test-util";
 import { fakeItemsPort, flush } from "../items/fixtures.test-util";
@@ -30,6 +30,7 @@ async function setup(start: string) {
   const screen = createScreen({
     navigation,
     catalog,
+    views: writable([]),
     items: fakeItemsPort(),
     transfers,
     toasts: createToasts({ set: () => 0, clear: () => undefined }),
@@ -59,14 +60,14 @@ describe("createScreen when the shown project is gone", () => {
     });
   });
 
-  it("goes home when the workspace is gone too", async () => {
+  it("goes to my tasks when the workspace is gone too", async () => {
     const { screen, catalog, stack, gone, goneWorkspaces } = await setup("/s/work/p/HH-P2/tree");
     gone.add("S1-P2");
     goneWorkspaces.add("S1-W1");
     await catalog.load();
     await flush();
-    expect(get(screen.current)).toEqual({ name: "home" });
-    expect(stack).toEqual(["/"]);
+    expect(get(screen.current)).toEqual({ name: "mytasks" });
+    expect(stack).toEqual(["/my-tasks"]);
   });
 
   it("keeps showing the project when only the tab changes", async () => {
@@ -86,17 +87,17 @@ describe("createScreen when the shown project is gone", () => {
     expect(get(screen.current)).toMatchObject({ name: "project", projectId: "S1-P2" });
   });
 
-  it("still sends an address that never resolved home", async () => {
+  it("still sends an address that never resolved to my tasks", async () => {
     const { screen, stack } = await setup("/s/work/p/HH-P9/overview");
-    expect(get(screen.current)).toEqual({ name: "home" });
+    expect(get(screen.current)).toEqual({ name: "mytasks" });
     expect(stack).toEqual(["/s/work/p/HH-P9/overview"]);
   });
 
-  it("sends another missing project home, not to the workspace of the one left", async () => {
+  it("sends another missing project to my tasks, not to the workspace of the one left", async () => {
     const { screen, navigation, stack } = await setup("/s/work/p/HH-P2/overview");
     navigation.go({ name: "project", store: "work", project: "HH-P9", tab: "overview" });
     await flush();
-    expect(get(screen.current)).toEqual({ name: "home" });
+    expect(get(screen.current)).toEqual({ name: "mytasks" });
     expect(stack.at(-1)).toBe("/s/work/p/HH-P9/overview");
   });
 });

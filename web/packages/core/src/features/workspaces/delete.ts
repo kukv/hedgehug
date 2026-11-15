@@ -54,7 +54,7 @@ export interface WorkspaceDeleteDeps {
   actions: Pick<WorkspacesPort, "workspaceDeletePreview" | "deleteWorkspace">;
   catalog: Catalog;
   toasts: Toasts;
-  // afterDelete は、削除できたあと。app が、ホームへ移し、サイドバーの一覧を読み直す。
+  // afterDelete は、削除できたあと。app が、マイタスクへ移し、サイドバーの一覧を読み直す。
   afterDelete(ws: DeleteWorkspaceTarget): Promise<void>;
 }
 
@@ -133,8 +133,8 @@ export interface LeaveDeletedWorkspaceDeps {
 }
 
 // leaveDeletedWorkspace は、削除できたあとの移り先(B5b-12)。いまの画面がそのワークスペースのもの(概要・設定・
-// 中のプロジェクト・アイテム)ならホームへ移り(履歴には積まない)、開いている詳細パネルがそのワークスペースの
-// アイテムなら閉じ、サイドバーの一覧を読み直す。先に移るのは、一覧を先に読み直すと、消えたアドレスがホームに
+// 中のプロジェクト・アイテム)ならマイタスクへ移り(履歴には積まない)、開いている詳細パネルがそのワークスペースの
+// アイテムなら閉じ、サイドバーの一覧を読み直す。先に移るのは、一覧を先に読み直すと、消えたアドレスがマイタスクに
 // 解決されるため。読み直しの失敗は、削除はできているので投げない(次の同期の読み直しで直る)。
 export async function leaveDeletedWorkspace(
   deps: LeaveDeletedWorkspaceDeps,
@@ -147,7 +147,7 @@ export async function leaveDeletedWorkspace(
       route.name === "workspace"
         ? route.prefix === ws.prefix
         : (route.name === "project" ? route.project : route.item).startsWith(`${ws.prefix}-`);
-    if (inside) deps.navigation.replace({ name: "home" });
+    if (inside) deps.navigation.replace({ name: "mytasks" });
   }
   const open = get(deps.detail.view)?.item;
   if (open?.storeId === ws.storeId && open.workspaceId === ws.id) deps.detail.close();

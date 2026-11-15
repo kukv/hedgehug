@@ -1,5 +1,6 @@
 import { createScreenStatesPort, createSearchPort } from "@hedgehug/api";
 import {
+  type CandidateScope,
   type CaretTerm,
   createChangeAll,
   createRowSelection,
@@ -12,6 +13,7 @@ import {
   menuAt,
   type PaletteItem,
   rowMenuContext,
+  type Search,
   type SearchRow,
   type SelectedItem,
   setRowStatus,
@@ -35,6 +37,18 @@ export const search = createSearch({
   toasts,
   selection: searchSelection,
 });
+
+// active は、Store が変わった知らせと selectedOne が使う、いま出している検索の流れ(初めは search)。
+let active: Search = search;
+
+// activate は、いま出している検索の流れを s に置き換え、前の流れに戻す関数を返す(保存したビューの画面が使う)。
+export function activate(s: Search): () => void {
+  const prev = active;
+  active = s;
+  return () => {
+    active = prev;
+  };
+}
 
 // openRowMenu は、テーブルの行末の「…」で、行のアイテムのメニュー(02)を開く(E2a-17)。rect は「…」の
 // getBoundingClientRect()。プロジェクトのアイテムを読めない・アイテムがないときは何もしない。
@@ -61,7 +75,7 @@ export function selectedOne(): SelectedItem | null {
     source: "table",
     setStatus: (statusId) =>
       setRowStatus(
-        { items: itemsPort, toasts, reload: () => search.reload() },
+        { items: itemsPort, toasts, reload: () => active.reload() },
         storeId,
         itemId,
         statusId,
@@ -69,16 +83,20 @@ export function selectedOne(): SelectedItem | null {
   };
 }
 
-// refreshCandidates は、開いている検索の画面の候補の元を読み直す。画面を閉じると null。
+// refreshCandidates は、開いている画面(検索・マイタスク)の候補の元を読み直す。画面を閉じると null。
 let refreshCandidates: (() => Promise<void>) | null = null;
 
-// Store が変わった知らせで、検索の画面を開いていれば、結果と候補の元を読み直す(E1-19)。ツリーのデータは、
-// 取っておいたものを捨ててから結果を読み直す(結果が変わるとツリーが読み直す。E3a-3)。
+// Store が変わった知らせで、検索の画面か保存したビューの画面(E3b-14)を開いていれば、結果と候補の元を読み直す(E1-19)。
+// ツリーのデータは、取っておいたものを捨ててから結果を読み直す(結果が変わるとツリーが読み直す。E3a-3)。
 reloads.add(async () => {
-  if (get(navigation.route).name !== "search") return;
+  const name = get(navigation.route).name;
+  if (name !== "search" && name !== "view") return;
   searchTreeData.reset();
-  await Promise.all([search.reload(), refreshCandidates?.()]);
+  await Promise.all([active.reload(), refreshCandidates?.()]);
 });
+
+// reloadCandidates は、開いている画面の絞り込み欄の候補の元を読み直す(マイタスクの画面の Store が変わった知らせ。myTasks.ts)。
+export const reloadCandidates = (): Promise<void> => refreshCandidates?.() ?? Promise.resolve();
 
 export interface SearchCandidates {
   // list は、カーソルの位置の語の候補。assignee: のときは、まだ読んでいない Store のメンバーを読み始める。
@@ -91,7 +109,11 @@ export interface SearchCandidates {
 // 作ったときに 1 回読み、メンバーは最初に assignee: の候補を出すときに Store ごとに読む。Store が変わった知らせでは、
 // 索引を読み直し、読んだメンバーを捨てる(次の assignee: で読み直す)。
 // 読み終わったら、読んだ元を添えて changed を呼ぶ(画面は、いまの語がその元を使うなら候補を出し直す)。
-export function createCandidates(changed: (source: "items" | "members") => void): SearchCandidates {
+// scope は、候補を出す範囲(マイタスクは、行のあるプロジェクトだけ)。候補を作るたびに呼ぶ。
+export function createCandidates(
+  changed: (source: "items" | "members") => void,
+  scope: () => CandidateScope = () => ({ kind: "all" }),
+): SearchCandidates {
   let items: PaletteItem[] = [];
   const members = new Map<string, Member[]>();
   // asked は、読み込み中か読めた Store。失敗した Store は外し、次の assignee: で読み直す。
@@ -150,7 +172,7 @@ export function createCandidates(changed: (source: "items" | "members") => void)
           ms.map((m) => ({ storeId, login: m.login, name: m.name })),
         ),
       };
-      return filterCandidates(term, sources, { kind: "all" });
+      return filterCandidates(term, sources, scope());
     },
     stop() {
       if (refreshCandidates === refresh) refreshCandidates = null;

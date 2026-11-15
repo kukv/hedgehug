@@ -37,6 +37,7 @@ func restoredHeader(next http.Handler) http.Handler {
 
 // restoredWriter は、最初の WriteHeader(Write が先なら 200 として)で、2xx なら取り消したものを種類ごとの Header に、
 // メンバーへ足したログイン名を Hedgehug-Joined に足す。
+// 最終の応答(200 以上)を送ったあとの WriteHeader は下に渡さず捨てる(huma が接続の切れたときに 499 をもう一度書くため)。
 type restoredWriter struct {
 	http.ResponseWriter
 	ctx  context.Context //nolint:containedctx // 応答の間だけ生きる入れ物の context
@@ -44,25 +45,33 @@ type restoredWriter struct {
 }
 
 func (w *restoredWriter) WriteHeader(status int) {
-	if !w.sent && status >= 200 { // 1xx は最終の応答ではないので、その後の応答に付ける
+	if w.sent && status >= 200 {
+		return
+	}
+	if status >= 200 { // 1xx は最終の応答ではないので、その後の応答に付ける
 		w.sent = true
 		if status < 300 {
-			for _, r := range port.Revived(w.ctx) {
-				switch r.Kind {
-				case port.RevivedID:
-					w.Header().Add("Hedgehug-Restored", r.Text)
-				case port.RevivedName: // 名前はコンマや空白を含みうるので、画面が decodeURIComponent で戻せる形にする
-					w.Header().Add("Hedgehug-Restored-Name", url.PathEscape(r.Text))
-				case port.RevivedComment:
-					w.Header().Add("Hedgehug-Restored-Comment", r.Text)
-				}
-			}
-			if joined := port.Joined(w.ctx); len(joined) > 0 {
-				w.Header().Set("Hedgehug-Joined", strings.Join(joined, ", "))
-			}
+			w.addNotes()
 		}
 	}
 	w.ResponseWriter.WriteHeader(status)
+}
+
+// addNotes は、取り消したものを種類ごとの Header に、メンバーへ足したログイン名を Hedgehug-Joined に足す。
+func (w *restoredWriter) addNotes() {
+	for _, r := range port.Revived(w.ctx) {
+		switch r.Kind {
+		case port.RevivedID:
+			w.Header().Add("Hedgehug-Restored", r.Text)
+		case port.RevivedName: // 名前はコンマや空白を含みうるので、画面が decodeURIComponent で戻せる形にする
+			w.Header().Add("Hedgehug-Restored-Name", url.PathEscape(r.Text))
+		case port.RevivedComment:
+			w.Header().Add("Hedgehug-Restored-Comment", r.Text)
+		}
+	}
+	if joined := port.Joined(w.ctx); len(joined) > 0 {
+		w.Header().Set("Hedgehug-Joined", strings.Join(joined, ", "))
+	}
 }
 
 // Flush は、出来事の読み続け(SSE)が w.(http.Flusher) で型を確かめて呼ぶ。Flush は暗黙に 200 を送るので、

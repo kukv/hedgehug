@@ -1,22 +1,24 @@
 import { expect, test } from "./fixtures";
+import { tokenUrl } from "./helpers";
 
-const url = "/#token=e2e-token";
+const url = tokenUrl();
 
 test("shows the frame and reads the server with the token", async ({ page }) => {
   await page.goto(url);
-  await expect(page.getByRole("heading", { name: "hedgehug" })).toBeVisible();
-  // e2e 用のビルドは -ldflags で版を入れないので "dev"。トークンが合わなければ 401 で出ない。
-  await expect(page.getByText("dev", { exact: true })).toBeVisible();
+  // トークンが合わなければ、マイタスクの読み込みが 401 で出ない。
+  await expect(page.getByRole("heading", { name: "マイタスク", level: 1 })).toBeVisible();
 });
 
 test("keeps the token out of the address and still reads the server after a reload", async ({
   page,
 }) => {
   await page.goto(url);
-  await expect(page.getByText("dev", { exact: true })).toBeVisible();
+  const heading = page.getByRole("heading", { name: "マイタスク", level: 1 });
+  await expect(heading).toBeVisible();
   expect(new URL(page.url()).hash).toBe("");
+  expect(new URL(page.url()).pathname).toBe("/my-tasks");
   await page.reload();
-  await expect(page.getByText("dev", { exact: true })).toBeVisible();
+  await expect(heading).toBeVisible();
 });
 
 test("the sidebar is a drawer only when the frame is 860px or narrower", async ({ page }, info) => {

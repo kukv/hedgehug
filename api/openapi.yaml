@@ -864,6 +864,18 @@ components:
       required:
         - title
       type: object
+    CreateViewBody:
+      additionalProperties: false
+      properties:
+        content:
+          $ref: "#/components/schemas/ViewContent"
+        name:
+          description: ビューの名前
+          type: string
+      required:
+        - name
+        - content
+      type: object
     CreateWorkspace:
       additionalProperties: false
       properties:
@@ -1389,6 +1401,15 @@ components:
         - choices
         - fields
       type: object
+    KeyImpact:
+      additionalProperties: false
+      properties:
+        affected:
+          description: 削除すると、保存したビューの条件にそのキーが使えなくなるか
+          type: boolean
+      required:
+        - affected
+      type: object
     LinkInput:
       additionalProperties: false
       properties:
@@ -1774,6 +1795,31 @@ components:
           type: string
       required:
         - direction
+      type: object
+    MyTasksQuery:
+      additionalProperties: false
+      properties:
+        filter:
+          description: "絞り込みの文字列(04「検索」と同じ書き方)。空なら基本のクエリだけ。sort:・group: は無視する"
+          type: string
+      required:
+        - filter
+      type: object
+    MyTasksResult:
+      additionalProperties: false
+      properties:
+        errors:
+          description: 絞り込みのエラー(1 語 1 行)
+          items:
+            type: string
+          type: array
+        rows:
+          items:
+            $ref: "#/components/schemas/SearchRow"
+          type: array
+      required:
+        - errors
+        - rows
       type: object
     NextNumber:
       additionalProperties: false
@@ -2450,6 +2496,15 @@ components:
       required:
         - title
       type: object
+    RenameViewBody:
+      additionalProperties: false
+      properties:
+        name:
+          description: 新しい名前
+          type: string
+      required:
+        - name
+      type: object
     RenameWorkspace:
       additionalProperties: false
       properties:
@@ -2949,6 +3004,14 @@ components:
         - title
         - structure
       type: object
+    SaveViewBody:
+      additionalProperties: false
+      properties:
+        content:
+          $ref: "#/components/schemas/ViewContent"
+      required:
+        - content
+      type: object
     ScreenState:
       additionalProperties: false
       properties:
@@ -3198,6 +3261,9 @@ components:
           type: string
         status:
           $ref: "#/components/schemas/SearchStatus"
+        statusId:
+          description: ステータスの内部 ID。なければ空
+          type: string
         storeColor:
           type: string
         storeId:
@@ -3234,6 +3300,7 @@ components:
         - title
         - kind
         - status
+        - statusId
         - assignee
         - priority
         - end
@@ -3856,15 +3923,6 @@ components:
         - afterWriteSeconds
         - githubMinutes
       type: object
-    SystemInfo:
-      additionalProperties: false
-      properties:
-        version:
-          description: hedgehug の版
-          type: string
-      required:
-        - version
-      type: object
     TransferChoice:
       additionalProperties: false
       properties:
@@ -4098,6 +4156,83 @@ components:
         - name
         - login
         - method
+      type: object
+    View:
+      additionalProperties: false
+      properties:
+        content:
+          $ref: "#/components/schemas/ViewContent"
+        id:
+          description: ULID を小文字にした 26 文字
+          pattern: ^[0-9a-z]{26}$
+          type: string
+        name:
+          type: string
+      required:
+        - id
+        - name
+        - content
+      type: object
+    ViewContent:
+      additionalProperties: false
+      properties:
+        layout:
+          description: 表示の形
+          enum:
+            - tree
+            - table
+          type: string
+        query:
+          description: クエリの文字列
+          type: string
+        table:
+          $ref: "#/components/schemas/ViewTable"
+      required:
+        - query
+        - layout
+        - table
+      type: object
+    ViewList:
+      additionalProperties: false
+      properties:
+        views:
+          description: 名前の順(大文字と小文字を区別しない)
+          items:
+            $ref: "#/components/schemas/View"
+          type: array
+      required:
+        - views
+      type: object
+    ViewSort:
+      additionalProperties: false
+      nullable: true
+      properties:
+        desc:
+          type: boolean
+        key:
+          type: string
+      required:
+        - key
+        - desc
+      type: object
+    ViewTable:
+      additionalProperties: false
+      properties:
+        columns:
+          description: 列の鍵(id・title・p:{キー} など)
+          items:
+            type: string
+          type: array
+        group:
+          description: グループの設定。空なら設定なし
+          type: string
+        sort:
+          $ref: "#/components/schemas/ViewSort"
+          description: 列見出しの並べ替え。なければ null
+      required:
+        - columns
+        - group
+        - sort
       type: object
     Worklog:
       additionalProperties: false
@@ -5059,7 +5194,7 @@ paths:
       summary: 選んだアイテムを一括削除するときの確認の中身を返す
   /api/events:
     get:
-      description: "出来事ごとに `event: store`・`event: sync`・`event: github`・`event: inbox` のどれかの行と、`data: {\"store\":\"<Store ID>\"}` の行を、空行で区切って送る。"
+      description: "出来事ごとに `event: store`・`event: sync`・`event: github`・`event: inbox`・`event: views` のどれかの行と、`data: {\"store\":\"<Store ID>\"}` の行を、空行で区切って送る。"
       operationId: watch-events
       responses:
         "200":
@@ -5339,6 +5474,29 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: 画面のアドレスのワークスペースの接頭辞(旧い接頭辞・移動元のアドレスを含む)が指すワークスペースを探す
+  /api/my-tasks:
+    post:
+      operationId: my-tasks
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MyTasksQuery"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MyTasksResult"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: 自分が担当する未完了のアイテムを、絞り込みをつないで返す
   /api/palette-index:
     get:
       operationId: palette-index
@@ -10069,15 +10227,15 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Internal Server Error
       summary: 同期のタイミングを保存する
-  /api/system:
+  /api/views:
     get:
-      operationId: get-system
+      operationId: list-views
       responses:
         "200":
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/SystemInfo"
+                $ref: "#/components/schemas/ViewList"
           description: OK
         default:
           content:
@@ -10085,4 +10243,179 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
-      summary: サーバーの版を返す
+      summary: 保存したビューの一覧を返す
+    post:
+      operationId: create-view
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateViewBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/View"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: ビューを作る
+  /api/views/key-impact:
+    get:
+      operationId: view-key-impact
+      parameters:
+        - description: 消すプロパティのあるワークスペースの Store
+          explode: false
+          in: query
+          name: storeId
+          required: true
+          schema:
+            description: 消すプロパティのあるワークスペースの Store
+            type: string
+        - description: 消すプロパティのあるワークスペース
+          explode: false
+          in: query
+          name: workspaceId
+          required: true
+          schema:
+            description: 消すプロパティのあるワークスペース
+            type: string
+        - description: 消す追加プロパティのキー
+          explode: false
+          in: query
+          name: key
+          required: true
+          schema:
+            description: 消す追加プロパティのキー
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KeyImpact"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: 追加プロパティの削除が、保存したビューに影響するかを返す
+  /api/views/{id}:
+    delete:
+      operationId: delete-view
+      parameters:
+        - description: ビューの識別子
+          in: path
+          name: id
+          required: true
+          schema:
+            description: ビューの識別子
+            pattern: ^[0-9a-z]{26}$
+            type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: ビューを削除する
+    put:
+      operationId: save-view
+      parameters:
+        - description: ビューの識別子
+          in: path
+          name: id
+          required: true
+          schema:
+            description: ビューの識別子
+            pattern: ^[0-9a-z]{26}$
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SaveViewBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/View"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: ビューの内容を置き換える
+  /api/views/{id}/duplicate:
+    post:
+      operationId: duplicate-view
+      parameters:
+        - description: ビューの識別子
+          in: path
+          name: id
+          required: true
+          schema:
+            description: ビューの識別子
+            pattern: ^[0-9a-z]{26}$
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/View"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: ビューを複製する
+  /api/views/{id}/rename:
+    post:
+      operationId: rename-view
+      parameters:
+        - description: ビューの識別子
+          in: path
+          name: id
+          required: true
+          schema:
+            description: ビューの識別子
+            pattern: ^[0-9a-z]{26}$
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RenameViewBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/View"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: ビューの名前を変える

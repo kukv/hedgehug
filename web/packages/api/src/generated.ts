@@ -605,6 +605,48 @@ export interface CreateProject {
   title: string;
 }
 
+/**
+ * 表示の形
+ */
+export type ViewContentLayout = typeof ViewContentLayout[keyof typeof ViewContentLayout];
+
+
+export const ViewContentLayout = {
+  tree: 'tree',
+  table: 'table',
+} as const;
+
+/**
+ * @nullable
+ */
+export type ViewSort = {
+  desc: boolean;
+  key: string;
+} | null;
+
+export interface ViewTable {
+  /** 列の鍵(id・title・p:{キー} など) */
+  columns: string[];
+  /** グループの設定。空なら設定なし */
+  group: string;
+  /** 列見出しの並べ替え。なければ null */
+  sort: ViewSort | null;
+}
+
+export interface ViewContent {
+  /** 表示の形 */
+  layout: ViewContentLayout;
+  /** クエリの文字列 */
+  query: string;
+  table: ViewTable;
+}
+
+export interface CreateViewBody {
+  content: ViewContent;
+  /** ビューの名前 */
+  name: string;
+}
+
 export interface CreateWorkspace {
   /**
      * 1 行。改行は入れられない
@@ -918,6 +960,11 @@ export interface Item {
   /** @nullable */
   watchers: string[] | null;
   workspace: string;
+}
+
+export interface KeyImpact {
+  /** 削除すると、保存したビューの条件にそのキーが使えなくなるか */
+  affected: boolean;
 }
 
 export type LinkInputKind = typeof LinkInputKind[keyof typeof LinkInputKind];
@@ -1245,6 +1292,128 @@ export const MoveWorkspaceItemDirection = {
 
 export interface MoveWorkspaceItem {
   direction: MoveWorkspaceItemDirection;
+}
+
+export interface MyTasksQuery {
+  /** 絞り込みの文字列(04「検索」と同じ書き方)。空なら基本のクエリだけ。sort:・group: は無視する */
+  filter: string;
+}
+
+/**
+ * @nullable
+ */
+export type SearchAssignee = {
+  login: string;
+  /**
+     * 表示名。メンバーにいない人は null
+     * @nullable
+     */
+  name: string | null;
+} | null;
+
+export interface SearchCell {
+  text: string;
+  type: string;
+}
+
+/**
+ * @nullable
+ */
+export type SearchDeleted = {
+  /** 完全に削除されるまでの日数。0 以下なら保持日数を過ぎている */
+  daysLeft: number;
+} | null;
+
+/**
+ * @nullable
+ */
+export type SearchParent = {
+  display: string;
+  itemId: string;
+  title: string;
+} | null;
+
+/**
+ * @nullable
+ */
+export type SearchPriority = {
+  name: string;
+} | null;
+
+export interface SearchProject {
+  display: string;
+  title: string;
+}
+
+/**
+ * @nullable
+ */
+export type SearchStatus = {
+  category: string;
+  name: string;
+} | null;
+
+/**
+ * 追加プロパティの列の鍵 → 値
+ */
+export type SearchRowCustom = {[key: string]: SearchCell};
+
+export interface SearchRow {
+  assignee: SearchAssignee | null;
+  /** 作成の時刻(RFC 3339) */
+  created: string;
+  /** 追加プロパティの列の鍵 → 値 */
+  custom: SearchRowCustom;
+  /** 削除済みの行だけ */
+  deleted: SearchDeleted | null;
+  /** いまの ID(HH-12) */
+  display: string;
+  /** 終了日(YYYY-MM-DD)。なければ空 */
+  end: string;
+  /**
+     * 見積もり時間
+     * @nullable
+     */
+  estimate: number | null;
+  itemId: string;
+  kind: string;
+  /** 旧 ID だけで一致した(画面は「旧 ID」と添える) */
+  oldIdHit: boolean;
+  parent: SearchParent | null;
+  /** @nullable */
+  points: number | null;
+  priority: SearchPriority | null;
+  project: SearchProject;
+  projectId: string;
+  readOnly: boolean;
+  /** リリースの名前。なければ空 */
+  release: string;
+  /** 「(削除された値)」にする列の鍵 */
+  removed: string[];
+  /** スプリントの名前。なければ空 */
+  sprint: string;
+  /** 開始日(YYYY-MM-DD)。なければ空 */
+  start: string;
+  status: SearchStatus | null;
+  /** ステータスの内部 ID。なければ空 */
+  statusId: string;
+  storeColor: string;
+  storeId: string;
+  storeName: string;
+  /** 関連システムの名前。一覧にない値は「(削除された値)」 */
+  systems: string[];
+  title: string;
+  /** 「—」にする列の鍵 */
+  unused: string[];
+  /** 更新の時刻(RFC 3339) */
+  updated: string;
+  workspaceId: string;
+}
+
+export interface MyTasksResult {
+  /** 絞り込みのエラー(1 語 1 行) */
+  errors: string[];
+  rows: SearchRow[];
 }
 
 export interface NextNumber {
@@ -1692,6 +1861,11 @@ export interface RenameProject {
   title: string;
 }
 
+export interface RenameViewBody {
+  /** 新しい名前 */
+  name: string;
+}
+
 export interface RenameWorkspace {
   /**
      * 1 行。改行は入れられない
@@ -1974,6 +2148,10 @@ export interface SaveItemAsTemplate {
   title: string;
 }
 
+export interface SaveViewBody {
+  content: ViewContent;
+}
+
 export interface ScreenState {
   /**
      * 保存した文字列。まだなければ null
@@ -1987,23 +2165,6 @@ export interface ScreenStateBody {
   body: string;
 }
 
-/**
- * @nullable
- */
-export type SearchAssignee = {
-  login: string;
-  /**
-     * 表示名。メンバーにいない人は null
-     * @nullable
-     */
-  name: string | null;
-} | null;
-
-export interface SearchCell {
-  text: string;
-  type: string;
-}
-
 export interface SearchColumn {
   key: string;
   name: string;
@@ -2012,38 +2173,9 @@ export interface SearchColumn {
   type: string;
 }
 
-/**
- * @nullable
- */
-export type SearchDeleted = {
-  /** 完全に削除されるまでの日数。0 以下なら保持日数を過ぎている */
-  daysLeft: number;
-} | null;
-
 export interface SearchGroup {
   label: string;
   rows: number[];
-}
-
-/**
- * @nullable
- */
-export type SearchParent = {
-  display: string;
-  itemId: string;
-  title: string;
-} | null;
-
-/**
- * @nullable
- */
-export type SearchPriority = {
-  name: string;
-} | null;
-
-export interface SearchProject {
-  display: string;
-  title: string;
 }
 
 /**
@@ -2061,69 +2193,6 @@ export interface SearchQuery {
   query: string;
   /** 列見出しの並べ替え。あれば sort: の代わりに使う */
   sort?: SearchSort | null;
-}
-
-/**
- * @nullable
- */
-export type SearchStatus = {
-  category: string;
-  name: string;
-} | null;
-
-/**
- * 追加プロパティの列の鍵 → 値
- */
-export type SearchRowCustom = {[key: string]: SearchCell};
-
-export interface SearchRow {
-  assignee: SearchAssignee | null;
-  /** 作成の時刻(RFC 3339) */
-  created: string;
-  /** 追加プロパティの列の鍵 → 値 */
-  custom: SearchRowCustom;
-  /** 削除済みの行だけ */
-  deleted: SearchDeleted | null;
-  /** いまの ID(HH-12) */
-  display: string;
-  /** 終了日(YYYY-MM-DD)。なければ空 */
-  end: string;
-  /**
-     * 見積もり時間
-     * @nullable
-     */
-  estimate: number | null;
-  itemId: string;
-  kind: string;
-  /** 旧 ID だけで一致した(画面は「旧 ID」と添える) */
-  oldIdHit: boolean;
-  parent: SearchParent | null;
-  /** @nullable */
-  points: number | null;
-  priority: SearchPriority | null;
-  project: SearchProject;
-  projectId: string;
-  readOnly: boolean;
-  /** リリースの名前。なければ空 */
-  release: string;
-  /** 「(削除された値)」にする列の鍵 */
-  removed: string[];
-  /** スプリントの名前。なければ空 */
-  sprint: string;
-  /** 開始日(YYYY-MM-DD)。なければ空 */
-  start: string;
-  status: SearchStatus | null;
-  storeColor: string;
-  storeId: string;
-  storeName: string;
-  /** 関連システムの名前。一覧にない値は「(削除された値)」 */
-  systems: string[];
-  title: string;
-  /** 「—」にする列の鍵 */
-  unused: string[];
-  /** 更新の時刻(RFC 3339) */
-  updated: string;
-  workspaceId: string;
 }
 
 export interface SearchResult {
@@ -2481,11 +2550,6 @@ export interface SyncTimingSetting {
   intervalMinutes: number;
 }
 
-export interface SystemInfo {
-  /** hedgehug の版 */
-  version: string;
-}
-
 export interface TransferEpic {
   /** 画面の ID(MB-1) */
   display: string;
@@ -2601,6 +2665,21 @@ export interface ValuesBody {
   /** デバイスフローはサインインの API で登録・保存する */
   method: ValuesBodyMethod;
   name: string;
+}
+
+export interface View {
+  content: ViewContent;
+  /**
+     * ULID を小文字にした 26 文字
+     * @pattern ^[0-9a-z]{26}$
+     */
+  id: string;
+  name: string;
+}
+
+export interface ViewList {
+  /** 名前の順(大文字と小文字を区別しない) */
+  views: View[];
 }
 
 export interface Worklog {
@@ -3005,6 +3084,15 @@ export type GetReportParams = {
 
 export type GetWorkspaceTransferPreviewParams = {
   toStore: string;
+};
+
+export type ViewKeyImpactParams = {
+  /** 消すプロパティのあるワークスペースの Store */
+  storeId: string;
+  /** 消すプロパティのあるワークスペース */
+  workspaceId: string;
+  /** 消す追加プロパティのキー */
+  key: string;
 };
 
 export const getListAccountsUrl = () => {
@@ -3467,7 +3555,7 @@ export const getWatchEventsUrl = () => {
 }
 
 /**
- * 出来事ごとに `event: store`・`event: sync`・`event: github`・`event: inbox` のどれかの行と、`data: {"store":"<Store ID>"}` の行を、空行で区切って送る。
+ * 出来事ごとに `event: store`・`event: sync`・`event: github`・`event: inbox`・`event: views` のどれかの行と、`data: {"store":"<Store ID>"}` の行を、空行で区切って送る。
  * @summary Store の変化と同期の状態の変化を、Server-Sent Events で送り続ける
  */
 export const watchEvents = async ( options?: Parameters<typeof fetcher>[1]): Promise<string> => {
@@ -3775,6 +3863,44 @@ export const locateWorkspace = async (params: LocateWorkspaceParams, options?: P
     method: 'GET'
 
 
+  }
+);}
+
+
+
+export const getMyTasksUrl = () => {
+
+
+
+
+  return `/api/my-tasks`
+}
+
+/**
+ * @summary 自分が担当する未完了のアイテムを、絞り込みをつないで返す
+ */
+export const myTasks = async (myTasksQuery: MyTasksQuery, options?: Parameters<typeof fetcher>[1]): Promise<MyTasksResult> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return fetcher<MyTasksResult>(getMyTasksUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(myTasksQuery)
   }
 );}
 
@@ -9054,24 +9180,219 @@ return fetcher<void>(getSetSyncTimingUrl(),
 
 
 
-export const getGetSystemUrl = () => {
+export const getListViewsUrl = () => {
 
 
 
 
-  return `/api/system`
+  return `/api/views`
 }
 
 /**
- * @summary サーバーの版を返す
+ * @summary 保存したビューの一覧を返す
  */
-export const getSystem = async ( options?: Parameters<typeof fetcher>[1]): Promise<SystemInfo> => {
+export const listViews = async ( options?: Parameters<typeof fetcher>[1]): Promise<ViewList> => {
 
-  return fetcher<SystemInfo>(getGetSystemUrl(),
+  return fetcher<ViewList>(getListViewsUrl(),
   {
     ...options,
     method: 'GET'
 
 
+  }
+);}
+
+
+
+export const getCreateViewUrl = () => {
+
+
+
+
+  return `/api/views`
+}
+
+/**
+ * @summary ビューを作る
+ */
+export const createView = async (createViewBody: CreateViewBody, options?: Parameters<typeof fetcher>[1]): Promise<View> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return fetcher<View>(getCreateViewUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(createViewBody)
+  }
+);}
+
+
+
+export const getViewKeyImpactUrl = (params: ViewKeyImpactParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/views/key-impact?${stringifiedParams}` : `/api/views/key-impact`
+}
+
+/**
+ * @summary 追加プロパティの削除が、保存したビューに影響するかを返す
+ */
+export const viewKeyImpact = async (params: ViewKeyImpactParams, options?: Parameters<typeof fetcher>[1]): Promise<KeyImpact> => {
+
+  return fetcher<KeyImpact>(getViewKeyImpactUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export const getDeleteViewUrl = (id: string,) => {
+
+
+
+
+  return `/api/views/${encodeURIComponent(String(id))}`
+}
+
+/**
+ * @summary ビューを削除する
+ */
+export const deleteView = async (id: string, options?: Parameters<typeof fetcher>[1]): Promise<void> => {
+
+  return fetcher<void>(getDeleteViewUrl(id),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+export const getSaveViewUrl = (id: string,) => {
+
+
+
+
+  return `/api/views/${encodeURIComponent(String(id))}`
+}
+
+/**
+ * @summary ビューの内容を置き換える
+ */
+export const saveView = async (id: string,
+    saveViewBody: SaveViewBody, options?: Parameters<typeof fetcher>[1]): Promise<View> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return fetcher<View>(getSaveViewUrl(id),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(saveViewBody)
+  }
+);}
+
+
+
+export const getDuplicateViewUrl = (id: string,) => {
+
+
+
+
+  return `/api/views/${encodeURIComponent(String(id))}/duplicate`
+}
+
+/**
+ * @summary ビューを複製する
+ */
+export const duplicateView = async (id: string, options?: Parameters<typeof fetcher>[1]): Promise<View> => {
+
+  return fetcher<View>(getDuplicateViewUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+export const getRenameViewUrl = (id: string,) => {
+
+
+
+
+  return `/api/views/${encodeURIComponent(String(id))}/rename`
+}
+
+/**
+ * @summary ビューの名前を変える
+ */
+export const renameView = async (id: string,
+    renameViewBody: RenameViewBody, options?: Parameters<typeof fetcher>[1]): Promise<View> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return fetcher<View>(getRenameViewUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(renameViewBody)
   }
 );}

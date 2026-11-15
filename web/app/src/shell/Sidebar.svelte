@@ -1,19 +1,23 @@
 <script lang="ts">
   import {
     createCollapsed,
+    myTasksBadge,
     type Resolved,
     type Route,
     type StoreNode,
     syncAllHint,
     syncCard,
   } from "@hedgehug/core";
-  import { Brand, Button, SyncCard } from "@hedgehug/ui";
+  import { Button, SyncCard } from "@hedgehug/ui";
   import { inbox } from "../inbox";
   import type { Links } from "../links";
+  import { myTaskBase } from "../myTasks";
   import { openSearchTable, screenStates } from "../search";
   import { isMac } from "../tab";
   import { itemDialog, sync, syncNow } from "../wire";
   import SidebarStore from "./SidebarStore.svelte";
+  import SidebarTop from "./SidebarTop.svelte";
+  import SidebarViews from "./SidebarViews.svelte";
 
   // サイドバー(04「サイドバー」)。名前と設定・「新規作成」・Store ごとのブロック・同期のカードを出す。
   interface Props {
@@ -27,12 +31,15 @@
   const status = sync.status;
   const card = $derived(syncCard($status, $syncNow));
   const hint = syncAllHint(isMac());
-  const settings: Route = { name: "settings", tab: "general" };
+  const myTasksRoute: Route = { name: "mytasks" };
   const inboxRoute: Route = { name: "inbox" };
   const activityRoute: Route = { name: "activity" };
   // 「検索」はテーブルで開く入口(E3a-9)。修飾キーのない主ボタンのクリックで移れたときだけテーブルにする。
   const searchRoute: Route = { name: "search" };
   const unread = inbox.unread;
+  // マイタスクのバッジは、絞り込みなしの件数(画面の絞り込みでは変わらない)。
+  const myTaskRows = myTaskBase.rows;
+  const myTaskCount = $derived($myTaskRows?.length ?? 0);
 
   // 開閉は画面の状態に残す(G1-14)。has は version を読むので、切り替えと読み込みの完了で描き直される。
   const saved = createCollapsed(screenStates);
@@ -53,30 +60,23 @@
   }
 </script>
 
-<div class="top">
-  <Brand />
-  <a
-    class="gear"
-    href={links.href(settings)}
-    aria-label="設定"
-    title="設定"
-    aria-current={current?.name === "settings" ? "page" : undefined}
-    onclick={(e) => links.click(e, settings)}
-    onauxclick={(e) => links.click(e, settings)}
-  >
-    <svg width="16" height="16" viewBox="0 0 24 24">
-      <title>設定</title>
-      <circle cx="12" cy="12" r="3" />
-      <path
-        d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"
-      />
-    </svg>
-  </a>
-</div>
+<SidebarTop {current} {links} />
 <Button variant="primary" onclick={() => void itemDialog.open()}>
   新規作成 <kbd class="kbd">C</kbd>
 </Button>
 <nav class="nav" aria-label="ナビ">
+  <a
+    class="nav-row"
+    href={links.href(myTasksRoute)}
+    aria-current={current?.name === "mytasks" ? "page" : undefined}
+    onclick={(e) => links.click(e, myTasksRoute)}
+    onauxclick={(e) => links.click(e, myTasksRoute)}
+  >
+    <span>マイタスク</span>
+    {#if myTaskCount > 0}
+      <span class="badge" role="img" aria-label={myTasksBadge(myTaskCount)}>{myTaskCount}</span>
+    {/if}
+  </a>
   <a
     class="nav-row"
     href={links.href(inboxRoute)}
@@ -111,6 +111,7 @@
 {#each stores as store (store.id)}
   <SidebarStore {store} {current} {links} {collapsed} ontoggle={toggle} />
 {/each}
+<SidebarViews {current} {links} />
 {#if card}
   <SyncCard
     {card}
@@ -121,31 +122,6 @@
 {/if}
 
 <style>
-  .top {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-  }
-  .gear {
-    display: inline-grid;
-    place-items: center;
-    width: 28px;
-    height: 28px;
-    border-radius: 8px;
-    color: var(--muted);
-  }
-  .gear:hover,
-  .gear[aria-current="page"] {
-    background: var(--hover);
-    color: var(--ink);
-  }
-  .gear svg {
-    stroke: currentColor;
-    fill: none;
-    stroke-width: 1.8;
-    stroke-linecap: round;
-    stroke-linejoin: round;
-  }
   .nav {
     display: flex;
     flex-direction: column;

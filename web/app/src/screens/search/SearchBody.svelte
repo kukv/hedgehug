@@ -5,13 +5,15 @@
     emptyText,
     nextSort,
     readOnlyNote,
+    type Search,
     type SearchTreeView,
     selectedText,
     shownColumns,
     treeEmptyText,
   } from "@hedgehug/core";
   import { Button, SelectionBar } from "@hedgehug/ui";
-  import { openRowMenu, search, searchSelection } from "../../search";
+  import type { Snippet } from "svelte";
+  import { openRowMenu, searchSelection } from "../../search";
   import { itemDialog } from "../../wire";
   import { bulkChange, bulkDelete } from "../../wireActions";
   import ItemTable from "../table/ItemTable.svelte";
@@ -20,7 +22,15 @@
 
   // 検索の画面の本体(04「検索」)。ツールバーと、レイアウトがツリーならツリー(E3a)、そうでなければテーブル(E2a)を出す。
   // どちらも、空のときは本体の代わりに文を出す。ツリーで is:deleted の検索をしたときは、ツリーの代わりに案内を出す(E3a-7)。
-  const view = search.state;
+  interface Props {
+    search: Search;
+    // actions は、画面ごとの操作。ツールバーの右端に置く。
+    actions?: Snippet;
+  }
+
+  let { search, actions }: Props = $props();
+
+  const view = $derived(search.state);
   const rows = $derived($view.result?.rows ?? []);
   const errors = $derived($view.result?.errors ?? []);
   const columns = $derived($view.result?.columns ?? []);
@@ -43,7 +53,7 @@
   });
 </script>
 
-<SearchToolbar treeCount={deleted ? 0 : (tree?.matched ?? null)} />
+<SearchToolbar {search} {actions} treeCount={deleted ? 0 : (tree?.matched ?? null)} />
 
 {#if deleted}
   <div class="content">
@@ -63,7 +73,7 @@
       </div>
     {/if}
     <!-- 空のあいだも組み直しを続けるので、ツリーは出したままにする(行がなければ何も描かない) -->
-    <SearchTree bind:view={tree} />
+    <SearchTree {search} bind:view={tree} />
   </div>
 {:else}
   {#if $picked.length > 0}

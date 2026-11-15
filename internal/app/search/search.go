@@ -2,6 +2,7 @@ package search
 
 import (
 	"context"
+	"time"
 
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/domain/planning"
@@ -52,23 +53,14 @@ func (s Service) Search(ctx context.Context, text string, opt TableOptions) (Res
 	if len(errs) > 0 {
 		return res, nil
 	}
-	now := s.Clock.Now()
-	es, err := s.entries(ctx, q, now)
-	if err != nil {
-		return Result{}, err
-	}
-	today := planning.Today(now)
-	var rows []*Row
-	for _, e := range es {
-		if hit := query.Match(q, e.facts, today); hit.Match {
-			rows = append(rows, &Row{Store: e.info, Facts: e.facts, OldID: hit.OldID, DaysLeft: e.daysLeft, Cells: cellsOf(e.facts, res.Columns)})
-		}
-	}
 	sortBy := q.Sort
 	if opt.Sort != nil {
 		sortBy = opt.Sort
 	}
-	query.Order(rows, func(r *Row) *query.Facts { return &r.Facts }, sortBy)
+	rows, now, err := s.collect(ctx, q, res.Columns, sortBy)
+	if err != nil {
+		return Result{}, err
+	}
 	res.Rows = make([]Row, 0, len(rows))
 	facts := make([]*query.Facts, 0, len(rows))
 	for _, r := range rows {
@@ -78,4 +70,23 @@ func (s Service) Search(ctx context.Context, text string, opt TableOptions) (Res
 	res.GroupBy = query.GroupKey(opt.Group, q.Group)
 	res.Groups = query.Groups(facts, res.GroupBy, now)
 	return res, nil
+}
+
+// collect は、解析したクエリに一致する行を、sortBy(なければ Store・ワークスペース・アイテムの並び順)で集める。
+// 時計は 1 回だけ読み、その時刻も返す。
+func (s Service) collect(ctx context.Context, q query.Query, columns []Column, sortBy *query.Sort) ([]*Row, time.Time, error) {
+	now := s.Clock.Now()
+	es, err := s.entries(ctx, q, now)
+	if err != nil {
+		return nil, now, err
+	}
+	today := planning.Today(now)
+	var rows []*Row
+	for _, e := range es {
+		if hit := query.Match(q, e.facts, today); hit.Match {
+			rows = append(rows, &Row{Store: e.info, Facts: e.facts, OldID: hit.OldID, DaysLeft: e.daysLeft, Cells: cellsOf(e.facts, columns)})
+		}
+	}
+	query.Order(rows, func(r *Row) *query.Facts { return &r.Facts }, sortBy)
+	return rows, now, nil
 }
