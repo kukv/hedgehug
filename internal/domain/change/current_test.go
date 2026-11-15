@@ -99,13 +99,16 @@ func TestListRow(t *testing.T) {
 		rec("a2", at(3), "taro", change.NewAdd("links", a), "r1"),
 		rec("b1", at(4), "taro", change.NewAdd("links", map[string]string{"repo": "b"}), "c"),
 	}
-	if got, ok := change.ListRow(log, "links", []byte(`{"repo":"a","kind":"x"}`)); !ok || got.ID != "a2" {
+	if got, ok := change.ListRow(log, "links", []byte(`{"kind":"x","repo":"a"}`)); !ok || got.ID != "a2" {
 		t.Errorf("ListRow(a) = %v, %v; want a2", got.ID, ok)
 	}
-	if got, ok := change.ListRow(log, "links", []byte(`{ "kind":"x", "repo":"a" }`)); !ok || got.ID != "a2" {
-		t.Errorf("ListRow(reordered a) = %v, %v; want a2", got.ID, ok)
+	if got, ok := change.ListRow(log, "links", []byte(`{ "kind": "x", "repo": "a" }`)); !ok || got.ID != "a2" {
+		t.Errorf("ListRow(whitespace-different a) = %v, %v; want a2", got.ID, ok)
 	}
-	if got, ok := change.ListRow(log[:3], "links", []byte(`{"repo":"a","kind":"x"}`)); !ok || got.ID != "r1" {
+	if _, ok := change.ListRow(log, "links", []byte(`{"repo":"a","kind":"x"}`)); ok {
+		t.Error("a key-order-different value is a different value (same as Resolve) and must give false")
+	}
+	if got, ok := change.ListRow(log[:3], "links", []byte(`{"kind":"x","repo":"a"}`)); !ok || got.ID != "r1" {
 		t.Errorf("ListRow(removed a) = %v, %v; want the remove r1", got.ID, ok)
 	}
 	if _, ok := change.ListRow(log, "links", []byte(`{"repo":"zzz"}`)); ok {

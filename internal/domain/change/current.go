@@ -45,17 +45,17 @@ func Current(log []Record, t Type, f string, alive func(Record) bool) (Record, b
 }
 
 // ListRow は、複数の値を持つ項目 f の値 v について、add・remove の先端のうち winner の行を返す(C5c2-3。
-// Resolve の resolveList と同じ選び方)。v は、JSON として同じなら(空白・キーの並びが違っても)同じ値とする。
+// Resolve の resolveList と同じ選び方)。v は、Resolve と同じく canonical(空白を除いた JSON)が同じなら同じ値とする(キーの並びが違えば別の値)。
 // いまある値なら add の行(作成の初期値にだけあれば作成の行)、外した値なら remove の行。
 // v の行がなく作成の初期値にもなければ false。
 func ListRow(log []Record, f string, v json.RawMessage) (Record, bool) {
-	want := normalize(v)
+	want := canonical(v)
 	var g []Record
 	for _, r := range log {
 		switch {
 		case r.T == Create:
 			g = append(g, r)
-		case r.F == f && r.T == Add && normalize(r.To) == want, r.F == f && r.T == Remove && normalize(r.From) == want:
+		case r.F == f && r.T == Add && canonical(r.To) == want, r.F == f && r.T == Remove && canonical(r.From) == want:
 			g = append(g, r)
 		}
 	}
@@ -63,7 +63,7 @@ func ListRow(log []Record, f string, v json.RawMessage) (Record, bool) {
 	if w == nil {
 		return Record{}, false
 	}
-	if w.T == Create && !slices.ContainsFunc(initialList(*w, f), func(x json.RawMessage) bool { return normalize(x) == want }) {
+	if w.T == Create && !slices.ContainsFunc(initialList(*w, f), func(x json.RawMessage) bool { return canonical(x) == want }) {
 		return Record{}, false
 	}
 	return *w, true
@@ -76,19 +76,6 @@ func initialList(c Record, f string) []json.RawMessage {
 	var list []json.RawMessage
 	_ = json.Unmarshal(initial[f], &list)
 	return list
-}
-
-// normalize は、JSON として同じ値に同じ文字列を返す(キーは辞書順)。JSON でなければそのまま。
-func normalize(v json.RawMessage) string {
-	var x any
-	if err := json.Unmarshal(v, &x); err != nil {
-		return string(v)
-	}
-	b, err := json.Marshal(x)
-	if err != nil {
-		return string(v)
-	}
-	return string(b)
 }
 
 // First は、t と f が同じ行のうち、最初に書いた行(投稿・記録)を返す。prev が同じ項目の行を指さない行のうち、
