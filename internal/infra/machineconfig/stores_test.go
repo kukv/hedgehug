@@ -177,3 +177,19 @@ func TestOldShapeSurvivesRewrite(t *testing.T) {
 		t.Errorf("StoreEntries = %+v, %v", got, err)
 	}
 }
+
+func TestSetMachineLoginKeepsStores(t *testing.T) {
+	ctx := context.Background()
+	f := writeConfig(t, threeStores+"accounts:\n  - {id: a1, name: work, login: x, method: gh_cli}\n")
+	gh := f.Stores(openAll).StoreGitHub()
+	if err := gh.SetMachineLogin(ctx, "hanako"); err != nil {
+		t.Fatal(err)
+	}
+	if login, err := gh.MachineLogin(ctx); err != nil || login != "hanako" {
+		t.Errorf("MachineLogin = %q, %v", login, err)
+	}
+	c, err := f.read()
+	if err != nil || len(c.Stores) != 3 || len(c.Accounts) != 1 {
+		t.Errorf("stores or accounts lost: %+v, %v", c, err)
+	}
+}

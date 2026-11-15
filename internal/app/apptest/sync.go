@@ -22,9 +22,8 @@ type ReplicatorCall struct {
 }
 
 // Replicator は port.Replicator の偽物。Sync は Results・Errs に置いた値を返す。Gate が nil でなければ、
-// Sync はそこから 1 つ受け取るまで待つ(同期が動いているあいだを作るため)。
-// SyncSave は、Errs にあれば fn を呼ばずにそれを返し(受け取りの失敗)、なければ Stores に保存する。
-// SendErrs にあれば送信の失敗として返し、Store に何も反映しない。
+// Sync はそこから 1 つ受け取るまで待つ(同期が動いているあいだを作るため)。SyncSave は、Errs にあれば fn を呼ばずに
+// それを返し(受け取りの失敗)、なければ Stores に保存する。SendErrs にあれば送信の失敗として返し、何も反映しない。
 type Replicator struct {
 	mu         sync.Mutex
 	Stores     *Stores // SyncSave の fn を実行する Store
@@ -58,8 +57,7 @@ func (r *Replicator) Sync(ctx context.Context, id port.StoreID, remote port.Remo
 	return r.Results[id], nil
 }
 
-// SyncSave は、受け取りの失敗(Errs)がなければ、Stores に保存して送る。ロックは Store のものだけを持つ
-// (r.mu は fn のあいだ持たない)。
+// SyncSave は、受け取りの失敗(Errs)がなければ、Stores に保存して送る(r.mu は fn のあいだ持たない)。
 func (r *Replicator) SyncSave(_ context.Context, id port.StoreID, remote port.Remote, op port.Operation, fn func(tx port.Tx) error) (port.SyncResult, error) {
 	r.mu.Lock()
 	r.calls = append(r.calls, ReplicatorCall{Store: id, Remote: remote, Save: true})
@@ -262,6 +260,13 @@ func (s *SyncSettings) Timing(context.Context) (port.SyncTiming, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.Value, nil
+}
+
+func (s *SyncSettings) SetTiming(_ context.Context, t port.SyncTiming) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.Value = t
+	return nil
 }
 
 // SyncTokens は port.SyncTokens の偽物。Errs にあればそのエラーを、なければ Tokens の値を返す。

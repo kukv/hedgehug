@@ -174,6 +174,13 @@ func (g storeGitHub) Unassign(_ context.Context, id account.ID) error {
 	})
 }
 
+func (g storeGitHub) SetMachineLogin(_ context.Context, login string) error {
+	return g.v.f.update(func(c *config) error {
+		c.Login = login
+		return nil
+	})
+}
+
 func (g storeGitHub) MachineLogin(context.Context) (string, error) {
 	c, err := g.v.f.read()
 	return c.Login, err

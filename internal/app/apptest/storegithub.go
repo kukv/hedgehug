@@ -42,6 +42,13 @@ func (s *StoreGitHub) MachineLogin(context.Context) (string, error) {
 	return s.Login, nil
 }
 
+func (s *StoreGitHub) SetMachineLogin(_ context.Context, login string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.Login = login
+	return nil
+}
+
 // 以下は GitHub(github.go)の PR の偽物。
 
 // PutPull は、repo の PR p を置く(同じ番号があれば置き換える)。ReadPulls が返す。

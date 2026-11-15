@@ -20,3 +20,4 @@ type noStoreGitHub struct{}
 func (noStoreGitHub) List(context.Context) ([]port.StoreGitHubInfo, error) { return nil, nil }
 func (noStoreGitHub) Unassign(context.Context, account.ID) error           { return nil }
 func (noStoreGitHub) MachineLogin(context.Context) (string, error)         { return "", nil }
+func (noStoreGitHub) SetMachineLogin(context.Context, string) error        { return nil }

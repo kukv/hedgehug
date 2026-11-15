@@ -47,3 +47,37 @@ func TestSyncSectionSurvivesRewrite(t *testing.T) {
 		t.Errorf("Timing = %+v, %v", got, err)
 	}
 }
+
+// 選択肢にない値(手で書き換えた)は初期値として扱う。選択肢の値はそのまま(G1-18)。
+func TestTimingSnapsToChoices(t *testing.T) {
+	ctx := context.Background()
+	f := writeConfig(t, "sync:\n  interval: 120\n  push_interval: 45\n  github_interval: 60\n")
+	got, err := f.SyncSettings().Timing(ctx)
+	want := port.SyncTiming{Auto: true, Interval: 5 * time.Minute, AfterWrite: 30 * time.Second, GitHubEvery: 5 * time.Minute}
+	if err != nil || got != want {
+		t.Errorf("Timing = %+v, %v", got, err)
+	}
+	f = writeConfig(t, "sync:\n  interval: 3600\n  push_interval: 60\n  github_interval: 1800\n")
+	got, err = f.SyncSettings().Timing(ctx)
+	want = port.SyncTiming{Auto: true, Interval: time.Hour, AfterWrite: time.Minute, GitHubEvery: 30 * time.Minute}
+	if err != nil || got != want {
+		t.Errorf("Timing = %+v, %v", got, err)
+	}
+}
+
+func TestSetTimingRoundTrip(t *testing.T) {
+	ctx := context.Background()
+	f := writeConfig(t, "login: taro\n")
+	want := port.SyncTiming{Auto: false, Interval: 15 * time.Minute, AfterWrite: 10 * time.Second, GitHubEvery: 30 * time.Minute}
+	if err := f.SyncSettings().SetTiming(ctx, want); err != nil {
+		t.Fatal(err)
+	}
+	got, err := f.SyncSettings().Timing(ctx)
+	if err != nil || got != want {
+		t.Errorf("Timing = %+v, %v", got, err)
+	}
+	c, err := f.read()
+	if err != nil || c.Sync.Auto == nil || *c.Sync.Auto || c.Login != "taro" {
+		t.Errorf("config = %+v, %v", c, err)
+	}
+}
