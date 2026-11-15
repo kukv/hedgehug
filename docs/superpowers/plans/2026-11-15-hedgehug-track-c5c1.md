@@ -50,13 +50,13 @@
 | C5c1-1 | 範囲は名前 8 種・接頭辞・プロパティのキー。Issue のリンクとメンバーは C5c2 | ユーザーの決定(2026-11-15、C5c を 2 本に分ける) |
 | C5c1-2 | 重なりを数える範囲と比べ方は、書き込みのときの検査と同じにする。<br>・ワークスペースの名前・接頭辞: Store の削除済みでないワークスペース<br>・プロジェクトの名前: 同じワークスペースの削除済みでないプロジェクト<br>・プロパティの名前: `Settings.Properties`(組み込み・非表示を含む)<br>・プロパティのキー: `Settings.Properties` の組み込みでないもの<br>・値の名前: 同じ一覧(ステータス・優先度・関連システム・プロパティごとの選択肢)。大文字と小文字を区別しない(`strings.EqualFold`)<br>・テンプレート: `Settings.Templates`<br>・ルール: `automation.FromLog`(専用ルールを含む。無効も数える)<br>・スプリント・リリース: `planning.FromLog` の `LiveSprints`・`LiveReleases`(完了・アーカイブを含む)<br>どれも削除済みは数えない。値の名前のほかは完全一致。比べる前に前後の空白を除く(各 `NormalizeName`) | 03 `:65`・`:283`、02 `:533`、05 `:82`。書き込みで断る範囲と同じにすれば、修復のあとの状態が書き込みの検査を通る |
 | C5c1-3 | 「名前を決めた行」: その項目(`name`・`prefix`・`title`・`properties/<P>/name` など)の `change.Current(log, change.Set, f, …)` の行。`set` がなければ、その項目を作った `create` の行(ワークスペースの作成と一緒に作った初期の設定、プロジェクトの作成) | 名前の変更で重なった場合(A が「X」を「foo」に変え、B が「foo」を作る)も、重なりを作った行で決めるため |
-| C5c1-4 | 残す 1 件と直すもの: 番号の重なりと同じ規則(C3a-13)を、名前を決めた行に当てる。名前を決めた行が自分の側(`Facts.Side == 1`)にないものの中で、行の `at` が最も古いもの(同じなら行の ID が小さいもの)を残す。どれも自分の側なら全体で最も古いもの。`numbers.go` の `moved` の規則を共通の `keeper` にして両方から使う | 06 `:256`「番号の重なりと同じ決め方」 |
+| C5c1-4 | 残す 1 件と直すもの: 番号の重なりと同じ規則(C3a-13)を、名前を決めた行に当てる。名前を決めた行が自分の側(`Facts.Side == 1`)にないものの中で、行の `at` が最も古いもの(同じなら、名前を決めた行の ID が小さいもの)を残す。どれも自分の側なら全体で最も古いもの。`numbers.go` の `moved` の規則を共通の `keeper` にして両方から使う。`at` が同じときの比べ方は `keeper` に渡す。番号はエンティティの内部 ID(C3a-13)、名前・接頭辞・キーは名前を決めた行の ID | 06 `:256`「番号の重なりと同じ決め方」 |
 | C5c1-5 | 新しい値の決め方。重なった値の辞書順に組を見て、組の中の直すものはエンティティの内部 ID の順に、n = 2 から 1 つずつ試し、範囲の中のいまの値と、この修復で先に決めた新しい値のどれとも重ならない最初の値にする(比べ方は C5c1-2)。<br>・名前: `{値} (n)`<br>・接頭辞: `{値}{n}`。10 文字を超えるときは、値の末尾を削って 10 文字にする(ABCDEFGHIJ → ABCDEFGHI2)<br>・キー: `{値}{n}`(予約語はどれも数字を含まないので、`{値}{n}` は予約語に当たらない) | 06 `:260-262`、03 `:232` |
 | C5c1-6 | 段の順(すべて (10) の段のあと): ワークスペースの名前 → 接頭辞 → ワークスペースの内部 ID 順に、プロジェクト → プロパティの名前 → プロパティのキー → 値(ステータス・優先度・関連システム・選択肢をプロパティの並び順)→ テンプレート → ルール → スプリント → リリース | 06 `:353`。名前を先に直すので、同じ保存に 2 つの項目が入らない |
 | C5c1-7 | 件名と通知の {種類}: ワークスペース・接頭辞・プロジェクト・プロパティ・プロパティのキー・ステータス・優先度・関連システム・選択肢・テンプレート・自動化・スプリント・リリース | 06 `:518` の {種類}。画面のサブタブ名とルールの呼び方(06 `:542`「自動化「{名前}」」)に合わせた |
 | C5c1-8 | 書く行は `set {項目}`(from = いまの値、to = 新しい値)だけ。プロジェクトはプロジェクトのログ、ほかはワークスペースのログ。接頭辞を変えた旧い接頭辞は `workspace.OldPrefixes` がログから読むので、別の行は書かない。キーは作ったあとに画面からは変えられないが、`SettingsFromLog` は `set properties/<P>/key` を読む(`setProperty` の `key`)。アイテムの値は `fields/<プロパティの内部 ID>` で持ち(`item.FieldKey`)、キーは検索と移動の対応付けだけが使うので、キーの `set` 1 行で足りる | 保存形式 `:214`、03 `:115`・`:234`。ワークスペースのフォルダは内部 ID なので、同じ接頭辞が 2 つあっても直すまで読み書きできる |
 | C5c1-9 | 通知の見分け方: 修復の保存(`Repair`)のうち `restore` の行を含まないものの `set` の行で、項目が C5c1-3 の項目のどれか。同期の修復でこれらの項目に `set` を書くのは (11) と、削除の取り消し(`change.Undo` は削除の op の中の `set` も戻す)だけで、取り消しの保存は必ず `restore` の行を含む | C4b2-8(保存の行で見分ける) |
-| C5c1-10 | 宛先: 修復の直前のログ(`beforeSave`)での、名前を決めた行(C5c1-3)の `by`。実行者が人でない行なら作らない | 06 `:266`「直したものを作った人」。名前の変更で重なったときは、名前を変えた人に、06 の本文のまま出す(ユーザーの決定、2026-11-15) |
+| C5c1-10 | 宛先: 名前を決めた行(C5c1-3)の `by`。名前を決めた行は、修復の行の `prev` が指す行(修復を書いたときの項目の先端)から決め、`prev` がなければ作成の行にする。2 台が同じ修復を書いた間に名前が変わっても、どちらの修復の行からも同じ行になる。実行者が人でない行なら作らない | 06 `:266`「直したものを作った人」。名前の変更で重なったときは、名前を変えた人に、06 の本文のまま出す(ユーザーの決定、2026-11-15) |
 | C5c1-11 | 鍵: `repair:duplicate:{エンティティの ID}:{項目}:{名前を決めた行の ID}`(修復の op を含めない。2 台が同じ修復を書いても 1 件) | C5b2-12 と同じ作り |
 | C5c1-12 | 開く先: プロジェクトはプロジェクト(`entityOf`)。ルールは `Rule: R`・`Section: "automation"`。ほかはワークスペースと既存の `section(f)`(名前・接頭辞は `general`、プロパティ・キー・選択肢は `properties`、値は一覧の区画、テンプレートは `templates`、スプリント・リリースはそのタブ) | 06 `:458`、C4b2-10 |
 | C5c1-13 | 同期でワークスペースの削除を取り消して、名前・接頭辞が新しいワークスペースと重なった場合も、C5c1-4 で直す。取り消したワークスペースの名前を決めた行は共通の祖先にあるので、どちらのマシンが同期しても、新しいワークスペースの方が直る。プロジェクト・設定・スプリント・リリースの削除の取り消しも同じ | B5b `:54`(ユーザーの決定、2026-11-14) |
@@ -90,7 +90,7 @@
   - `type Rename struct { Named; To string }`
   - `func NamingRow(log []change.Record, f string) (change.Record, bool)`: C5c1-3。
   - `func NameRenames(all []Named, f Facts, fold bool) []Rename`・`func PrefixRenames(all []Named, f Facts) []Rename`・`func KeyRenames(all []Named, f Facts) []Rename`: C5c1-4・C5c1-5。並びは C5c1-5 の順。重ならなければ空。
-  - `func keeper[T any](g []T, row func(T) change.Record, f Facts) T`(パッケージの中だけ): C5c1-4。`moved` もこれを使う。
+  - `func keeper[T any](g []T, row func(T) change.Record, tie func(T) string, f Facts) T`(パッケージの中だけ): C5c1-4。`tie` は `at` が同じときに比べる文字列で、番号はエンティティの内部 ID(C3a-13)、名前は名前を決めた行の ID。`moved` もこれを使う。
 
 - [ ] **Step 1: 失敗するテストを書く**
   - `TestNameRenames`: 「開発」が 2 つ。名前を決めた行の一方が自分の側 → 自分の側のものが `To == "開発 (2)"`。`Facts` が空 → 行の `at` があとの方が直る。
@@ -124,7 +124,7 @@ git commit -m "feat(repair): 重なった名前・接頭辞・キーの直すも
 - Consumes: Task 1 の `repair.NamingRow`・`NameRenames`・`PrefixRenames`、`port.LiveWorkspaces`・`port.LiveProjects`
 - Produces:
   - `func renameDuplicates(ctx context.Context, w port.RepairWriter) error`(`step`): C5c1-6 の順に、`Rename` 1 つを 1 回の保存で書く(C5c1-8)。件名は Global Constraints の文。
-  - `type renameFix struct { ref change.Ref; kind string; rename repair.Rename }`(`kind` は C5c1-7 の {種類})と、ワークスペースごとの集め方の口 `func settingsRenames(r port.Reader, ws workspace.ID, log []change.Record) ([]renameFix, error)`(Task 3 が中身を書く。この Task では空を返す)。
+  - `type renameFix struct { ref change.Ref; kind string; rename repair.Rename }`(`kind` は C5c1-7 の {種類})と、ワークスペースごとの集め方の口 `func settingsRenames(ws workspace.ID, log []change.Record, f repair.Facts) []renameFix`(Task 3 が中身を書く。この Task では空を返す)。
 
 - [ ] **Step 1: 失敗するテストを書く**
   - `TestRenameDuplicatesWorkspaces`: 自分の側でワークスペース「開発」(接頭辞 WEB)を作り、remote の側でも「開発」(WEB)を作った。
@@ -155,7 +155,7 @@ git commit -m "feat(repairing): 重なったワークスペースの名前・接
 
 **Interfaces:**
 - Consumes: Task 1・Task 2、`workspace.SettingsFromLog`・`workspace.List.Field`・`automation.FromLog`・`automation.Field`・`planning.FromLog`・`workspace.TemplateField`
-- Produces: `func settingsRenames(r port.Reader, ws workspace.ID, log []change.Record) ([]renameFix, error)`: C5c1-2 の範囲で、C5c1-6 の順(プロパティの名前〜リリース)。
+- Produces: `func settingsRenames(ws workspace.ID, log []change.Record, f repair.Facts) []renameFix`: C5c1-2 の範囲で、C5c1-6 の順(プロパティの名前〜リリース)。
 
 - [ ] **Step 1: 失敗するテストを書く**(どれも、一方を自分の側、他方を remote の側で足す)
   - `TestRenameDuplicatesSettings`(表。件名で確かめる):
@@ -233,7 +233,7 @@ git commit -m "feat(noticing): 重なった名前・接頭辞・キーの修復�
     1. A が「開発」(WEB)を作って同期する。B が clone する。
     2. A が「開発」を削除し、新しい「開発」(WEB)を作る。B は同時に古い「開発」にステータス「Review」を足す。
     3. A が同期し、B が同期し、A が同期する。
-    - 期待: 古い「開発」は戻り(削除の取り消し)、A の新しい「開発」が「開発 (2)」・WEB2。A に 2 行。2 台のファイルが同じ。
+    - 期待: 古い「開発」は戻り(削除の取り消し)、A の新しい「開発」が「開発 (2)」・WEB2。A に 3 行(重なりの 2 行と、削除の取り消しの 1 行)。2 台のファイルが同じ。
   - `TestRepairDuplicatesSettings`: A と B が同時に、同じワークスペースにプロパティ「顧客」(キー customer)・ステータス「Review」と「review」・スプリント「Sprint 1」を足す。同期のあと、B の側のものが「顧客 (2)」・customer2・「review (2)」・「Sprint 1 (2)」。B に 4 行(キーも 1 行)。
 - [ ] **Step 2: 流して、足りない組み立てを直す** — Run: `go test ./cmd/hedgehug/ -run 'RepairDuplicates'` Expected: PASS
 - [ ] **Step 3: 全体を確かめる** — Run: `go test ./... && golangci-lint run ./... && golangci-lint run --build-tags e2e ./...` Expected: PASS・指摘なし
