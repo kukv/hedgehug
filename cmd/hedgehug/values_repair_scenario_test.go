@@ -5,6 +5,7 @@ package main
 import (
 	"errors"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -176,10 +177,16 @@ func wantRepairs(t *testing.T, m machine, texts ...string) {
 func TestRepairValuesRules(t *testing.T) {
 	remote, a, b := valuesPair(t)
 	addWebReviewRulesAs(t, a, "taro")
+	if tos := projectrule.FromLog(a.wsLog(t, mainWS)).Of(webPR).Workflow[mainTodo]; !slices.Contains(tos, mainReview) {
+		t.Fatalf("the workflow of Web on A before the repair: Todo -> %v, want Review in it", tos)
+	}
 	deleteReviewAs(t, b, "hanako")
 	syncAll(t, remote, a, b)
 	sameFiles(t, a, b)
 	for _, m := range []machine{a, b} {
+		if hasReview(m.settings(t)) {
+			t.Errorf("%s: Review is not deleted", m.dir)
+		}
 		log := m.wsLog(t, mainWS)
 		for from, tos := range projectrule.FromLog(log).Of(webPR).Workflow {
 			if from == mainReview || slices.Contains(tos, mainReview) {
@@ -224,12 +231,13 @@ func TestRepairValuesHiddenInitial(t *testing.T) {
 	syncAll(t, remote, a, b)
 	sameFiles(t, a, b)
 	for _, m := range []machine{a, b} {
-		log := m.wsLog(t, mainWS)
-		for _, r := range log {
-			if r.Actor.Kind == change.ActorSync {
-				t.Errorf("%s: a repair row by sync: %+v", m.dir, r)
+		// Store のどのログ(ワークスペース・プロジェクト・アイテムなど)にも、同期の修復の行がない。
+		for path, body := range files(t, m.dir) {
+			if strings.Contains(body, `"actor":"`+string(change.ActorSync)+`"`) {
+				t.Errorf("%s: %s has a repair row by sync", m.dir, path)
 			}
 		}
+		log := m.wsLog(t, mainWS)
 		if got := m.settings(t).InitialStatus; got != mainReview {
 			t.Errorf("initial status on %s = %s, want Review", m.dir, got)
 		}
