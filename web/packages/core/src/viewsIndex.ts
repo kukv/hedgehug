@@ -6,4 +6,6 @@ export {
   viewDirty,
   viewScreenKey,
 } from "./features/views/content";
+export { createNameDialog, type NameDialog } from "./features/views/nameDialog";
+export { saveAsView, saveSummary } from "./features/views/saveDialog";
 export { createViews, type SavedView, type Views } from "./features/views/views";

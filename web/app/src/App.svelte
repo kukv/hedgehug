@@ -18,6 +18,7 @@
   import ProjectTransferDialog from "./screens/project/ProjectTransferDialog.svelte";
   import ProjectMenu from "./screens/tree/ProjectMenu.svelte";
   import RenameProjectDialog from "./screens/tree/RenameProjectDialog.svelte";
+  import SaveViewDialog from "./screens/views/SaveViewDialog.svelte";
   import CreateWorkspaceDialog from "./screens/workspace-settings/CreateWorkspaceDialog.svelte";
   import DeleteWorkspaceDialog from "./screens/workspace-settings/DeleteWorkspaceDialog.svelte";
   import WorkspaceTransferDialog from "./screens/workspace-settings/WorkspaceTransferDialog.svelte";
@@ -130,6 +131,7 @@
 <ProjectTransferDialog />
 <ProjectMenu />
 <RenameProjectDialog />
+<SaveViewDialog />
 <DeleteWorkspaceDialog />
 <WorkspaceTransferDialog />
 <DiscardDialog />

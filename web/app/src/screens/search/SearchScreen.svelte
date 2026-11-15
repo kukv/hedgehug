@@ -1,8 +1,10 @@
 <script lang="ts">
-  import { PageHead } from "@hedgehug/ui";
+  import { get, viewContent } from "@hedgehug/core";
+  import { Button, PageHead } from "@hedgehug/ui";
   import { onMount } from "svelte";
   import { selection } from "../../palette";
   import { search, searchSelection, selectedOne } from "../../search";
+  import { openSaveView } from "../../views";
   import SearchBody from "./SearchBody.svelte";
   import SearchFilter from "./SearchFilter.svelte";
 
@@ -32,4 +34,10 @@
   {alert}
 />
 <SearchFilter {search} />
-<SearchBody {search} />
+<SearchBody {search}>
+  {#snippet actions()}
+    <Button size="sm" onclick={() => openSaveView(viewContent(get(search.state)))}>
+      ビューとして保存
+    </Button>
+  {/snippet}
+</SearchBody>

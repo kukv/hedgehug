@@ -6,6 +6,7 @@
   import ProjectScreen from "../screens/project/ProjectScreen.svelte";
   import SearchScreen from "../screens/search/SearchScreen.svelte";
   import SettingsScreen from "../screens/settings/SettingsScreen.svelte";
+  import ViewScreen from "../screens/views/ViewScreen.svelte";
   import WorkspaceScreen from "../screens/workspace/WorkspaceScreen.svelte";
 
   // いまの画面を出す。画面が替わるたびに作り直すので、本文は先頭から出る(01「画面の移り方」)。
@@ -39,6 +40,8 @@
     <ActivityScreen {ondrawer} {alert} />
   {:else if current?.name === "search"}
     <SearchScreen {ondrawer} {alert} />
+  {:else if current?.name === "view"}
+    <ViewScreen id={current.viewId} {ondrawer} {alert} />
   {:else if current?.name === "project"}
     <ProjectScreen
       storeId={current.storeId}
