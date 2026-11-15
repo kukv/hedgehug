@@ -163,6 +163,24 @@ function choiceRow(
   return { text, deleted, options };
 }
 
+// propertyRow は、1 つのプロパティの行。非表示や種類では絞らない(テーブルのセルの編集も使う)。
+export function propertyRow(
+  settings: WorkspaceSettings,
+  p: WorkspaceProperty,
+  value: PropertyInput,
+  people: People,
+  project?: string,
+): PropertyRow {
+  const base = { property: p, extra: !p.builtin, value };
+  if (chooser.includes(p.type)) return { ...base, ...choiceRow(settings, p, value, project) };
+  if (p.type === "user") {
+    const options = peopleOptions(people, String(value));
+    const text = options.find((o) => o.checked)?.label ?? "";
+    return { ...base, text, deleted: false, options };
+  }
+  return { ...base, text: String(value), deleted: false, options: [] };
+}
+
 // propertyRows は、種類で使う表示中のプロパティの行。values はプロパティの入力欄の値を返す。
 export function propertyRows(
   settings: WorkspaceSettings,
@@ -171,15 +189,7 @@ export function propertyRows(
   people: People,
   project?: string,
 ): PropertyRow[] {
-  return visibleProperties(settings, kind).map((p) => {
-    const value = values(p);
-    const base = { property: p, extra: !p.builtin, value };
-    if (chooser.includes(p.type)) return { ...base, ...choiceRow(settings, p, value, project) };
-    if (p.type === "user") {
-      const options = peopleOptions(people, String(value));
-      const text = options.find((o) => o.checked)?.label ?? "";
-      return { ...base, text, deleted: false, options };
-    }
-    return { ...base, text: String(value), deleted: false, options: [] };
-  });
+  return visibleProperties(settings, kind).map((p) =>
+    propertyRow(settings, p, values(p), people, project),
+  );
 }

@@ -41,6 +41,7 @@ export {
   type People,
   type PropertyRow as ItemPropertyRow,
   projectStatusOptions,
+  propertyRow as itemPropertyRow,
   propertyRows as itemPropertyRows,
   statusOptions,
   type ValueOption,
