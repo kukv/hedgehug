@@ -1,5 +1,5 @@
 import { expect, test } from "./fixtures";
-import { addProperty, newTask, tokenUrl, unique } from "./helpers";
+import { addProperty, newTask, openSettings, tokenUrl, unique } from "./helpers";
 
 // 値を変えるテストは、同じ worker のほかのテストとサーバーを共有するので、自分の Task を作ってから使う。
 // 保存の応答は、エンドポイントまで合わせて待つ。別の保存の応答に当たらないようにする。
@@ -146,4 +146,45 @@ test("a read-only store disables properties", async ({ page }) => {
   await expect(link).toBeVisible();
   await link.click();
   await expect(page).toHaveURL(/\/s\/readonly\/.*settings/);
+});
+
+// プロパティの削除の確認は、そのキーを使う保存したビューがあるときだけ添え書きを出す(E3b-18)。
+test("delete warns about saved views", async ({ page, request }, info) => {
+  const stamp = Date.now();
+  const used = { name: `顧客 ${stamp}`, key: `cust_${info.project.name}_${info.retry}_${stamp}` };
+  const unused = { name: `備考 ${stamp}`, key: `note_${info.project.name}_${info.retry}_${stamp}` };
+  await addProperty(request, { ...used, type: "text" });
+  await addProperty(request, { ...unused, type: "text" });
+  const view = await page.request.post("/api/views", {
+    headers: { Authorization: "Bearer e2e-token" },
+    data: {
+      name: `顧客のビュー ${stamp}`,
+      content: {
+        query: `${used.key}:A`,
+        layout: "table",
+        table: { columns: ["id", "title"], group: "none", sort: null },
+      },
+    },
+  });
+  expect(view.ok()).toBe(true);
+  const { id } = (await view.json()) as { id: string };
+
+  await openSettings(page, "HH", "プロパティ");
+  const rowOf = (name: string) =>
+    page.locator(".row").filter({ has: page.getByRole("button", { name: `${name}の使う種類` }) });
+  const dialog = page.getByRole("dialog", { name: "プロパティを削除" });
+  const note = "このキーを使う保存したビューの検索条件は、キーがなくなるためエラーになります。";
+
+  await rowOf(unused.name).getByRole("button", { name: "削除" }).click();
+  await expect(dialog).toContainText(`「${unused.name}」を削除します。`);
+  await expect(dialog).not.toContainText(note);
+  await dialog.getByRole("button", { name: "キャンセル" }).click();
+
+  await rowOf(used.name).getByRole("button", { name: "削除" }).click();
+  await expect(dialog).toContainText(note);
+  await dialog.getByRole("button", { name: "削除", exact: true }).click();
+  await expect(page.getByText("プロパティを削除しました")).toBeVisible();
+
+  await page.goto(tokenUrl(`/views/${id}`));
+  await expect(page.getByText(`「${used.key}」というキーはありません`)).toBeVisible();
 });

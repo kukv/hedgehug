@@ -17,7 +17,7 @@ import type { SearchResult } from "./types";
 
 export type { Search, SearchState } from "./layout";
 
-// 検索の画面の流れ(04「検索」、E1-16・E1-19)。絞り込みの文字列は画面の状態 `search` に
+// 検索の画面の流れ(04「検索」、E1-16・E1-19)。絞り込みの文字列は画面の状態(初めは `search`)に
 // `{query, layout, table, tree}`(E3a-2)で置き、入力のたびに wait ms 待ってから検索し、古い応答は捨てる。
 // タブで最初の open が読み終えるまでは書かずに積み、読んだ値に重ねて 1 回書く(E3a-23)。
 
@@ -32,10 +32,15 @@ export interface SearchDeps {
   wait?: number;
   // selection は、結果が変わるたびに選べる行で整理し(E2a-16)、テーブルを離れるときに解除する(E3a-10)。
   selection?: Pick<RowSelection, "prune" | "clear">;
+  // screen は、読み書きする画面の状態の鍵(初めは searchScreen)。fallback は、その画面の状態に何もないときに
+  // readSearchState に渡す値(open のたびに呼ぶ)。
+  screen?: string;
+  fallback?: () => unknown;
 }
 
 export function createSearch(deps: SearchDeps): Search {
   const wait = deps.wait ?? searchWaitMs;
+  const screen = deps.screen ?? searchScreen;
   const state = writable<SearchState>(initialSearchState());
   // runs は、古い応答を捨てるための通し番号。pending は、待っている検索の印。
   let runs = 0;
@@ -96,7 +101,7 @@ export function createSearch(deps: SearchDeps): Search {
     if (failure && report) deps.toasts.show(failure.message, { error: true });
   }
 
-  const write = () => deps.screenStates.write(searchScreen, savedSearch(get(state)));
+  const write = () => deps.screenStates.write(screen, savedSearch(get(state)));
 
   // change は、項目を替えて書く。読む前は書かずに積む(読む前に書くと、保存した値を初めの値で上書きする)。
   function change(patch: Partial<SavedSearch>) {
@@ -127,7 +132,8 @@ export function createSearch(deps: SearchDeps): Search {
     async open() {
       cancel();
       // 読んだ値には、読んでいるあいだに書いたものも入っている(screenStates)。待っていた検索は open の検索にまとめる。
-      const saved = readSearchState(await deps.screenStates.read<unknown>(searchScreen, null));
+      const raw = await deps.screenStates.read<unknown>(screen, null);
+      const saved = readSearchState(raw ?? deps.fallback?.());
       cancel();
       loaded = true;
       const next = { ...saved, ...stash };
@@ -177,6 +183,12 @@ export function createSearch(deps: SearchDeps): Search {
       const typed = stash.query ?? initialSearchState().query;
       if (!loaded) state.update((s) => ({ ...s, query: typed }));
       release();
+    },
+    restore({ query, layout, table }) {
+      cancel();
+      put({ query, layout, table });
+      if (layout !== "table") deps.selection?.clear();
+      void run();
     },
     reload() {
       cancel();

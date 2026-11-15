@@ -2,6 +2,7 @@ import { createPalette, createPlanRequest, createSelection } from "@hedgehug/cor
 import { hereOf } from "./here";
 import { bulkChangeAll, openSearch, search, searchPort } from "./search";
 import { isMac } from "./tab";
+import { saveQueryAsView, views } from "./views";
 import {
   catalog,
   detail,
@@ -65,4 +66,6 @@ export const palette = createPalette({
   openSearch,
   bulkChangeAll,
   showSearchTable: () => search.showTable(),
+  views: views.list,
+  saveQueryAsView,
 });

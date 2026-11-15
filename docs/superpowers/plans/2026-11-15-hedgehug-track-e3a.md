@@ -538,9 +538,9 @@ git commit -m "docs: トラック E の分け方を E3a・E3b に書き換え、
 
 ### E3b(保存したビュー)
 
-- 画面の状態は `{query, layout, table, tree}`(E3a-2)。ビューが持つもの(04 の 366〜375 行)は、このうち `query`・`layout`・`table` と、E5・E6 が足すカンバン・ガントの設定。`tree.collapsed` は「未保存の変更」の比べる対象に入れない(04 の 418 行)。
-- ビューの画面は、検索の画面の部品(`SearchToolbar`・`SearchBody`・`LayoutSwitch`・`SearchTree`)を使う。検索の流れ(core の `createSearch`)は画面の状態の鍵 `search` に決め打ちなので、鍵を引数にとる形にする。
-- 「このクエリで」の群(`queryGroup.ts`)の「検索で開く」と「{N} 件をまとめて変更…」のあいだに「ビューとして保存…」を足す。テーブルで開く入口なので `search.showTable()` を通る(E3a-9)。
+- 画面の状態は `{query, layout, table, tree}`(E3a-2)。ビューが持つもの(04 の 366〜375 行)は、このうち `query`・`layout`・`table` と、E5・E6 が足すカンバン・ガントの設定。`tree.collapsed` は「未保存の変更」の比べる対象に入れない(04 の 418 行)。(E3b で足した)
+- ビューの画面は、検索の画面の部品(`SearchToolbar`・`SearchBody`・`LayoutSwitch`・`SearchTree`)を使う。検索の流れ(core の `createSearch`)は画面の状態の鍵 `search` に決め打ちなので、鍵を引数にとる形にする。(E3b で足した)
+- 「このクエリで」の群(`queryGroup.ts`)の「検索で開く」と「{N} 件をまとめて変更…」のあいだに「ビューとして保存…」を足す。テーブルで開く入口なので `search.showTable()` を通る(E3a-9)。(E3b で足した)
 
 ### E4(マイタスクと概要)
 

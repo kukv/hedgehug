@@ -1,10 +1,12 @@
-import { createPalettePort, onRestored } from "@hedgehug/api";
+import { createPalettePort, createViewsPort, onRestored } from "@hedgehug/api";
 import {
   createToasts,
+  createViews,
   restoredCommentToast,
   restoredNameToast,
   restoredToast,
 } from "@hedgehug/core";
+import { viewsReloads } from "./reloads";
 
 // wire.ts が 300 行の上限に近いので、ほかの組み立てが先に使うものをここに分けた(wire.ts は toasts を再公開する)。
 
@@ -15,6 +17,11 @@ export const timer = {
 export const toasts = createToasts(timer);
 // コマンドパレットの口。詳細パネル(wire.ts)が開いたアイテムを記録し、パレット(palette.ts)が読む。
 export const palettePort = createPalettePort();
+// 保存したビューの口と一覧(E3b)。wire.ts が画面のアドレスの解決に使うので、wire.ts を読まないここで作る
+// (views.ts が再公開する)。views の知らせで一覧を読み直す。
+export const viewsPort = createViewsPort();
+export const views = createViews({ port: viewsPort, toasts });
+viewsReloads.add(() => views.load());
 
 // 別の画面で削除されていたものへの保存で削除を取り消したとき、取り消したものごとに通常のトーストを出す。
 onRestored((restored) => {

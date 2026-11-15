@@ -48,9 +48,9 @@ import { hereOf } from "./here";
 import { browserHistory } from "./history";
 import { createLinks } from "./links";
 import { createNoteHistory } from "./noteHistory";
-import { githubReloads, inboxReloads, propertySaved, reloads, syncReloads } from "./reloads";
+import { eventReloads, propertySaved, reloads } from "./reloads";
 import { held, online as isOnline, tabId, visible } from "./tab";
-import { palettePort, timer, toasts } from "./wireBase";
+import { palettePort, timer, toasts, views } from "./wireBase";
 
 // 組み立て: api の実装を core に渡す(設計書 6 節)。画面はここで作った状態を使う。
 // syncNow は、相対時間と 24 時間の判定に使う時刻(実体は clock.ts)。
@@ -159,6 +159,7 @@ export const watch = createWatch({ notes, toasts, onChanged: () => void detail.r
 export const screen = createScreen({
   navigation,
   catalog,
+  views: views.list,
   items: itemsPort,
   transfers: transfersPort,
   toasts,
@@ -226,11 +227,7 @@ async function reflect(kinds: SyncEventKind[]) {
   if (kinds.includes("store") || kinds.includes("github")) {
     jobs.push(...[...reloads].map((reload) => reload()));
   }
-  if (kinds.includes("github")) {
-    jobs.push(...[...githubReloads].map((reload) => reload()));
-  }
-  if (kinds.includes("inbox")) jobs.push(...[...inboxReloads].map((reload) => reload()));
-  if (kinds.includes("sync")) jobs.push(...[...syncReloads].map((reload) => reload()));
+  for (const k of kinds) jobs.push(...[...(eventReloads[k] ?? [])].map((reload) => reload()));
   await Promise.allSettled(jobs);
 }
 
@@ -292,8 +289,9 @@ function startSync() {
   document.addEventListener("focusin", () => signals.check());
 }
 
-// 一覧を読んでから、アドレスの解決と同期(出来事・知らせ)を始める(一覧がないと Store 名と ID を解決できない)。
-void catalog.load().then(() => {
+// 一覧とビューの一覧を読んでから、アドレスの解決と同期(出来事・知らせ)を始める(一覧がないと Store 名と ID・ビューの
+// 識別子を解決できない)。
+void Promise.all([catalog.load(), views.load()]).then(() => {
   screen.start();
   startSync();
 });

@@ -86,14 +86,12 @@ func wire(ctx context.Context) (httpapi.Deps, port.JudgedSaves, error) {
 		AppMissing:  state.AppMissing(),
 		Reports:     state.ReportSelections(),
 		Screens:     state.ScreenStates(),
+		Views:       state.Views(),
 		Secrets:     &apptest.Secrets{Tokens: e2eTokens},
 		GitHub:      e2eGitHub,
 		DeviceFlow:  e2eDeviceFlow,
 		Hosts:       apptest.Hosts{ID: "e2e-client"},
-		StoreGitHub: &apptest.StoreGitHub{Login: "taro", Stores: []port.StoreGitHubInfo{
-			{ID: e2eStore, Name: "e2e", Remote: true, Account: e2eAccount},
-			{ID: readonlyStore, Name: "readonly", Account: e2eAccount, ReadOnly: true},
-		}},
+		StoreGitHub: e2eStoreGitHub(),
 		Clock:       clock,
 		Sync:        syncSvc,
 		Auto:        auto,
@@ -103,6 +101,14 @@ func wire(ctx context.Context) (httpapi.Deps, port.JudgedSaves, error) {
 		SyncTargets: syncSvc.Targets,
 		Recent:      state.Recent(),
 	}), state.JudgedSaves(), nil
+}
+
+// e2eStoreGitHub は、GitHub に使う Store(e2e は remote あり、readonly は閲覧のみ)。
+func e2eStoreGitHub() *apptest.StoreGitHub {
+	return &apptest.StoreGitHub{Login: "taro", Stores: []port.StoreGitHubInfo{
+		{ID: e2eStore, Name: "e2e", Remote: true, Account: e2eAccount},
+		{ID: readonlyStore, Name: "readonly", Account: e2eAccount, ReadOnly: true},
+	}}
 }
 
 // e2eStores は、e2e と readonly の Store にサンプル(e2e にはワークスペース Mobile も、readonly には 2 つ目の

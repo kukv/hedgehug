@@ -103,6 +103,7 @@ describe("createLastScreen", () => {
       items: fakeItemsPort(),
       transfers,
       toasts,
+      views: writable([]),
       now: () => new Date(2026, 10, 14, 12, 0),
       openItem: () => {},
     });

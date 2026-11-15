@@ -204,4 +204,5 @@ export {
 } from "./reactive/store";
 export * from "./searchIndex";
 export * from "./selectionIndex";
+export * from "./viewsIndex";
 export * from "./workspacesIndex";
