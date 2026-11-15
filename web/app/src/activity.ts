@@ -13,7 +13,8 @@ import { catalog, detail, itemsPort, navigation, toasts, transfersPort } from ".
 // アクティビティ(06「アクティビティ」)。wire.ts が 300 行なので、ここで作る。
 export const activity = createActivity({ port: createActivityPort(), toasts });
 
-// 出来事 store・sync で、アクティビティの画面を開いているときだけ読み直す(C4d-15)。
+// 出来事 store・github・sync で、アクティビティの画面を開いているときだけ読み直す(C4d-15。github は wire.ts の
+// reflect が store と同じく reloads を呼ぶ)。
 // store と sync が同時に来ると reloads と syncReloads の両方から同じ tick に呼ばれるので、マイクロタスクに
 // 1 回だけ予約し、予約中の呼び出しは同じ読み直しを待つ。
 let pending: Promise<void> | null = null;

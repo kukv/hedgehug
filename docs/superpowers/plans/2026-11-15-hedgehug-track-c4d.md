@@ -29,12 +29,17 @@
 | 3 | C4d-5: 行が 1 行もなく作者が bot のコミットは、件名が「保持日数を過ぎた削除済み 」で始まれば実行者なし、それ以外は同期 | 完全な削除の記録(`purged.jsonl`)は実行者を持たない。仕様の固定の文なので、G は文どおり保存するだけでよい |
 | 4 | C4d-7: 別の Store へ子ごと移したアイテムの移動元の行は、ID を出さない | 消したあとは親が読めず、根が決まらない |
 | 5 | C4d-11: 重なりの鍵に実行者の種類を含める | GitHub と同期の同じ値の変更を、1 行にまとめてしまう |
-| 6 | C4d-14・Task 3 の `Row.Key`: 鍵は `{SHA}:{4 桁の 0 埋めの連番}`。API の行は `cursor`(`{UTC RFC3339 ミリ秒}\|{鍵}`、`activity.Cursor`)を持ち、画面は最後の行の cursor を `before` に渡す。`Query` に `Limit` はない。知らない種類・読めない `before`・Store なしのワークスペースは `ErrInvalidOperation`(API は 422) | 連番を文字列で比べるため桁をそろえる。続きの印を画面が組み立てずに済む |
+| 6 | C4d-14・Task 3 の `Row.Key`: 鍵は `{SHA}:{6 桁の 0 埋めの連番}`(最終レビューで 4 桁から 6 桁に)。API の行は `cursor`(`{UTC RFC3339 ミリ秒}\|{鍵}`、`activity.Cursor`)を持ち、画面は最後の行の cursor を `before` に渡す。`Query` に `Limit` はない。知らない種類・読めない `before`・Store なしのワークスペースは `ErrInvalidOperation`(API は 422) | 連番を文字列で比べるため桁をそろえる。続きの印を画面が組み立てずに済む |
 | 7 | C4d-13: 同期の行の書き込みに失敗しても、同期は成功として続ける(`slog.Warn`)。同期の行の時刻はミリ秒に切る | 同期の行は記録にすぎない。続きの印がミリ秒なので、行の時刻も合わせる |
 | 8 | C4d-15: 選んでいたワークスペースが一覧から消えたら「すべて」に戻す。`store` と `sync` の出来事による読み直しは、同じ tick で 1 回にまとめる。いまの ID のリンクは内部 ID を引いて詳細パネルを開き、引けなければアドレスへ移る | 消えたワークスペースで 0 件のまま動けなくなる。出来事が続くと読み直しが重なる |
 | 9 | Task 6: 履歴の `Row` に `Actor`(実行者の種類)も足した。`/e2e/receive` の書き先は、`wire` が返す `port.JudgedSaves` を `wrap` に渡す(`wire` のシグネチャは `(Deps, JudgedSaves, error)`) | 「同期」の行に添えない判定(C4d-16)に実行者が要る。e2e の入口が本物と同じ `judged_saves` に書くため |
 | 10 | Task 7: 種類の選択肢は `activityKindOptions`(`kindOptions` は既存の名前と重なる)。読み直しは、1 回の読みで行が増えなければ止める | 名前の重なり。`more` が偽のまま読み続けないため |
 | 11 | Task 10: e2e の helper `apiTask`・`renameByApi`・`receiveMark` を足した | 履歴の e2e の準備を 1 か所にまとめるため |
+| 12 | 最終レビュー: C4d-11 の鍵に、行の `Prev`(並べたもの)を入れる。行のないコミットは、件名に加えてフォルダごと消したエンティティ(並べたもの)を入れる。Store と実行者(自動化はルールの ID まで)は今のまま | 全履歴で同じ鍵の最も早い 1 行だけを残すと、順に起きた繰り返し(自動化が Todo→Done、人が戻す、自動化がまた Done)の 3 つ目が消える。06 `:538` がまとめるのは複数のマシンから届いたものだけ |
+| 13 | 最終レビュー: `activity.Service` に `Versions`(`port.StoreVersions`)と `Memo`(ポインタ)を足し、Store の版の印が変わらなければ、重なりをまとめたあとのコミットの行をそのまま使う(`Stores.Read` も `Commits` も呼ばない)。Store 名と色は覚えず、いまの一覧の値を入れる。同期の行は毎回読む。1 回の作り直しの中では、アイテム・プロジェクトを ID ごとに覚える。`httpapi.Deps` に `Versions` を足し、`wire.go`・`wire_e2e.go` は Store を渡す | 要求ごとに全履歴から行を作り直し、そのあいだ Store のロックを持っていた。同期の行は版を変えずに足されることがある(送るだけの同期・e2e の入口) |
+| 14 | 最終レビュー: コミットの行の時刻をミリ秒に切る | 同期の行と同じく、秒以下を持つコミットが続きの印で次のページから抜ける |
+| 15 | 最終レビュー: gitstore が覚える保存のコミットは、説明の全文(`EntityRows.Description`)を持たず、行のないエンティティを落とす | アクティビティは説明を使わない。SHA ごとに覚えるので、全文を抱え続ける |
+| 16 | 最終レビュー: `/e2e/sync-log` は、足したあと本物の同期と同じく出来事 `sync` を出す | 通しのテストで、絞り込みを変えずに同期の行が出ることを確かめるため |
 
 ## Global Constraints
 
@@ -72,11 +77,11 @@
 | C4d-8 | 対象の表示: Store にあり削除済みでない → いまの ID(プロジェクトはタイトルと ID)とリンク。削除済み → いまの ID を文字だけ。Store にない → 転送記録(`Transfers().List()`、同じ `Target` の最後の行)の `Old` を旧 ID のリンク(`locate-item`・`locate-project`)。転送記録にもなければ完全に削除の記録(`Purged().List()`)の `Display` を文字だけ。どれにもなければ出さない | 06 `:571`(削除済みでなければリンク)、A5a の C4 への申し送り(旧 ID は `locate-item` で開く) |
 | C4d-9 | ワークスペース: 行が属するワークスペースは、行を持つエンティティの「いまの」ワークスペース(ワークスペースはそれ自身、プロジェクト・アイテムは Store にあるもの(削除済みを含む)の `Workspace`)の集合。Store にないエンティティ(別の Store へ移した・完全に削除した)はワークスペースを持たない。ワークスペースが 1 つも決まらず、members の行があるか、`StoreLog` が true か、本体の実行者がなし(`none`)のコミットは「Store 全体」の印を持つ(06 `:551` のメンバーの追加・変更、保持日数の変更、保持日数を過ぎたものの完全な削除)。ワークスペースの絞り込みでは、選んだワークスペースを集合に含む行、同じ Store の同期の行、同じ Store の「Store 全体」の行を出す。行に出すワークスペース名は、集合が 1 つのときだけその名前 | 06 `:551`・`:559`(別の Store へ移した記録は移動先に属し「すべて」でだけ見える)。ユーザーの決定(2026-11-15): 同じ Store の別のワークスペースへ移したアイテムの古い行は移動先で出す。保存形式「アクティビティと履歴」の移したワークスペース |
 | C4d-10 | ワークスペースの選択肢は、画面がサイドバーの Store の一覧(catalog)から作る。いまの Store にあるワークスペースだけなので、移動元にないワークスペースは出ない | B5c の申し送り、06 `:551` |
-| C4d-11 | 重なりの 1 行: 実行者が人でない行のうち、重なりの鍵が同じものは、時刻が最も早い行(同じなら SHA の辞書順で前)だけ残す。鍵は Store と実行者の種類と、本体なら C4d-3 の行の (エンティティ・項目・from・to) の集合(行がないときは件名)、自動化の行ならその 1 行の (エンティティ・項目・from・to)。300 件はまとめたあとで数える | 06 `:538`、保存形式「人でない実行者の同じ変更」 |
+| C4d-11 | 重なりの 1 行: 実行者が人でない行のうち、重なりの鍵が同じものは、時刻が最も早い行(同じなら SHA の辞書順で前)だけ残す。鍵は Store と実行者(種類。自動化はルールの ID まで)と、本体なら C4d-3 の行の (エンティティ・項目・from・to・Prev) の集合(行がないときは件名と、フォルダごと消したエンティティの集合)、自動化の行・メンバーの追加の行ならその 1 行の (エンティティ・項目・from・to・Prev)。06 がまとめるのは複数のマシンから届いた同じ変更だけで、2 台が同じ版から作った変更は Prev が同じ、順に起きた繰り返しは Prev が違う。同じものを 2 度消すことはないので、別のときの同じ件名の完全な削除はまとまらない。300 件はまとめたあとで数える | 06 `:538`、保存形式「人でない実行者の同じ変更」 |
 | C4d-12 | 実行者の名前はサーバーが決める: 人はその Store のメンバーの表示名(大文字小文字を区別せずに探す。いなければ「不明なユーザー」でアバターは中身のない丸)、自動化「自動化」、GitHub「GitHub」、同期「同期」、なしは空 | 06 `:569-570`、01「不明なユーザー」。履歴と同じくサーバーで作る |
 | C4d-13 | 同期の行: 送信と受信の合計が 1 以上の成功した同期ごとに、新しい口 `port.SyncLog.Add(ctx, store, at, sent, received)` で `state.db` の表 `sync_log` に書く。書くのは `syncing` の `run`(手動・すべて・自動)と `deliver`(書き込みのあとの同期)の `Succeeded` の直後。時刻は同期を終えた時刻(`Succeeded` に渡す時刻)をミリ秒に切ったもの。書けなくても同期は成功として続ける(`slog.Warn`)。Store をこのマシンから削除したときに消すため `ForgetStore` を持つ(呼ぶのは G の削除。`JudgedSaves.ForgetStore` と同じ) | 06 `:509`、C2-5、保存形式「このマシンに持つもの」 |
-| C4d-14 | 並びと区切り: Store ごとの行と同期の行を、時刻の新しい順、同じなら鍵(コミットの行は `{SHA}:{4 桁の 0 埋めの連番}`、同期の行は `sync:{ID}`)の辞書順の逆で並べる。API の行は `cursor`(`{UTC RFC3339 ミリ秒}|{鍵}`)を持ち、`before`(前のページの最後の行の `cursor`)を受け、その後ろの 300 件と、さらにあるか(`more`)を返す。画面の読み直しは、受信箱の `again` と同じく、先頭から 300 件ずつ、出していた件数を覆うまで読む(何回「さらに読み込む」を押したあとでも同じ) | 06 `:575`(300 件、日付をまたいで数える)。受信箱の続きの印と同じ形 |
-| C4d-15 | 画面: アドレス `/activity`。サイドバーのナビは「受信箱」と「検索」のあいだ。絞り込みは画面の状態で、アドレスにも Store にも入れない。日付の見出しと時刻はこのマシンの時刻帯で、「今日」「昨日」は `syncNow` の日付で決めて日付が変わったら更新する。行のアイテムの ID は、いまの ID なら詳細パネルで開き、旧 ID ならアドレス `{ name: "item", store, item: 旧 ID }` を開く(転送記録から探す)。プロジェクトは `{ name: "project", store, project: ID, tab: "overview" }`。読み直しは出来事 `store`・`sync` で、アクティビティの画面を開いているときだけ。同じ tick の出来事は 1 回にまとめる。選んでいたワークスペースが一覧から消えたら「すべて」に戻す | 06 `:563-571`、01 `:132`・`:163`・`:195`、受信箱の `linkOf` と同じ |
+| C4d-14 | 並びと区切り: Store ごとの行と同期の行を、時刻の新しい順、同じなら鍵(コミットの行は `{SHA}:{6 桁の 0 埋めの連番}`、同期の行は `sync:{ID}`)の辞書順の逆で並べる。API の行は `cursor`(`{UTC RFC3339 ミリ秒}|{鍵}`)を持ち、`before`(前のページの最後の行の `cursor`)を受け、その後ろの 300 件と、さらにあるか(`more`)を返す。画面の読み直しは、受信箱の `again` と同じく、先頭から 300 件ずつ、出していた件数を覆うまで読む(何回「さらに読み込む」を押したあとでも同じ) | 06 `:575`(300 件、日付をまたいで数える)。受信箱の続きの印と同じ形 |
+| C4d-15 | 画面: アドレス `/activity`。サイドバーのナビは「受信箱」と「検索」のあいだ。絞り込みは画面の状態で、アドレスにも Store にも入れない。日付の見出しと時刻はこのマシンの時刻帯で、「今日」「昨日」は `syncNow` の日付で決めて日付が変わったら更新する。行のアイテムの ID は、いまの ID なら詳細パネルで開き、旧 ID ならアドレス `{ name: "item", store, item: 旧 ID }` を開く(転送記録から探す)。プロジェクトは `{ name: "project", store, project: ID, tab: "overview" }`。読み直しは出来事 `store`・`github`・`sync` で(`github` は既存の `reloads` の仕組みで `store` と一緒に呼ばれる)、アクティビティの画面を開いているときだけ。同じ tick の出来事は 1 回にまとめる。選んでいたワークスペースが一覧から消えたら「すべて」に戻す | 06 `:563-571`、01 `:132`・`:163`・`:195`、受信箱の `linkOf` と同じ |
 | C4d-16 | 「同期で受信」: 履歴の行の op が、その Store の `judged_saves` にあり、同じ op でこのマシンで作った印(`own = 1`)のものがないとき。新しい口は app/history が宣言する `ReceivedOps`(`Received(ctx, store, ops []change.ID) (map[change.ID]bool, error)`)で、`statedb.DB` のメソッドが満たす。remote のない Store、まだ同期していない保存は記録がないので添えない。Store を追加したときの clone で入った保存は「受信」に数える(ユーザーの決定、2026-11-15。最初の同期のあとから添える)。実行者が「同期」の行(同期の修復)には添えない(このマシンの修復の保存は `own = 1` にならない(`TestOwnExcludesRepair`)ので材料で区別できず、実行者の名前「同期」が同期から来たことをすでに示す) | 02 `:492`。`judged_saves` の `own` はこのマシンで作った保存の印(C4c1-4)で、最初の同期の印付けのあとも `Judge` が送っていない自分の保存を `own = 1` にする |
 | C4d-17 | e2e: 同期は e2e で再現できないので、e2e のビルドだけに入口 `POST /e2e/sync-log`(本文 `{store, sent, received}`)と `POST /e2e/receive`(本文 `{store, item}`。そのアイテムの最後の行の op を、このマシンで作っていない保存として `judged_saves` に書く)を足す。保存のコミットは、偽物 `apptest.CommitLog`(`port.Stores` を包み、`Write` の前後で行を比べてコミットを記録する)が持つ | `/e2e/notice` と同じ形(C4c2-12) |
 
@@ -125,7 +130,7 @@
   - `RetentionAfterWrite{Stores; Days}` は、`Write` のあとで保持日数を `Days` にする(偽物の `Write` の中からは保持日数を変えられないため)。
   - `func RunStoreCommitsContract(t *testing.T, newStores func(t *testing.T) (port.Stores, port.StoreCommits, port.StoreID))`
 
-- [ ] **Step 1: 失敗するテストを書く** — `commits.go` の契約に次のケースを書き、`commits_test.go` から `NewCommitLog(NewStores(...), clock)` で流す。
+- [ ] **Step 1: 失敗するテストを書く** — `storelist.go` の契約に次のケースを書き、`commits_test.go` から `NewCommitLog(NewStores(...), clock)` で流す。
   - `TestCommitsNewestFirst`: 3 回の保存(アイテムの作成、タイトルの変更、members への `member.Join("hanako")`)のあと、`Commits` が 3 件を新しい順に返し、`Summary` が各 `Operation.Summary`、`Op` が足した行の op、`Changes` の `Ref` がアイテム(2 件)・members(1 件)。
   - `TestCommitsEmptyWriteNotRecorded`: 行のない `Write` のあと件数が増えない。
   - `TestCommitsRemoved`: アイテムを `Remove` し、`WriteTransfers` で転送記録だけを書いた保存が 1 件記録され、`Changes` は空、`Removed` がそのアイテム。`StoreLog` は保持日数を変える口がまだないので共有の契約に入れず、偽物のテスト(`RetentionAfterWrite` で 1 回の `Write` の前後を比べる)と saves のテストで確かめる。
@@ -176,7 +181,7 @@
       Link    string // "current" | "moved" | ""(文字だけ)
   }
   type Row struct {
-      Key        string // "{SHA}:{4 桁の 0 埋めの連番}" か "sync:{ID}"
+      Key        string // "{SHA}:{6 桁の 0 埋めの連番}" か "sync:{ID}"
       At         time.Time
       Store      port.StoreInfo
       Actor      ActorKind
@@ -243,7 +248,7 @@
   - `service_test.go`(syncing): `TestRunLogsSyncLine` — 偽の Replicator が `Sent: 2, Received: 1` を返すと `Log.List` に 1 行、`Sent: 0, Received: 0` なら増えない。書き込みのあとの同期(`Deliver`)でも同じ。
   - `service_test.go`(activity): 2 つの Store(1 つは `StoreList` に入れない = 非表示)と同期の行で:
     - `TestPageOrdersByTime`: 行が時刻の新しい順。未来の時刻の保存が先頭。同期の行の `Text` は「origin と同期 (送信 2 件・受信 1 件)」、`Who` 「同期」、`SHA` ""。
-    - `TestPageMergesNonHumanDuplicates`: 同じ (アイテム・`status`・from・to) の自動化の行が 2 つのコミットにある → 早い方の 1 行。実行者「同期」の同じ件名で行のないコミット 2 つ → 1 行。人の同じ変更 2 つ → 2 行。
+    - `TestPageMergesNonHumanDuplicates`: 同じ (アイテム・`status`・from・to・Prev) の自動化の行が 2 つのコミット(2 台が同じ版から作ったもの)にある → 早い方の 1 行。順に起きた同じ変更の繰り返し(Prev が違う) → 別の行。実行者「同期」の同じ件名で行のないコミット 2 つ → 1 行(消したエンティティが違えば 2 行)。人の同じ変更 2 つ → 2 行。
     - `TestPageKindFilter`: `user` は人の行だけ(受け取った他の人の保存を含む)、`sync` は同期の行と実行者「同期」、`automation` は自動化と GitHub、`none` の行は `all` だけ。
     - `TestPageWorkspaceFilter`: ワークスペース A を選ぶと、A の行・同じ Store の同期の行・同じ Store の `Storewide` の行が出て、B だけの行と別の Store の行は出ない。A と B にまたがる行は A でも B でも出る。
     - `TestPageHiddenStore`: 非表示の Store の行と同期の行は出ない。

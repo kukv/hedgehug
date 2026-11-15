@@ -40,7 +40,7 @@ describe("createActivityPort", () => {
 
   it("splits the workspace value into store and workspace, and passes before as is", async () => {
     const fetch = respond(200, { rows: [], more: true });
-    const cursor = "2026-11-14T00:00:00.001Z|abc1234:0001";
+    const cursor = "2026-11-14T00:00:00.001Z|abc1234:000001";
     expect(await createActivityPort().list({ workspace: "S1/W1", kind: "sync" }, cursor)).toEqual({
       rows: [],
       more: true,
