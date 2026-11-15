@@ -34,18 +34,11 @@ func (j joining) Write(ctx context.Context, id port.StoreID, op port.Operation, 
 	if op.Actor.Kind != change.ActorUser {
 		return j.Stores.Write(ctx, id, op, fn)
 	}
-	ro, err := j.readOnly(ctx, id)
-	if err != nil {
-		return err
-	}
-	if ro {
-		return j.Stores.Write(ctx, id, op, fn)
-	}
 	login := op.Actor.Login
 	var joined bool
-	err = j.Stores.Write(ctx, id, op, func(tx port.Tx) error {
+	err := j.Stores.Write(ctx, id, op, func(tx port.Tx) error {
 		var err error
-		if joined, err = join(tx, login); err != nil {
+		if joined, err = j.join(ctx, tx, id, login); err != nil {
 			return err
 		}
 		if !joined {
@@ -69,6 +62,22 @@ func (j joining) Write(ctx context.Context, id port.StoreID, op port.Operation, 
 	return err
 }
 
+// join は、メンバーに login(大文字と小文字を区別しない)がいなくて、id が閲覧のみの Store でなければ足し、足したかを
+// 返す。Store の一覧(config.yaml)は、メンバーにいないと分かったときだけ読む(読めなくても、メンバーの書き込みは通す)。
+func (j joining) join(ctx context.Context, tx port.Tx, id port.StoreID, login string) (bool, error) {
+	ms, err := tx.Members().List()
+	if err != nil {
+		return false, err
+	}
+	if slices.ContainsFunc(ms, func(m member.Member) bool { return strings.EqualFold(m.Login, login) }) {
+		return false, nil
+	}
+	if ro, err := j.readOnly(ctx, id); err != nil || ro {
+		return false, err
+	}
+	return true, tx.WriteMembers().Append(member.Join(login))
+}
+
 // readOnly は、id が閲覧のみの Store か。一覧にない Store は閲覧のみではないとする。
 func (j joining) readOnly(ctx context.Context, id port.StoreID) (bool, error) {
 	infos, err := j.list.List(ctx)
@@ -77,18 +86,6 @@ func (j joining) readOnly(ctx context.Context, id port.StoreID) (bool, error) {
 	}
 	i := slices.IndexFunc(infos, func(in port.StoreGitHubInfo) bool { return in.ID == id })
 	return i >= 0 && infos[i].ReadOnly, nil
-}
-
-// join は、メンバーに login(大文字と小文字を区別しない)がいなければ足し、足したかを返す。
-func join(tx port.Tx, login string) (bool, error) {
-	ms, err := tx.Members().List()
-	if err != nil {
-		return false, err
-	}
-	if slices.ContainsFunc(ms, func(m member.Member) bool { return strings.EqualFold(m.Login, login) }) {
-		return false, nil
-	}
-	return true, tx.WriteMembers().Append(member.Join(login))
 }
 
 // counting は、fn が書き口を呼んで何かを書いた回数を数える Tx。行のない Append は何も書かないので数えない。

@@ -1,6 +1,7 @@
 package members_test
 
 import (
+	"context"
 	"errors"
 	"slices"
 	"testing"
@@ -14,6 +15,7 @@ import (
 	"github.com/kukv/hedgehug/internal/domain/member"
 	"github.com/kukv/hedgehug/internal/domain/project"
 	"github.com/kukv/hedgehug/internal/domain/rank"
+	"github.com/kukv/hedgehug/internal/domain/transfer"
 	"github.com/kukv/hedgehug/internal/domain/workspace"
 )
 
@@ -21,11 +23,12 @@ const (
 	joinWorkspace workspace.ID = "01JNWS00000000000000000001"
 	joinProject   project.ID   = "01JNPR00000000000000000001"
 	joinItem      item.ID      = "01JNIT00000000000000000001"
+	joinOldItem   item.ID      = "01JNIT00000000000000000002" // 準備で作る
 )
 
 var taroOp = port.Operation{Actor: change.User("taro"), Summary: "アイテムを作成"}
 
-// newJoinStores は、メンバーが hanako だけで、ワークスペースとプロジェクトがある Store S1 を、コミットを数える
+// newJoinStores は、メンバーが hanako だけで、ワークスペースとプロジェクトとアイテム joinOldItem がある Store S1 を、コミットを数える
 // 偽物で返す。first は S1 を最初に書くメンバー(hanako か Taro)。
 func newJoinStores(t *testing.T, first string) *apptest.CommitLog {
 	t.Helper()
@@ -35,6 +38,7 @@ func newJoinStores(t *testing.T, first string) *apptest.CommitLog {
 	s.AddStore("S1")
 	ws := workspace.Workspace{ID: joinWorkspace, Name: "Web", Prefix: "HH"}
 	pr := project.Project{ID: joinProject, Place: project.Place{Workspace: ws.ID, Number: 1}, Rank: "V", Title: "ログイン", Owner: first, Status: project.Todo}
+	old := item.Item{ID: joinOldItem, Place: item.Place{Workspace: ws.ID, Project: pr.ID, Number: 2}, Kind: item.Task, Rank: rank.First, Title: "前からある"}
 	op := port.Operation{Actor: change.User(first), Summary: "準備"}
 	err := s.Write(t.Context(), "S1", op, func(tx port.Tx) error {
 		d, err := workspace.CreateWithSettings(ws, workspace.DefaultSettings(ids.New))
@@ -45,6 +49,7 @@ func newJoinStores(t *testing.T, first string) *apptest.CommitLog {
 			tx.WriteMembers().Append(member.Init(), member.Join(first)),
 			tx.WriteWorkspaces().Append(ws.ID, d),
 			tx.WriteProjects().Append(pr.ID, project.Create(pr)),
+			tx.WriteItems().Append(old.ID, item.Create(old)),
 		)
 	})
 	if err != nil {
@@ -219,5 +224,95 @@ func TestJoinPassesRead(t *testing.T) {
 	err := members.JoinOnWrite(c, writable()).Read(t.Context(), "nope", func(port.Reader) error { return nil })
 	if !errors.Is(err, port.ErrStoreNotFound) {
 		t.Errorf("Read = %v", err)
+	}
+}
+
+// importLog は、ref のログを読み、write に渡す(写す先は新しい内部 ID)。
+func importLog(ref change.Ref, write func(tx port.Tx, log []change.Record) error) func(port.Tx) error {
+	return func(tx port.Tx) error {
+		log, err := tx.Changes().Of(ref)
+		if err != nil {
+			return err
+		}
+		return write(tx, log)
+	}
+}
+
+// 書き口のどれか 1 つだけを呼んだ保存でも、「あなた」は一緒に足され、コミットは 1 つ。
+func TestJoinCountsEveryWriter(t *testing.T) {
+	wsRef := change.Ref{Kind: change.KindWorkspace, ID: joinWorkspace}
+	prRef := change.Ref{Kind: change.KindProject, ID: joinProject}
+	itRef := change.Ref{Kind: change.KindItem, ID: joinOldItem}
+	const (
+		newWS workspace.ID = "01JNWS00000000000000000002"
+		newPR project.ID   = "01JNPR00000000000000000002"
+		newIT item.ID      = "01JNIT00000000000000000003"
+	)
+	cases := map[string]func(port.Tx) error{
+		"Workspace Append": func(tx port.Tx) error {
+			return tx.WriteWorkspaces().Append(joinWorkspace, change.NewSet("name", "Web", "Web2"))
+		},
+		"Workspace Import": importLog(wsRef, func(tx port.Tx, log []change.Record) error { return tx.WriteWorkspaces().Import(newWS, log) }),
+		"Workspace Remove": func(tx port.Tx) error { return tx.WriteWorkspaces().Remove(joinWorkspace) },
+		"Project Append": func(tx port.Tx) error {
+			return tx.WriteProjects().Append(joinProject, change.NewSet("title", "ログイン", "ログイン2"))
+		},
+		"Project Describe": func(tx port.Tx) error { return tx.WriteProjects().Describe(joinProject, "説明") },
+		"Project Import": importLog(prRef, func(tx port.Tx, log []change.Record) error {
+			return tx.WriteProjects().Import(newPR, log, "")
+		}),
+		"Project Remove": func(tx port.Tx) error { return tx.WriteProjects().Remove(joinProject) },
+		"Item Append":    createItem,
+		"Item Describe":  func(tx port.Tx) error { return tx.WriteItems().Describe(joinOldItem, "説明") },
+		"Item Import": importLog(itRef, func(tx port.Tx, log []change.Record) error {
+			return tx.WriteItems().Import(newIT, log, "")
+		}),
+		"Item Remove":    func(tx port.Tx) error { return tx.WriteItems().Remove(joinOldItem) },
+		"Members Append": func(tx port.Tx) error { return tx.WriteMembers().Append(member.Join("jiro")) },
+		"Transfers Append": func(tx port.Tx) error {
+			return tx.WriteTransfers().Append(transfer.Record{Entity: transfer.EntityItem, Target: joinOldItem, ToStore: "S2"})
+		},
+	}
+	for name, fn := range cases {
+		c := newJoinStores(t, "hanako")
+		ctx := port.WithJoined(t.Context())
+		if err := members.JoinOnWrite(c, writable()).Write(ctx, "S1", taroOp, fn); err != nil {
+			t.Errorf("%s: %v", name, err)
+			continue
+		}
+		if n := commits(t, c); n != 1 {
+			t.Errorf("%s: commits = %d, want 1", name, n)
+		}
+		if got := logins(t, c); !slices.Contains(got, "taro") {
+			t.Errorf("%s: members = %v", name, got)
+		}
+		if got := port.Joined(ctx); !slices.Equal(got, []string{"taro"}) {
+			t.Errorf("%s: Joined = %v", name, got)
+		}
+	}
+}
+
+// failingList は、List が失敗する Store の一覧(config.yaml が読めない)。
+type failingList struct{ apptest.StoreGitHub }
+
+var errList = errors.New("config.yaml が読めない")
+
+func (*failingList) List(context.Context) ([]port.StoreGitHubInfo, error) { return nil, errList }
+
+// 一覧が読めないとき、メンバーにいない人の書き込みはそのエラーで断り、メンバーの書き込みは通す。
+func TestJoinListFailure(t *testing.T) {
+	c := newJoinStores(t, "hanako")
+	if err := members.JoinOnWrite(c, &failingList{}).Write(t.Context(), "S1", taroOp, createItem); !errors.Is(err, errList) {
+		t.Errorf("not a member: %v, want errList", err)
+	}
+	if n := commits(t, c); n != 0 {
+		t.Errorf("commits = %d, want 0", n)
+	}
+	op := port.Operation{Actor: change.User("hanako"), Summary: "アイテムを作成"}
+	if err := members.JoinOnWrite(c, &failingList{}).Write(t.Context(), "S1", op, createItem); err != nil {
+		t.Errorf("member: %v", err)
+	}
+	if n := commits(t, c); n != 1 {
+		t.Errorf("commits = %d, want 1", n)
 	}
 }
