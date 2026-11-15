@@ -98,6 +98,17 @@ func TestNameRenamesFold(t *testing.T) {
 	assertRenames(t, repair.NameRenames(all, repair.Facts{}, true), map[string]string{"b": "review (3)"})
 }
 
+// SimpleFold で 3 つが輪になる文字(K・k・U+212A KELVIN SIGN、S・s・U+017F ſ)も、どれどうしも重なる。
+func TestNameRenamesFoldOrbits(t *testing.T) {
+	all := []repair.Named{
+		named("a", "K", "ra", 0), named("b", "k", "rb", 1), named("c", "K", "rc", 2),
+		named("d", "S", "rd", 0), named("e", "s", "re", 1), named("f", "ſ", "rf", 2),
+	}
+	assertRenames(t, repair.NameRenames(all, repair.Facts{}, true), map[string]string{
+		"b": "k (2)", "c": "K (3)", "e": "s (2)", "f": "ſ (3)",
+	})
+}
+
 func TestPrefixRenames(t *testing.T) {
 	all := []repair.Named{named("a", "WEB", "ra", 0), named("b", "WEB", "rb", 1)}
 	assertRenames(t, repair.PrefixRenames(all, repair.Facts{}), map[string]string{"b": "WEB2"})

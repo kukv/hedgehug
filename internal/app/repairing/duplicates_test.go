@@ -127,10 +127,9 @@ func TestRenameDuplicatesWorkspaces(t *testing.T) {
 	ours := e.newDevWithEpic()
 	theirs := e.newWorkspace(devWS2, "開発", "WEB")
 	wantOps(t, e.run(ours, theirs), "ワークスペース「開発」を「開発 (2)」に変更", "接頭辞「WEB」を「WEB2」に変更")
-	fixed := e.workspaceOf(devWS1)
-	wantWorkspace(t, fixed, "開発 (2)", "WEB2")
+	wantWorkspace(t, e.workspaceOf(devWS1), "開発 (2)", "WEB2")
 	wantWorkspace(t, e.workspaceOf(devWS2), "開発", "WEB")
-	if got := e.item(devEpic).DisplayID(fixed.Prefix); got != "WEB2-1" {
+	if got := e.item(devEpic).DisplayID("WEB2"); got != "WEB2-1" {
 		t.Errorf("epic = %s, want WEB2-1", got)
 	}
 	if old := workspace.OldPrefixes(e.logOf(wsRef(devWS1))); !slices.Contains(old, "WEB") {
@@ -150,21 +149,22 @@ func (e *env) newProject(ws workspace.ID, id project.ID, n int, title string) ma
 }
 
 // 同じワークスペースの同じ名前のプロジェクトは直す。別のワークスペースの同じ名前と、大文字と小文字だけ違う名前は直さない。
+// 自分の側のものは、古く内部 ID が小さくても直す(新しい方や内部 ID の大きい方を直すのではない。C5c1-4)。
 func TestRenameDuplicatesProjects(t *testing.T) {
 	e := newEnv(t)
 	addMobile(e)
 	e.newProject(mobileWS, webProject3, 2, "Web")
 	e.newProject(apptest.SampleWorkspace, webProject4, 5, "web")
-	theirs := e.newProject(apptest.SampleWorkspace, webProject1, 3, "Web")
-	ours := e.newProject(apptest.SampleWorkspace, webProject2, 4, "Web")
+	ours := e.newProject(apptest.SampleWorkspace, webProject1, 3, "Web")
+	theirs := e.newProject(apptest.SampleWorkspace, webProject2, 4, "Web")
 	wantOps(t, e.run(ours, theirs), "プロジェクト「Web」を「Web (2)」に変更")
-	want := map[project.ID]string{webProject1: "Web", webProject2: "Web (2)", webProject3: "Web", webProject4: "web"}
+	want := map[project.ID]string{webProject1: "Web (2)", webProject2: "Web", webProject3: "Web", webProject4: "web"}
 	for id, title := range want {
 		if got := e.project(id).Title; got != title {
 			t.Errorf("%s title = %q, want %q", id, got, title)
 		}
 	}
-	log := e.logOf(change.Ref{Kind: change.KindProject, ID: webProject2})
+	log := e.logOf(change.Ref{Kind: change.KindProject, ID: webProject1})
 	if last := log[len(log)-1]; last.T != change.Set || last.F != "title" {
 		t.Errorf("last row = %+v, want set title", last)
 	}
@@ -240,6 +240,35 @@ func (e *env) sampleSettings() workspace.Settings {
 	return s
 }
 
+// sampleNames は、サンプルのワークスペースの名前とキー。鍵は、プロパティ・選択肢・テンプレート・ルール・スプリント・
+// リリースの内部 ID(名前)と、「プロパティの ID/key」(キー)。
+func (e *env) sampleNames() map[string]string {
+	e.t.Helper()
+	log := e.logOf(wsRef(apptest.SampleWorkspace))
+	s, _ := workspace.SettingsFromLog(log)
+	got := map[string]string{}
+	for _, p := range s.Properties {
+		got[string(p.ID)], got[string(p.ID)+"/key"] = p.Name, p.Key
+		for _, v := range p.Choices {
+			got[string(v.ID)] = v.Name
+		}
+	}
+	for _, x := range s.Templates {
+		got[string(x.ID)] = x.Name
+	}
+	for _, r := range automation.FromLog(log) {
+		got[string(r.ID)] = r.Name
+	}
+	plan := planning.FromLog(log)
+	for _, x := range plan.Sprints {
+		got[string(x.ID)] = x.Name
+	}
+	for _, x := range plan.Releases {
+		got[string(x.ID)] = x.Name
+	}
+	return got
+}
+
 func propertyDrafts(id change.ID, key, name string, typ workspace.PropertyType) []change.Draft {
 	return workspace.PropertyDrafts(workspace.Property{ID: id, Key: key, Name: name, Type: typ, Kinds: []string{"Task"}, Rank: "z" + string(id)})
 }
@@ -271,16 +300,9 @@ func releaseDrafts(id change.ID, name string, state planning.ReleaseState) []cha
 	return planning.ReleaseDrafts(planning.Release{}, planning.Release{ID: id, Name: name, State: state})
 }
 
-// wantSettingNames は、設定のプロパティの名前(鍵はプロパティの ID)・キー(鍵は「ID/key」)・選択肢の名前(鍵は値の ID)が want のとおりか確かめる。
-func wantSettingNames(t *testing.T, s workspace.Settings, want map[string]string) {
+// wantNames は、名前とキー got(鍵は sampleNames のとおり)が want のとおりか確かめる。
+func wantNames(t *testing.T, got, want map[string]string) {
 	t.Helper()
-	got := map[string]string{}
-	for _, p := range s.Properties {
-		got[string(p.ID)], got[string(p.ID)+"/key"] = p.Name, p.Key
-		for _, v := range p.Choices {
-			got[string(v.ID)] = v.Name
-		}
-	}
 	for k, v := range want {
 		if got[k] != v {
 			t.Errorf("%s = %q, want %q", k, got[k], v)
@@ -295,7 +317,7 @@ func TestRenameDuplicatesSettings(t *testing.T) {
 		base         []change.Draft
 		theirs, ours []change.Draft
 		want         []string
-		names        map[string]string // wantSettingNames の want
+		names        map[string]string // wantNames の want
 	}{
 		{
 			name:   "プロパティ",
@@ -328,24 +350,28 @@ func TestRenameDuplicatesSettings(t *testing.T) {
 			theirs: templateDrafts(dupTpl1, "バグ報告"),
 			ours:   templateDrafts(dupTpl2, "バグ報告"),
 			want:   []string{"テンプレート「バグ報告」を「バグ報告 (2)」に変更"},
+			names:  map[string]string{string(dupTpl1): "バグ報告", string(dupTpl2): "バグ報告 (2)"},
 		},
 		{
 			name:   "ルール",
 			theirs: ruleDrafts(dupRule1, true, ""),
 			ours:   ruleDrafts(dupRule2, true, ""),
 			want:   []string{"自動化「通知」を「通知 (2)」に変更"},
+			names:  map[string]string{string(dupRule1): "通知", string(dupRule2): "通知 (2)"},
 		},
 		{
 			name:   "スプリント",
 			theirs: sprintDrafts(dupSprint1, planning.Closed),
 			ours:   sprintDrafts(dupSprint2, planning.Planned),
 			want:   []string{"スプリント「Sprint 1」を「Sprint 1 (2)」に変更"},
+			names:  map[string]string{string(dupSprint1): "Sprint 1", string(dupSprint2): "Sprint 1 (2)"},
 		},
 		{
 			name:   "リリース",
 			theirs: releaseDrafts(dupRel1, "v1", planning.Archived),
 			ours:   releaseDrafts(dupRel2, "v1", planning.Unreleased),
 			want:   []string{"リリース「v1」を「v1 (2)」に変更"},
+			names:  map[string]string{string(dupRel1): "v1", string(dupRel2): "v1 (2)"},
 		},
 	} {
 		t.Run(c.name, func(t *testing.T) {
@@ -356,7 +382,7 @@ func TestRenameDuplicatesSettings(t *testing.T) {
 			theirs := e.writeWS(c.theirs...)
 			ours := e.writeWS(c.ours...)
 			wantOps(t, e.run(ours, theirs), c.want...)
-			wantSettingNames(t, e.sampleSettings(), c.names)
+			wantNames(t, e.sampleNames(), c.names)
 		})
 	}
 }
@@ -375,6 +401,34 @@ func TestRenameDuplicatesValuesFold(t *testing.T) {
 	s := e.sampleSettings()
 	if i := slices.IndexFunc(s.Priorities, func(v workspace.Value) bool { return v.ID == dupValue4 }); i < 0 || s.Priorities[i].Name != "API" {
 		t.Errorf("priorities = %+v", s.Priorities)
+	}
+}
+
+// 非表示のプロパティの名前も数える(C5c1-2)。
+func TestRenameDuplicatesHiddenProperty(t *testing.T) {
+	e := newEnv(t)
+	theirs := e.writeWS(append(propertyDrafts(dupProp1, "customer", "顧客", workspace.TypeText),
+		change.NewSet("properties/"+string(dupProp1)+"/hidden", false, true))...)
+	ours := e.writeWS(propertyDrafts(dupProp2, "client", "顧客", workspace.TypeText)...)
+	if p, _ := e.sampleSettings().Property(dupProp1); !p.Hidden {
+		t.Fatalf("property = %+v, want hidden", p)
+	}
+	wantOps(t, e.run(ours, theirs), "プロパティ「顧客」を「顧客 (2)」に変更")
+	wantNames(t, e.sampleNames(), map[string]string{string(dupProp1): "顧客", string(dupProp2): "顧客 (2)"})
+}
+
+// (10) が削除を取り消した値と、同時に足した同じ名前の値が重なったら、足した方を直す(C5c1-6・C5c1-13)。
+func TestRenameDuplicatesRestoredValue(t *testing.T) {
+	e := newEnv(t)
+	theirs := union(e.writeWS(change.NewDelete(reviewRef)), e.writeWS(valueDrafts(statuses, dupValue1, "Review")...))
+	ours := e.writeWS(change.NewSet("category_default/doing", apptest.SampleStatusInProgress, review))
+	wantOps(t, e.run(ours, theirs), "「Review」の削除を取り消し", "ステータス「Review」を「Review (2)」に変更")
+	got := map[change.ID]string{}
+	for _, v := range e.sampleSettings().Statuses {
+		got[v.ID] = v.Name
+	}
+	if got[review] != "Review" || got[dupValue1] != "Review (2)" {
+		t.Errorf("statuses = %v, want Review kept and the new one Review (2)", got)
 	}
 }
 

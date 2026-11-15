@@ -135,8 +135,11 @@ func TestRepairDuplicatesRevivedWorkspace(t *testing.T) {
 	for _, m := range []machine{a, b} {
 		wantWorkspace(t, m, devOld, "開発", "WEB")
 		wantWorkspace(t, m, devNew, "開発 (2)", "WEB2")
+		st, _ := workspace.SettingsFromLog(m.wsLog(t, devOld))
+		wantStatusName(t, m, st, devReview, "Review")
 	}
 	// 削除の取り消しの通知(C4b2)は、削除した A に別に 1 行。
+	// hanako はメンバーにいるが表示名を変えていないので、{変更した人} は表示名の初期値のログイン名になる。
 	wantRepairs(t, a,
 		duplicateText("開発", "開発 (2)"), duplicateText("WEB", "WEB2"),
 		"ワークスペース「開発」は hanako が同時に変更したため、削除を取り消しました",
