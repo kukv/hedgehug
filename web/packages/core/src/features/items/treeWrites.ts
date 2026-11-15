@@ -77,7 +77,8 @@ export function createTreeWrites(deps: TreeWritesDeps): TreeWrites {
 
   async function parentStep(id: string, dir: Dir): Promise<boolean> {
     const w = writableRow(id);
-    if (!w) return false;
+    // プロジェクトの行のない画面(order なし。プロジェクトの画面)では、Epic の新しい親がないので何もしない(E3a-17)。
+    if (!w || (w.row.kind === "Epic" && !w.s.order)) return false;
     let candidates: MoveCandidate[];
     try {
       candidates = await deps.moveCandidates(w.s.storeId, id);

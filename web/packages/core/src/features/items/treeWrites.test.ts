@@ -179,7 +179,8 @@ describe("Alt+Shift+↑↓ (changeParent)", () => {
     const none = setup();
     none.writes.changeParent(c.id, "up");
     await flush();
-    expect(epic.log).toEqual([`candidates ${e1.id}`]);
+    // プロジェクトの画面(order なし)の Epic は、候補も読まない(E3a-17)。
+    expect(epic.log).toEqual([]);
     expect(ro.log).toEqual([]);
     expect(none.log).toEqual([`candidates ${c.id}`]);
     expect(none.toasts.show).not.toHaveBeenCalled();
