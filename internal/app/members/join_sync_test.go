@@ -35,16 +35,25 @@ func TestJoinOnSyncSave(t *testing.T) {
 	}
 }
 
+// 足したのに fn が何も書かなかったら、足した分を捨て、包まない fn で内側の SyncSave を呼び直す(送り・Seen・数は、
+// 包まない SyncSave と同じ。待っていたローカルの保存も送る)。
 func TestJoinOnSyncSaveSkipsEmptyWrite(t *testing.T) {
-	r, c := joinReplicator(t)
+	c := newJoinStores(t, "hanako")
+	want := port.SyncResult{Seen: "seen-after", Sent: 2}
+	inner := &apptest.Replicator{Stores: c.Stores.(*apptest.Stores), Results: map[port.StoreID]port.SyncResult{"S1": want}}
+	r := members.JoinOnSyncSave(inner, writable())
 	ctx := port.WithJoined(t.Context())
-	res, err := r.SyncSave(ctx, "S1", joinRemote, taroOp, func(port.Tx) error { return nil })
+	var calls int
+	res, err := r.SyncSave(ctx, "S1", joinRemote, taroOp, func(port.Tx) error { calls++; return nil })
 	if err != nil {
 		t.Fatal(err)
 	}
-	// 受け取った位置は、前の同期の位置のまま(空にすると、次の同期で書き換えを見分けられなくなる)。
-	if res.Seen != joinRemote.Seen {
-		t.Errorf("Seen = %q, want %q", res.Seen, joinRemote.Seen)
+	if res != want {
+		t.Errorf("result = %+v, want the inner result %+v", res, want)
+	}
+	// 2 回目は包まない fn なので、メンバーを足さず、何も書かないまま成功する。
+	if n := len(inner.Calls()); n != 2 || calls != 2 {
+		t.Errorf("inner SyncSave calls = %d, fn calls = %d, want 2 and 2", n, calls)
 	}
 	if got := logins(t, c); !slices.Equal(got, []string{"hanako"}) {
 		t.Errorf("members = %v", got)

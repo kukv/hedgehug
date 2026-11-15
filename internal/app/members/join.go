@@ -44,9 +44,9 @@ func (j joining) Write(ctx context.Context, id port.StoreID, op port.Operation, 
 
 // JoinOnSyncSave は、remote のある Store への人の保存(SyncSave。移動先への送り届け)でも、JoinOnWrite と同じく、
 // 実行者がメンバーにいなければ同じ保存で足す port.Replicator を返す(決定 G1-6)。メンバーかは fn の中で、試みごとに
-// 受け取ったあとの Tx から決める。足したのに fn が何も書かなかったら、保存も送信もせずに成功を返す。そのときの結果の
-// Seen は前の同期の位置(remote.Seen)のままにする(受け取りは済んでいるが、空の Seen を記録させないため)。
-// SyncSave 以外はそのまま渡す。
+// 受け取ったあとの Tx から決める。足したのに fn が何も書かなかったら、足した分を捨て、包まない fn で内側の SyncSave を
+// 1 回呼び直す(送り・Seen・数を包まない SyncSave と同じにする。成功を記録して LastAttempt が進むので、待っていた
+// ローカルの保存もここで送る)。SyncSave 以外はそのまま渡す。
 func JoinOnSyncSave(r port.Replicator, list port.StoreGitHub) port.Replicator {
 	return joiningReplicator{Replicator: r, list: list}
 }
@@ -63,7 +63,7 @@ func (j joiningReplicator) SyncSave(ctx context.Context, id port.StoreID, remote
 	w := &joinWrite{list: j.list, id: id, login: op.Actor.Login, fn: fn}
 	res, err := j.Replicator.SyncSave(ctx, id, remote, op, w.run(ctx))
 	if errors.Is(err, errNothingWritten) { // fn のエラーは *port.SaveError に包まれて返る
-		return port.SyncResult{Seen: remote.Seen}, nil
+		return j.Replicator.SyncSave(ctx, id, remote, op, fn)
 	}
 	return res, w.done(ctx, err)
 }
