@@ -1,6 +1,6 @@
 import type { APIRequestContext, Page } from "@playwright/test";
 import { expect, test } from "./fixtures";
-import { sidebar, tokenUrl, unique } from "./helpers";
+import { prefixOf, sidebar, tokenUrl, unique } from "./helpers";
 
 // アクティビティの通しのテスト(C4d。06「アクティビティ」)。保存は API で行い、Store の変更の知らせで画面が読み直されることを確かめる。
 // 同じ worker のほかのテストも同じサーバーに保存と同期の行を残すので、行はこのテストで作ったアイテムの ID と同期の件数で探す。
@@ -80,4 +80,29 @@ test("lists saves and sync rows by day, with links and filters", async ({ page }
     unique(info, "アクティビティ 改"),
   );
   await expect(page).toHaveURL(/\/activity$/);
+});
+
+test("returns the workspace filter to すべて when the selected workspace is deleted", async ({
+  page,
+}, info) => {
+  const base = `/api/stores/${e2eStore}`;
+  const prefix = prefixOf(info);
+  const name = unique(info, `アクティビティ ${prefix}`);
+  const ws = await send(page.request, "post", `${base}/workspaces`, { name, prefix });
+
+  await page.goto(tokenUrl("/activity"));
+  const workspace = page.getByRole("combobox", { name: "ワークスペース" });
+  await workspace.selectOption({ label: `e2e / ${name}` });
+  await expect(workspace).toHaveValue(`${e2eStore}/${ws.id}`);
+
+  // 画面を開いたまま API で削除すると、選択肢から消え、絞り込みを「すべて」に戻して読み直す。
+  // 選んでいた option が消えるとブラウザは先頭の「すべて」を出すので、表示だけでなく、ワークスペースを付けない読み直しを待つ。
+  const all = page.waitForRequest(
+    (r) => new URL(r.url()).pathname === "/api/activity" && !r.url().includes("workspace="),
+  );
+  const res = await page.request.delete(`${base}/workspaces/${ws.id}`, { headers: auth });
+  if (!res.ok()) throw new Error(`delete-workspace: ${res.status()} ${await res.text()}`);
+  await expect(workspace.locator("option", { hasText: `e2e / ${name}` })).toHaveCount(0);
+  await all;
+  await expect(workspace).toHaveValue("");
 });

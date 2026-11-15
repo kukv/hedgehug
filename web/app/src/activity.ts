@@ -14,9 +14,15 @@ import { catalog, detail, itemsPort, navigation, toasts, transfersPort } from ".
 export const activity = createActivity({ port: createActivityPort(), toasts });
 
 // 出来事 store・sync で、アクティビティの画面を開いているときだけ読み直す(C4d-15)。
-// store と sync が同時に来ると 2 回呼ぶが、古い読み直しの答えは createActivity が捨てる。
-const reloadActivity = async () => {
-  if (get(navigation.route).name === "activity") await activity.reload();
+// store と sync が同時に来ると reloads と syncReloads の両方から同じ tick に呼ばれるので、マイクロタスクに
+// 1 回だけ予約し、予約中の呼び出しは同じ読み直しを待つ。
+let pending: Promise<void> | null = null;
+const reloadActivity = () => {
+  pending ??= Promise.resolve().then(async () => {
+    pending = null;
+    if (get(navigation.route).name === "activity") await activity.reload();
+  });
+  return pending;
 };
 reloads.add(reloadActivity);
 syncReloads.add(reloadActivity);
