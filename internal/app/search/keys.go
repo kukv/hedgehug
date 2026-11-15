@@ -46,6 +46,12 @@ func (s Service) catalog(ctx context.Context) (map[string]bool, []Column, error)
 	return keys, columnsOf(slices.Concat(shown...)), nil
 }
 
+// CustomKeys は、catalog の追加プロパティのキー(小文字)。保存したビューの列を外す判定に使う(E3b-8)。
+func (s Service) CustomKeys(ctx context.Context) (map[string]bool, error) {
+	keys, _, err := s.catalog(ctx)
+	return keys, err
+}
+
 // addCustomKeys は、spaces の追加プロパティのキー(小文字)を keys に足す。
 func addCustomKeys(spaces []*space, keys map[string]bool) {
 	for _, sp := range spaces {

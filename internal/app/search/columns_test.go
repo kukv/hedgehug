@@ -164,6 +164,17 @@ func TestColumnsHiddenStoreLeftOut(t *testing.T) {
 	}
 }
 
+func TestCustomKeysIncludesHiddenStores(t *testing.T) {
+	f := newFixture(t)
+	addWorkspace(t, f, store1, "01TESTWS0000000000000000A", "a", withProp("Customer", "顧客", workspace.TypeText))
+	addWorkspace(t, f, store3, "01TESTWS0000000000000000C", "a", withProp("hiddenonly", "隠れ", workspace.TypeText))
+	keys, err := f.svc.CustomKeys(t.Context())
+	must(t, err)
+	if !keys["customer"] || !keys["hiddenonly"] || keys["title"] {
+		t.Errorf("keys = %v", keys)
+	}
+}
+
 func TestColumnsHiddenPropertyKept(t *testing.T) {
 	f := newFixture(t)
 	addWorkspace(t, f, store1, "01TESTWS0000000000000000A", "a", func(s *workspace.Settings) {
