@@ -52,11 +52,11 @@ describe("resolveRoute of a workspace not in the catalog", () => {
     transfers.missing.add("HH");
     expect(
       await resolveRoute(wRoute("HH", "nope"), await stores(), itemsIn("S1"), transfers),
-    ).toEqual({ name: "home" });
+    ).toEqual({ name: "mytasks" });
     expect(transfers.calls).toEqual(["locateWorkspace nope HH"]);
   });
 
-  it("is home with the gone reason when the server says it is gone", async () => {
+  it("is my tasks with the gone reason when the server says it is gone", async () => {
     transfers.locatedWorkspace = {
       kind: "gone",
       reason: "deleted",
@@ -65,20 +65,20 @@ describe("resolveRoute of a workspace not in the catalog", () => {
       newDisplay: "team",
     };
     expect(await resolveRoute(wRoute("XX"), await stores(), itemsIn("S1"), transfers)).toEqual({
-      name: "home",
+      name: "mytasks",
       gone: { reason: "deleted", old: "XX", at: movedFrom.at, newDisplay: "team" },
     });
   });
 
-  it("is home when the server does not know it, and does not ask when askServer is false", async () => {
+  it("is my tasks when the server does not know it, and does not ask when askServer is false", async () => {
     transfers.missing.add("XX");
     expect(await resolveRoute(wRoute("XX"), await stores(), itemsIn("S1"), transfers)).toEqual({
-      name: "home",
+      name: "mytasks",
     });
     transfers.calls.length = 0;
     expect(
       await resolveRoute(wRoute("XX"), await stores(), itemsIn("S1"), transfers, false),
-    ).toEqual({ name: "home" });
+    ).toEqual({ name: "mytasks" });
     expect(transfers.calls).toEqual([]);
   });
 

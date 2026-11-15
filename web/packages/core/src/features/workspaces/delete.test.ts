@@ -223,10 +223,10 @@ describe("leaveDeletedWorkspace", () => {
     { name: "workspace", store: "work", prefix: "HH", tab: "overview" },
     { name: "project", store: "work", project: "HH-P1", tab: "overview" },
     { name: "item", store: "work", item: "HH-12" },
-  ])("replaces to home first, then reloads, from %j", async (route) => {
+  ])("replaces to my tasks first, then reloads, from %j", async (route) => {
     const { deps, replaced, events } = await leaveSetup(route);
     await leaveDeletedWorkspace(deps, web);
-    expect(replaced).toEqual([{ name: "home" }]);
+    expect(replaced).toEqual([{ name: "mytasks" }]);
     expect(events).toEqual(["replace", "load"]);
   });
 

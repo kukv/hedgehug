@@ -106,6 +106,7 @@ export {
   type WorkspaceTab,
   workspaceTabOf,
 } from "./features/router/route";
+export { createLastScreen, type LastScreen, lastScreenKey } from "./features/screen/lastScreen";
 export { createScreen, type Screen } from "./features/screen/screen";
 export { focusesFilter } from "./features/search/focusKey";
 export { createShell, type Shell } from "./features/shell/shell";

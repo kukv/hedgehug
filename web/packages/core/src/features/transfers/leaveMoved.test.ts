@@ -70,10 +70,10 @@ describe("createLeaveMoved", () => {
     expect(events).toEqual(["replace", "load"]);
   });
 
-  it("goes home when the destination Store is not in the list", async () => {
+  it("goes to my tasks when the destination Store is not in the list", async () => {
     const { leave, routes } = await setup();
     await leave()({ ...result, toStore: "S9" });
-    expect(routes).toEqual([{ name: "home" }]);
+    expect(routes).toEqual([{ name: "mytasks" }]);
   });
 });
 
