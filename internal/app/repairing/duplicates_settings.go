@@ -80,19 +80,18 @@ func settingsScopes(log []change.Record) []scope {
 
 // valueScopes は、値の一覧ごとの範囲。ステータス・優先度・関連システム、選択肢をプロパティの並び順。
 func valueScopes(s workspace.Settings) []scope {
-	lists := []struct {
+	// valueList は、値の一覧 1 つと、件名の {種類}。
+	type valueList struct {
 		kind string
 		l    workspace.List
-	}{
+	}
+	lists := []valueList{
 		{"ステータス", workspace.List{Kind: workspace.ListStatuses}},
 		{"優先度", workspace.List{Kind: workspace.ListPriorities}},
 		{"関連システム", workspace.List{Kind: workspace.ListSystems}},
 	}
 	for _, p := range s.Properties {
-		lists = append(lists, struct {
-			kind string
-			l    workspace.List
-		}{"選択肢", workspace.List{Kind: workspace.ListChoices, Property: p.ID}})
+		lists = append(lists, valueList{"選択肢", workspace.List{Kind: workspace.ListChoices, Property: p.ID}})
 	}
 	var out []scope
 	for _, x := range lists {
