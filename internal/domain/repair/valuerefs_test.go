@@ -112,3 +112,37 @@ func TestDanglingRefsHiddenInitial(t *testing.T) {
 		t.Fatalf("使わないステータスが初期ステータスでも直さない: %+v", got)
 	}
 }
+
+// ワークフローの辺の両端を別々に削除したら、辺を外す行は、値の ID の順で先の修復だけが持つ。
+func TestDanglingRefsEdgeBothEnds(t *testing.T) {
+	log := put(refLog(false), "d1", day, "hanako", change.NewDelete("statuses/s-review"))
+	log = put(log, "d3", day, "jiro", change.NewDelete("statuses/s-todo"))
+	want := []repair.RefRepair{
+		{Kind: repair.RefProject, Project: "P1", Value: "s-review", Drafts: []change.Draft{
+			change.NewRemove(projectrule.HiddenField("P1"), change.ID("s-review")),
+			change.NewRemove(projectrule.WorkflowField("P1", "s-review"), change.ID("s-done")),
+			change.NewRemove(projectrule.WorkflowField("P1", "s-todo"), change.ID("s-review")),
+		}},
+	}
+	if got := repair.DanglingRefs(log); !reflect.DeepEqual(got, want) {
+		t.Fatalf("同じ行は 1 回だけ、行のなくなった修復は入れない: got %+v\nwant %+v", got, want)
+	}
+}
+
+// 先の修復が持つ行は、あとの修復から除き、ほかの行は残す。
+func TestDanglingRefsEdgeBothEndsKeepsOthers(t *testing.T) {
+	log := put(refLog(false), "d1", day, "hanako", change.NewDelete("statuses/s-review"))
+	log = put(log, "d3", day, "jiro", change.NewDelete("statuses/s-done"))
+	want := []repair.RefRepair{
+		{Kind: repair.RefProject, Project: "P1", Value: "s-done", Drafts: []change.Draft{
+			change.NewRemove(projectrule.WorkflowField("P1", "s-review"), change.ID("s-done")),
+		}},
+		{Kind: repair.RefProject, Project: "P1", Value: "s-review", Drafts: []change.Draft{
+			change.NewRemove(projectrule.HiddenField("P1"), change.ID("s-review")),
+			change.NewRemove(projectrule.WorkflowField("P1", "s-todo"), change.ID("s-review")),
+		}},
+	}
+	if got := repair.DanglingRefs(log); !reflect.DeepEqual(got, want) {
+		t.Fatalf("got %+v\nwant %+v", got, want)
+	}
+}

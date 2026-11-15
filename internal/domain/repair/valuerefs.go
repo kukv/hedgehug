@@ -48,6 +48,7 @@ func DanglingRefs(log []change.Record) []RefRepair {
 }
 
 // projectRefs は、プロジェクト別のルールの分。行は、そのプロジェクトだけの Set に、値の削除の追従と同じ規則を当てたもの。
+// 同じプロジェクトで先の値の修復が持つ行は、あとの値の修復から除き、行がなくなった修復は入れない。
 func projectRefs(log []change.Record, deleted map[string][]change.Record) []RefRepair {
 	ids := map[change.ID]bool{} // 値の ID → テンプレートか
 	for f := range deleted {
@@ -59,11 +60,18 @@ func projectRefs(log []change.Record, deleted map[string][]change.Record) []RefR
 	var out []RefRepair
 	for _, p := range slices.Sorted(maps.Keys(set)) {
 		one := projectrule.Set{p: set[p]}
+		seen := map[string]bool{} // このプロジェクトで出した行。辺の両端が削除されたときの同じ行を、先の値の修復だけに入れる
 		for _, id := range values {
 			ds := projectrule.StatusDeleteDrafts(one, id)
 			if ids[id] {
 				ds = projectrule.TemplateDropDrafts(one, id)
 			}
+			ds = slices.DeleteFunc(ds, func(d change.Draft) bool {
+				k := string(d.T) + "\x00" + d.F + "\x00" + string(d.From) + "\x00" + string(d.To)
+				dup := seen[k]
+				seen[k] = true
+				return dup
+			})
 			if len(ds) > 0 {
 				out = append(out, RefRepair{Kind: RefProject, Project: p, Value: id, Drafts: ds})
 			}

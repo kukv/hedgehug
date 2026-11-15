@@ -395,15 +395,15 @@ func TestValueRefsOnceAcrossMachines(t *testing.T) {
 	}
 }
 
-// ワークフローの行の From と To を 1 回の操作で削除していたら、行は両方の値の保存に入るが、鍵(プロジェクト・区画・
-// 削除の op)が同じなので受信箱は 1 行。本文の値は、行が外した To。
+// ワークフローの行の From と To を 1 回の操作で削除していたら、行は値の ID の順で先の値の保存だけに入り、
+// 鍵(プロジェクト・区画・削除の op)が 1 つなので受信箱は 1 行。本文の値は、行が外した To。
 func TestValueRefsBothEndsDeleted(t *testing.T) {
 	f := valueRefsSetup(t)
 	wsRules(f, "hanako", change.NewAdd(projectrule.WorkflowField(webProj, apptest.SampleStatusPending), apptest.SampleStatusDone))
 	taroDeletes(f, pendingRef, statusList.Ref(apptest.SampleStatusDone))
 	saves := danglingSaves(f)
-	if len(saves) != 2 {
-		t.Fatalf("saves = %d, want 2", len(saves))
+	if len(saves) != 1 {
+		t.Fatalf("saves = %d, want 1", len(saves))
 	}
 	f.judge(saves...)
 	want := "プロジェクト「Web」のワークフローの制約から、太郎 が「Done」を削除したため、「Done」を外しました"

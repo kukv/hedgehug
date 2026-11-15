@@ -211,6 +211,21 @@ func TestDropDanglingRefsAfterOrphans(t *testing.T) {
 	wantOps(t, e.run(nil, nil), orphanWebOp)
 }
 
+// ワークフローの辺の両端を別々に削除したら、辺を外す行は先の値の保存だけが持ち、行のなくなった保存は書かない。
+func TestDropDanglingRefsEdgeBothEnds(t *testing.T) {
+	e := newEnv(t)
+	e.addWebRules()
+	e.workspaceWrite(append(
+		workspace.ValueDrafts(statuses, workspace.Value{ID: shipped, Name: "Shipped", Color: "gray", Category: workspace.CategoryDone, Rank: "c"}),
+		change.NewAdd(projectrule.WorkflowField(webProject, review), shipped))...)
+	e.workspaceWrite(change.NewDelete(reviewRef))
+	e.workspaceWrite(change.NewDelete(statuses.Ref(shipped)))
+	wantOps(t, e.run(nil, nil), webReview)
+	if set, _ := e.sampleRules(); len(set.Of(webProject).Workflow) != 0 || len(set.Of(webProject).Hidden) != 0 {
+		t.Errorf("project rules = %+v", set.Of(webProject))
+	}
+}
+
 // 完了の分類にされた初期ステータスは、未着手の既定に戻す。「Review」の分類は変えない。
 func TestResetFinishedInitial(t *testing.T) {
 	e := newEnv(t)
