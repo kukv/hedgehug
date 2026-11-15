@@ -44,7 +44,7 @@ export function createLeaveMoved(deps: LeaveMovedDeps): LeaveMoved {
     const store = get(deps.catalog.stores).find((s) => s.id === result.toStore);
     return store
       ? { name: "project", store: store.name, project: result.display, tab: "settings" }
-      : { name: "home" };
+      : { name: "mytasks" };
   });
 }
 

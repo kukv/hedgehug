@@ -9,6 +9,7 @@ function row(over: Partial<SearchRow> = {}): SearchRow {
     storeId: "s",
     storeName: "s",
     storeColor: "",
+    statusId: "",
     workspaceId: "w",
     projectId: "p",
     itemId: "i",

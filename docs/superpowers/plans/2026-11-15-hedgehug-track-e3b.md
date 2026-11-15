@@ -578,6 +578,7 @@ git commit -m "docs: 保存したビューに合わせて仕様と計画を直�
 
 ## 実装で計画から変えたこと
 
+- E4a が先に develop に入り、ホーム(`/`)は「最後に開いていた画面へ移る」アドレスに、マイタスクは別のルート `mytasks` になった。E3b-13・E3b-17 の「ホームへ移る」は、仕様(04 の 430 行、01 の 149 行)どおりマイタスク(`navigation.replace({ name: "mytasks" })`)へ移る形にした。
 - 値の型(`Sort`・`Table`・`Content`・`View`)は `internal/domain/savedview` に置き、`internal/app/views` は別名で公開した(infra は port と domain だけを読む規則のため)。
 - `routes.go` の `NewAPI` が関数の行数の上限を超えたので、検索とビューの登録を `registerSearch` に分けた。API の本文の型名は既存の型とぶつからないように `CreateViewBody`・`SaveViewBody`・`RenameViewBody` にした。
 - core の `Views.create` は `SavedView | string | null`(`null` は断り以外の失敗で、エラーのトーストを出し済み)。`rename` の `null` は、成功と、トーストを出し済みの失敗の両方。

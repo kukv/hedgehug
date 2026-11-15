@@ -52,7 +52,7 @@ export interface LeaveDeletedDeps {
 
 // leaveDeletedProject は、削除できたあとの移り先。ワークスペースの概要へ移り(履歴には積まない。戻るで削除済みの
 // アドレスに戻らない)、サイドバーの一覧を読み直す。先に移るのは、一覧を先に読み直すと、消えたプロジェクトの
-// アドレスがホームに解決されるため。読み直しの失敗は、削除はできているので投げない(次の同期の読み直しで直る)。
+// アドレスがマイタスクに解決されるため。読み直しの失敗は、削除はできているので投げない(次の同期の読み直しで直る)。
 export async function leaveDeletedProject(
   deps: LeaveDeletedDeps,
   project: DeleteTarget,

@@ -29,7 +29,7 @@ describe("deleteView", () => {
     const { deps, shown, replaced } = setup(true);
     await deleteView(deps, "v1");
     expect(shown).toEqual(["ビューを削除しました"]);
-    expect(replaced).toEqual([{ name: "home" }]);
+    expect(replaced).toEqual([{ name: "mytasks" }]);
   });
   it("stays when the delete failed", async () => {
     const { deps, shown, replaced } = setup(false);

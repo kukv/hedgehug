@@ -1778,6 +1778,31 @@ components:
       required:
         - direction
       type: object
+    MyTasksQuery:
+      additionalProperties: false
+      properties:
+        filter:
+          description: "絞り込みの文字列(04「検索」と同じ書き方)。空なら基本のクエリだけ。sort:・group: は無視する"
+          type: string
+      required:
+        - filter
+      type: object
+    MyTasksResult:
+      additionalProperties: false
+      properties:
+        errors:
+          description: 絞り込みのエラー(1 語 1 行)
+          items:
+            type: string
+          type: array
+        rows:
+          items:
+            $ref: "#/components/schemas/SearchRow"
+          type: array
+      required:
+        - errors
+        - rows
+      type: object
     NextNumber:
       additionalProperties: false
       properties:
@@ -3218,6 +3243,9 @@ components:
           type: string
         status:
           $ref: "#/components/schemas/SearchStatus"
+        statusId:
+          description: ステータスの内部 ID。なければ空
+          type: string
         storeColor:
           type: string
         storeId:
@@ -3254,6 +3282,7 @@ components:
         - title
         - kind
         - status
+        - statusId
         - assignee
         - priority
         - end
@@ -3851,15 +3880,6 @@ components:
         - error
         - unsent
         - lastSuccess
-      type: object
-    SystemInfo:
-      additionalProperties: false
-      properties:
-        version:
-          description: hedgehug の版
-          type: string
-      required:
-        - version
       type: object
     TransferChoice:
       additionalProperties: false
@@ -5412,6 +5432,29 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: 画面のアドレスのワークスペースの接頭辞(旧い接頭辞・移動元のアドレスを含む)が指すワークスペースを探す
+  /api/my-tasks:
+    post:
+      operationId: my-tasks
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MyTasksQuery"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MyTasksResult"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: 自分が担当する未完了のアイテムを、絞り込みをつないで返す
   /api/palette-index:
     get:
       operationId: palette-index
@@ -10031,23 +10074,6 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: タブがネットワークにつながっているかを知らせる(オフラインのあいだは自動で同期しない)
-  /api/system:
-    get:
-      operationId: get-system
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/SystemInfo"
-          description: OK
-        default:
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ErrorModel"
-          description: Error
-      summary: サーバーの版を返す
   /api/views:
     get:
       operationId: list-views

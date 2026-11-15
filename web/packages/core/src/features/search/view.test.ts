@@ -8,6 +8,7 @@ function row(storeName: string, readOnly: boolean): SearchRow {
     storeId: `s-${storeName}`,
     storeName,
     storeColor: "blue",
+    statusId: "",
     workspaceId: "w1",
     projectId: "p1",
     itemId: `i-${storeName}`,

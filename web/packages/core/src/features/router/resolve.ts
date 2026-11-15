@@ -19,10 +19,12 @@ import {
 // 聞く(アドレスの Store の旧 ID を、ほかの Store のいまの ID より先に見る。A5a-15)。プロジェクトも、一覧では
 // アドレスの Store だけを(いまの接頭辞・旧い接頭辞で)探し、なければサーバーの locateProject に聞く(旧 ID・
 // ほかの Store のいまの ID・一覧を読み直す前の移したばかりのいまの ID。A5b-24)。一覧でほかの Store を探すと、
-// 別の Store へ移した直後に、ほかの Store の同じ ID のプロジェクトを開いてしまう。どれでも見つからなければホーム。
+// 別の Store へ移した直後に、ほかの Store の同じ ID のプロジェクトを開いてしまう。どれでも見つからなければマイタスク
+// (E4a-13)。home(/)は、最後に開いていた画面へ移るまでのあいだだけの解決。
 
 export type Resolved =
-  | { name: "home"; gone?: Gone }
+  | { name: "mytasks"; gone?: Gone }
+  | { name: "home" }
   | {
       name: "workspace";
       storeId: string;
@@ -38,7 +40,7 @@ export type Resolved =
   | { name: "activity" }
   | { name: "view"; viewId: string };
 
-const home = { name: "home" } as const;
+const notFound = { name: "mytasks" } as const;
 
 // findWorkspace は、接頭辞 prefix のワークスペースを、stores のいまの接頭辞で探してから旧い接頭辞で探す。
 function findWorkspace(
@@ -55,13 +57,13 @@ function findWorkspace(
       }
     }
   }
-  return home;
+  return notFound;
 }
 
 // findProject は、表示 ID のプロジェクト。旧い接頭辞のワークスペースでは、その接頭辞で書いた ID が同じものを選ぶ。
 function findProject(stores: StoreNode[], display: string, tab: ProjectTab): Resolved {
   const d = parseDisplayId(display);
-  if (d?.kind !== "project") return home;
+  if (d?.kind !== "project") return notFound;
   return findWorkspace(stores, d.prefix, (s, w) => {
     const p = w.projects.find((x) => projectDisplayId(d.prefix, x.number) === display);
     return p && { name: "project", storeId: s.id, projectId: p.id, tab };
@@ -79,12 +81,12 @@ async function askWorkspace(
     const l = await transfers.locateWorkspace(store, prefix);
     if (l.kind === "gone") {
       const { kind: _, ...gone } = l;
-      return { name: "home", gone };
+      return { name: "mytasks", gone };
     }
     const { storeId, workspaceId, movedFrom } = l;
     return { name: "workspace", storeId, workspaceId, tab, ...(movedFrom ? { movedFrom } : {}) };
   } catch (e) {
-    if (e instanceof NotFound) return home;
+    if (e instanceof NotFound) return notFound;
     throw e;
   }
 }
@@ -96,17 +98,17 @@ async function askProject(
   tab: ProjectTab,
   transfers: Pick<TransfersPort, "locateProject">,
 ): Promise<Resolved> {
-  if (parseDisplayId(id)?.kind !== "project") return home;
+  if (parseDisplayId(id)?.kind !== "project") return notFound;
   try {
     const l = await transfers.locateProject(store, id);
     if (l.kind === "gone") {
       const { kind: _, ...gone } = l;
-      return { name: "home", gone };
+      return { name: "mytasks", gone };
     }
     const { storeId, projectId, movedFrom } = l;
     return { name: "project", storeId, projectId, tab, ...(movedFrom ? { movedFrom } : {}) };
   } catch (e) {
-    if (e instanceof NotFound) return home;
+    if (e instanceof NotFound) return notFound;
     throw e;
   }
 }
@@ -119,7 +121,7 @@ async function findItem(
   transfers: Pick<TransfersPort, "locate">,
 ): Promise<Resolved> {
   const d = parseDisplayId(id);
-  if (d?.kind !== "item") return home;
+  if (d?.kind !== "item") return notFound;
   const s = stores.find((x) => x.name === store);
   const w = s?.workspaces.find((x) => x.prefix === d.prefix);
   if (s && w) {
@@ -142,12 +144,12 @@ async function locate(
     const l = await transfers.locate(store, id);
     if (l.kind === "gone") {
       const { kind: _, ...gone } = l;
-      return { name: "home", gone };
+      return { name: "mytasks", gone };
     }
     const { storeId, projectId, itemId, movedFrom } = l;
     return { name: "item", storeId, projectId, itemId, ...(movedFrom ? { movedFrom } : {}) };
   } catch (e) {
-    if (e instanceof NotFound) return home;
+    if (e instanceof NotFound) return notFound;
     throw e;
   }
 }
@@ -162,7 +164,9 @@ export async function resolveRoute(
 ): Promise<Resolved> {
   switch (route.name) {
     case "home":
-      return home;
+      return { name: "home" };
+    case "mytasks":
+      return notFound;
     case "workspace": {
       const named = stores.filter((s) => s.name === route.store);
       const r = findWorkspace(named, route.prefix, (s, w) => ({
@@ -171,13 +175,13 @@ export async function resolveRoute(
         workspaceId: w.id,
         tab: route.tab,
       }));
-      if (r.name !== "home" || !askServer) return r;
+      if (r.name !== "mytasks" || !askServer) return r;
       return askWorkspace(route.store, route.prefix, route.tab, transfers);
     }
     case "project": {
       const named = stores.filter((s) => s.name === route.store);
       const r = findProject(named, route.project, route.tab);
-      if (r.name !== "home" || !askServer) return r;
+      if (r.name !== "mytasks" || !askServer) return r;
       return askProject(route.store, route.project, route.tab, transfers);
     }
     case "item":
@@ -195,7 +199,7 @@ export async function resolveRoute(
   }
 }
 
-// routeOfProject は、プロジェクトの画面のアドレス。一覧にないときはホーム。
+// routeOfProject は、プロジェクトの画面のアドレス。一覧にないときはマイタスク。
 export function routeOfProject(
   stores: StoreNode[],
   storeId: string,
@@ -207,10 +211,10 @@ export function routeOfProject(
     const p = w.projects.find((x) => x.id === projectId);
     if (s && p) return { name: "project", store: s.name, project: p.displayId, tab };
   }
-  return home;
+  return notFound;
 }
 
-// routeOfWorkspace は、ワークスペースの画面のアドレス。一覧にないときはホーム。
+// routeOfWorkspace は、ワークスペースの画面のアドレス。一覧にないときはマイタスク。
 export function routeOfWorkspace(
   stores: StoreNode[],
   storeId: string,
@@ -219,5 +223,5 @@ export function routeOfWorkspace(
 ): Route {
   const s = stores.find((x) => x.id === storeId);
   const w = s?.workspaces.find((x) => x.id === workspaceId);
-  return s && w ? { name: "workspace", store: s.name, prefix: w.prefix, tab } : home;
+  return s && w ? { name: "workspace", store: s.name, prefix: w.prefix, tab } : notFound;
 }

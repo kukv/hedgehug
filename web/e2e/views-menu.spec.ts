@@ -124,9 +124,10 @@ test("delete", async ({ page }, info) => {
   await expect(page).not.toHaveURL(/\/views\//);
   await expect(viewRow(await sidebar(page, info), name)).toHaveCount(0);
 
-  // 削除したビューのアドレスを開いてもホームになる。
+  // 削除したビューのアドレスを開くとマイタスクになる。
   await page.goto(tokenUrl(`/views/${id}`));
   await expect(page).not.toHaveURL(/\/views\//);
+  await expect(page.getByRole("heading", { name: "マイタスク", level: 1 })).toBeVisible();
 
   // 同じ名前で保存し直したビューには、印がない。
   const again = await newView(page, name);

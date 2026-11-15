@@ -9,6 +9,7 @@
     type ProjectView,
     type Route,
   } from "@hedgehug/core";
+  import { today } from "../../clock";
   import { selection } from "../../palette";
   import { detail, itemDialog, links, projectScreen } from "../../wire";
   import { itemMenuHost, itemRefresh } from "../../wireActions";
@@ -23,8 +24,7 @@
 
   let { view }: Props = $props();
 
-  // 期限の判定に使う今日は、画面を出したときの日付(決定 22)。
-  const today = new Date();
+  // 期限の判定に使う今日は、app の時計の日付(決定 22。日付が替わったら描き直す。E4a-16)。
   let list = $state<HTMLElement>();
   const route = (it: Item): Route => ({
     name: "item",
@@ -125,7 +125,7 @@
       settings={view.settings}
       members={view.members}
       items={view.items}
-      {today}
+      today={$today}
       onstatus={(it, id) => void projectScreen.setStatus(it.id, id)}
       onmenu={(e, it) => openMenu(it, (e.currentTarget as HTMLElement).getBoundingClientRect())}
     />

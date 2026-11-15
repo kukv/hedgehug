@@ -60,6 +60,7 @@ type SearchRow struct {
 	Title       string          `json:"title"`
 	Kind        string          `json:"kind"`
 	Status      *SearchStatus   `json:"status"`
+	StatusID    string          `json:"statusId" doc:"ステータスの内部 ID。なければ空"`
 	Assignee    *SearchAssignee `json:"assignee"`
 	Priority    *SearchPriority `json:"priority"`
 	End         string          `json:"end" doc:"終了日(YYYY-MM-DD)。なければ空"`
@@ -108,6 +109,7 @@ func Register(api huma.API, svc appsearch.Service, screens appsearch.ScreenState
 			}
 			return &searchOutput{Body: toResult(res)}, nil
 		})
+	registerMyTasks(api, svc)
 	registerScreens(api, screens)
 }
 
@@ -129,7 +131,7 @@ func toRow(r appsearch.Row) SearchRow {
 		StoreID: string(r.Store.ID), StoreName: r.Store.Name, StoreColor: r.Store.Color, ReadOnly: r.Store.ReadOnly,
 		WorkspaceID: string(it.Place.Workspace), ProjectID: string(it.Place.Project), ItemID: string(it.ID),
 		Display: f.Display, OldIDHit: r.OldID, Title: it.Title, Kind: string(it.Kind),
-		Status: toStatus(f), Assignee: toAssignee(f), Priority: toPriority(f), End: it.End, Points: it.Points,
+		Status: toStatus(f), StatusID: string(it.Status), Assignee: toAssignee(f), Priority: toPriority(f), End: it.End, Points: it.Points,
 	}
 	if r.DaysLeft != nil {
 		row.Deleted = &SearchDeleted{DaysLeft: *r.DaysLeft}

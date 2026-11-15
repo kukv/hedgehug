@@ -5,12 +5,14 @@
     choices: { id: string; label: string }[];
     value: string;
     onchange: (id: string) => void;
+    // label は、読み上げの名前(まとめ方の切り替えにも使う)。
+    label?: string;
   }
 
-  let { choices, value, onchange }: Props = $props();
+  let { choices, value, onchange, label = "レイアウト" }: Props = $props();
 </script>
 
-<fieldset class="switch" aria-label="レイアウト">
+<fieldset class="switch" aria-label={label}>
   {#each choices as c (c.id)}
     <button
       type="button"

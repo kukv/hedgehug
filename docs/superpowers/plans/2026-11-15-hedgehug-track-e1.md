@@ -819,8 +819,8 @@ E1 で作ったものと、それぞれの小計画・トラックが足すも�
 
 ### E4(マイタスクなど)
 
-- 日付が変わったときに `today`・`-7d` のクエリを計算し直す仕組み(04 の 42 行)は E4 が作る。E1 は検索を出すたびにその時点の今日で計算する(E1-11、E1-23)。
-- `web/packages/core/src/features/search/candidates.ts` の `CandidateScope` は、E1 では `{ kind: "all" }` だけを使う。E4 は `{ kind: "workspace"; storeId; workspaceId }` で、ワークスペースの範囲の候補を使う。範囲を絞る処理は `scopedStores` と `itemEntries`・`memberEntries` に書いてあり、E1 のテスト(`candidates.test.ts`)で確かめてある。
+- 日付が変わったときに `today`・`-7d` のクエリを計算し直す仕組み(04 の 42 行)は E4 が作る。E1 は検索を出すたびにその時点の今日で計算する(E1-11、E1-23)。(E4a で足した。時計は `web/app/src/clock.ts`)
+- `web/packages/core/src/features/search/candidates.ts` の `CandidateScope` は、E1 では `{ kind: "all" }` だけを使う。E4 は `{ kind: "workspace"; storeId; workspaceId }` で、ワークスペースの範囲の候補を使う。範囲を絞る処理は `scopedStores` と `itemEntries`・`memberEntries` に書いてあり、E1 のテスト(`candidates.test.ts`)で確かめてある。(E4b に回した)
 
 ### E7(ツリー)
 

@@ -88,9 +88,9 @@ test("delete in another tab moves to home and clears the sidebar", async ({ page
   await dialog.getByRole("button", { name: "削除", exact: true }).click();
   await expect(b).not.toHaveURL(/\/views\//);
 
-  // タブ A はホーム(見出し「hedgehug」)へ移り、トーストは出さない(E3b-17)。
+  // タブ A はマイタスクへ移り、トーストは出さない(E3b-17)。
   await expect(a).not.toHaveURL(/\/views\//);
-  await expect(a.getByRole("heading", { name: "hedgehug" })).toBeVisible();
+  await expect(a.getByRole("heading", { name: "マイタスク", level: 1 })).toBeVisible();
   await expect(a.getByRole("status").filter({ hasText: "ビューを削除しました" })).toHaveCount(0);
   await expect(viewRow(await sidebar(a, info), name)).toHaveCount(0);
 });

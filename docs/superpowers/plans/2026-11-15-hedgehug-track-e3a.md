@@ -544,7 +544,7 @@ git commit -m "docs: トラック E の分け方を E3a・E3b に書き換え、
 
 ### E4(マイタスクと概要)
 
-- ワークスペースの概要のプロジェクトの一覧の行にも、プロジェクトのメニューを付ける(04 の 84 行)。`web/app/src/projectRows.ts` の `openProjectMenu` と、core の `projectMenu`・`canMoveProject` を使う。
+- ワークスペースの概要のプロジェクトの一覧の行にも、プロジェクトのメニューを付ける(04 の 84 行)。`web/app/src/projectRows.ts` の `openProjectMenu` と、core の `projectMenu`・`canMoveProject` を使う。(E4b に回した)
 
 ### E5(カンバン)・E6(ガント)
 

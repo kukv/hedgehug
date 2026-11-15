@@ -7,6 +7,7 @@
     type SearchRow,
     type TableSettings,
   } from "@hedgehug/core";
+  import { today } from "../../clock";
   import TableHead from "./TableHead.svelte";
   import TableRow from "./TableRow.svelte";
 
@@ -26,9 +27,11 @@
 
   let { rows, columns, groups, sort, onsort, selection, onmenu }: Props = $props();
   const picked = $derived(selection.rows);
-  // 終了日の「期限切れ」「今日」と相対時間は、結果が届いたときの時刻で決める(読み直した行の「N 分前」がずれない)。
+  // 終了日の「期限切れ」「今日」と相対時間は、結果が届いたときと日付が替わったときの時刻で決める(読み直した行の
+  // 「N 分前」がずれない。E4a-16)。
   const now = $derived.by(() => {
     void rows;
+    void $today;
     return new Date();
   });
 </script>

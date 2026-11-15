@@ -8,9 +8,10 @@ describe("コマンド「検索を開く」", () => {
   test("search command shows table after moving (Ctrl+Enter opens a new tab)", async () => {
     const { palette, calls } = await setup();
     await palette.open();
-    expect(labels(palette).slice(0, 5)).toEqual([
+    expect(labels(palette).slice(0, 6)).toEqual([
       "# コマンド",
       "新規作成",
+      "マイタスクを開く",
       "受信箱を開く",
       "アクティビティを開く",
       "検索を開く",

@@ -18,8 +18,10 @@ export interface CandidateSources {
 }
 
 // CandidateScope は、候補を出す範囲。all は表示中のすべての Store、workspace はそのワークスペースだけ。
+// myTasks は、`project:` だけ projects(`{storeId}/{projectId}`)に入るプロジェクトに絞り、ほかのキーは all と同じ。
 export type CandidateScope =
   | { kind: "all" }
+  | { kind: "myTasks"; projects: ReadonlySet<string> }
   | { kind: "workspace"; storeId: string; workspaceId: string };
 
 const limit = 10;
@@ -63,7 +65,7 @@ function withDots(entries: Entry[], stores: StoreNode[]): FilterCandidate[] {
 }
 
 function scopedStores(src: CandidateSources, scope: CandidateScope): StoreNode[] {
-  if (scope.kind === "all") return src.stores;
+  if (scope.kind !== "workspace") return src.stores;
   return src.stores
     .filter((s) => s.id === scope.storeId)
     .map((s) => ({ ...s, workspaces: s.workspaces.filter((w) => w.id === scope.workspaceId) }));
@@ -73,10 +75,11 @@ function hits(label: string, typed: string): boolean {
   return label.toLowerCase().includes(typed.toLowerCase());
 }
 
-function projectEntries(stores: StoreNode[], typed: string): Entry[] {
+function projectEntries(stores: StoreNode[], scope: CandidateScope, typed: string): Entry[] {
   return stores.flatMap((s) =>
     s.workspaces.flatMap((w) =>
       w.projects
+        .filter((p) => scope.kind !== "myTasks" || scope.projects.has(`${s.id}/${p.id}`))
         .map((p) => ({
           storeId: s.id,
           display: p.displayId,
@@ -103,7 +106,7 @@ function itemEntries(src: CandidateSources, scope: CandidateScope, typed: string
   return src.items
     .filter(
       (i) =>
-        scope.kind === "all" ||
+        scope.kind !== "workspace" ||
         (i.storeId === scope.storeId && i.workspaceId === scope.workspaceId),
     )
     .map((i) => ({
@@ -150,7 +153,7 @@ export function filterCandidates(
   if (term.typed === "") return [];
   const stores = scopedStores(src, scope);
   let found: FilterCandidate[] = [];
-  if (term.key === "project") found = withDots(projectEntries(stores, term.typed), stores);
+  if (term.key === "project") found = withDots(projectEntries(stores, scope, term.typed), stores);
   else if (term.key === "workspace") found = workspaceEntries(stores, term.typed);
   else if (term.key === "assignee") found = memberEntries(src, scope, term.typed);
   else if (itemKeys.has(term.key)) found = withDots(itemEntries(src, scope, term.typed), stores);

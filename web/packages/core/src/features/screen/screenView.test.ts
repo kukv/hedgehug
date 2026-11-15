@@ -47,19 +47,19 @@ describe("createScreen for a saved view", () => {
     expect(stack).toEqual([`/views/${id}`]);
   });
 
-  it("replaces an id that is not in the list with home, without a toast", async () => {
+  it("replaces an id that is not in the list with my tasks, without a toast", async () => {
     const { screen, stack, toasts } = await setup(`/views/${id}`, []);
-    expect(get(screen.current)).toEqual({ name: "home" });
-    expect(stack).toEqual(["/"]);
+    expect(get(screen.current)).toEqual({ name: "mytasks" });
+    expect(stack).toEqual(["/my-tasks"]);
     expect(get(toasts.list)).toEqual([]);
   });
 
-  it("replaces with home when the open view leaves the list", async () => {
+  it("replaces with my tasks when the open view leaves the list", async () => {
     const { screen, stack, views, toasts } = await setup(`/views/${id}`, [bug]);
     views.set([]);
     await flush();
-    expect(get(screen.current)).toEqual({ name: "home" });
-    expect(stack).toEqual(["/"]);
+    expect(get(screen.current)).toEqual({ name: "mytasks" });
+    expect(stack).toEqual(["/my-tasks"]);
     expect(get(toasts.list)).toEqual([]);
   });
 });

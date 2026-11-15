@@ -69,15 +69,18 @@ func get(t *testing.T, url, token string) (int, string) {
 	return res.StatusCode, string(b)
 }
 
-func TestSystemNeedsToken(t *testing.T) {
-	srv := newServer(t)
+func TestAPINeedsToken(t *testing.T) {
+	srv := httptest.NewServer(httpapi.New("secret", fstest.MapFS{}, httpapi.Deps{
+		Version:   "test",
+		StoreList: apptest.StoreList{},
+	}))
+	t.Cleanup(srv.Close)
 	for _, token := range []string{"", "wrong"} {
-		if code, _ := get(t, srv.URL+"/api/system", token); code != http.StatusUnauthorized {
+		if code, _ := get(t, srv.URL+"/api/stores", token); code != http.StatusUnauthorized {
 			t.Errorf("token %q: status %d, want 401", token, code)
 		}
 	}
-	code, body := get(t, srv.URL+"/api/system", "secret")
-	if code != http.StatusOK || strings.TrimSpace(body) != `{"version":"v0.0.0-test"}` {
+	if code, body := get(t, srv.URL+"/api/stores", "secret"); code != http.StatusOK {
 		t.Errorf("status %d, body %s", code, body)
 	}
 }
@@ -158,7 +161,7 @@ func TestNoIndexIs404WithoutListing(t *testing.T) {
 func TestOpenAPIIsNotServed(t *testing.T) {
 	mux := http.NewServeMux()
 	httpapi.NewAPI(mux, httpapi.Deps{Version: "v0.0.0-test"})
-	for _, path := range []string{"/openapi.json", "/openapi.yaml", "/docs", "/schemas/SystemInfo.json", "/schemas/x.json"} {
+	for _, path := range []string{"/openapi.json", "/openapi.yaml", "/docs", "/schemas/StoreInfo.json", "/schemas/x.json"} {
 		rec := httptest.NewRecorder()
 		mux.ServeHTTP(rec, httptest.NewRequestWithContext(t.Context(), http.MethodGet, path, nil))
 		if rec.Code != http.StatusNotFound {

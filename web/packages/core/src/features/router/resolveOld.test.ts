@@ -63,7 +63,7 @@ describe("resolveRoute with old IDs", () => {
     expect(r).toEqual({ name: "item", storeId: "S1", projectId: "S1-P1", itemId: "S1-I2" });
   });
 
-  it("gives the Gone of a gone item with home", async () => {
+  it("gives the Gone of a gone item with my tasks", async () => {
     const gone = {
       reason: "purged",
       old: "HH-5",
@@ -78,10 +78,10 @@ describe("resolveRoute with old IDs", () => {
         itemsIn("S1"),
         transfers,
       ),
-    ).toEqual({ name: "home", gone });
+    ).toEqual({ name: "mytasks", gone });
   });
 
-  it("is plain home when locate has nothing (NotFound), and does not ask for an unreadable ID", async () => {
+  it("is plain my tasks when locate has nothing (NotFound), and does not ask for an unreadable ID", async () => {
     transfers.missing.add("HH-99");
     const s = await stores();
     expect(
@@ -91,11 +91,11 @@ describe("resolveRoute with old IDs", () => {
         itemsIn("S1"),
         transfers,
       ),
-    ).toEqual({ name: "home" });
+    ).toEqual({ name: "mytasks" });
     transfers.calls.length = 0;
     expect(
       await resolveRoute({ name: "item", store: "work", item: "abc" }, s, itemsIn("S1"), transfers),
-    ).toEqual({ name: "home" });
+    ).toEqual({ name: "mytasks" });
     expect(transfers.calls).toEqual([]);
   });
 
@@ -205,15 +205,15 @@ describe("resolveRoute with old prefixes", () => {
     expect(transfers.calls).toEqual(["locateWorkspace nope HH"]);
   });
 
-  it("is home for a prefix that no workspace has used, and for an old-prefix project number that does not exist", async () => {
+  it("is my tasks for a prefix that no workspace has used, and for an old-prefix project number that does not exist", async () => {
     transfers.missing.add("HH-P9");
     transfers.missing.add("ZZ");
     const nodes = one(ws("S1", "W1", "WEB", ["HH"]));
     expect(await resolveRoute(wsRoute("ZZ"), nodes, itemsIn("S1"), transfers)).toEqual({
-      name: "home",
+      name: "mytasks",
     });
     expect(await resolveRoute(pRoute("HH-P9"), nodes, itemsIn("S1"), transfers)).toEqual({
-      name: "home",
+      name: "mytasks",
     });
   });
 });

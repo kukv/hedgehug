@@ -136,7 +136,7 @@ describe("createScreen with a moved workspace", () => {
     expect(get(screen.workspaceMoved)).toBeNull();
   });
 
-  it("goes home with the workspace gone toast", async () => {
+  it("goes to my tasks with the workspace gone toast", async () => {
     const { screen, stack, transfers, toasts } = await setup("/s/work/w/XX/overview");
     transfers.locatedWorkspace = {
       kind: "gone",
@@ -150,13 +150,13 @@ describe("createScreen with a moved workspace", () => {
     expect(get(toasts.list).map((t) => t.text)).toEqual([
       "このワークスペースは 11/13 09:05 に team へ移動しましたが、削除されています。設定の「削除済み」から復元できます",
     ]);
-    expect(stack).toEqual(["/"]);
+    expect(stack).toEqual(["/my-tasks"]);
   });
 
   // 出していたワークスペースのアドレスを読み直すときは、サーバーに聞かない(A5b-19 と同じ)。ほかの書き手が移した
-  // ときも、移った先を開かずにホームへ移る(B5c-17)。アドレスもホームに替えるので、次の一覧の読み直しでもサーバーに
+  // ときも、移った先を開かずにマイタスクへ移る(B5c-17)。アドレスもマイタスクに替えるので、次の一覧の読み直しでもサーバーに
   // 聞かず、移った先へひとりでに移らない。
-  it("goes home without asking locateWorkspace when reloads no longer find the shown workspace", async () => {
+  it("goes to my tasks without asking locateWorkspace when reloads no longer find the shown workspace", async () => {
     const { screen, catalog, stack, transfers, goneWorkspaces } =
       await setup("/s/work/w/HH/overview");
     screen.start();
@@ -171,12 +171,12 @@ describe("createScreen with a moved workspace", () => {
     await catalog.load();
     await flush();
     expect(transfers.calls).toEqual([]);
-    expect(get(screen.current)).toEqual({ name: "home" });
-    expect(stack).toEqual(["/"]);
+    expect(get(screen.current)).toEqual({ name: "mytasks" });
+    expect(stack).toEqual(["/my-tasks"]);
     await catalog.load();
     await flush();
     expect(transfers.calls).toEqual([]);
-    expect(stack).toEqual(["/"]);
+    expect(stack).toEqual(["/my-tasks"]);
     expect(get(screen.workspaceMoved)).toBeNull();
   });
 });

@@ -29,12 +29,12 @@ export async function duplicateView(
   if (copy !== null) await deps.open(copy.id);
 }
 
-// deleteView は、ビューを削除し、できたらトーストを出してホームへ移る(履歴には積まない)。
+// deleteView は、ビューを削除し、できたらトーストを出してマイタスクへ移る(履歴には積まない)。
 export async function deleteView(
   deps: { views: Pick<Views, "remove">; toasts: Toasts; navigation: Pick<Navigation, "replace"> },
   id: string,
 ): Promise<void> {
   if (!(await deps.views.remove(id))) return;
   deps.toasts.show("ビューを削除しました");
-  deps.navigation.replace({ name: "home" });
+  deps.navigation.replace({ name: "mytasks" });
 }

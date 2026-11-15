@@ -8,7 +8,8 @@ import {
 
 // 通しのテストの共通の手順。
 
-export const tokenUrl = (path = "/") => `${path}#token=e2e-token`;
+// 初めのパスはマイタスク(E4a-20)。/ で開くと、同じ worker のサーバーを共有する前のテストの最後の画面が開くため。
+export const tokenUrl = (path = "/my-tasks") => `${path}#token=e2e-token`;
 
 // send は、e2e のサーバーの API を呼び、応答の本文を返す(204 は undefined)。
 export async function send(

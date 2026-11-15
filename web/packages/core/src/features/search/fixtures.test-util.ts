@@ -32,6 +32,7 @@ export const result = (...ids: string[]): SearchResult => ({
     storeId: "s1",
     storeName: "main",
     storeColor: "#000",
+    statusId: "",
     workspaceId: "w1",
     projectId: "p1",
     itemId: id,

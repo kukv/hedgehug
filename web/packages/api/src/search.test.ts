@@ -30,6 +30,7 @@ const row = {
   title: "t",
   kind: "task",
   status: null,
+  statusId: "st1",
   assignee: null,
   priority: null,
   end: "",
@@ -69,6 +70,7 @@ describe("createSearchPort", () => {
     expect(r.group).toBe("kind");
     expect(r.rows[0]).toMatchObject({
       itemId: "i1",
+      statusId: "st1",
       assignee: { login: "a", name: null },
       points: 3,
     });
