@@ -35,6 +35,7 @@ func restoredHeader(next http.Handler) http.Handler {
 }
 
 // restoredWriter は、最初の WriteHeader(Write が先なら 200 として)で、2xx なら取り消したものを種類ごとの Header に足す。
+// 最終の応答(200 以上)を送ったあとの WriteHeader は下に渡さず捨てる(huma が接続の切れたときに 499 をもう一度書くため)。
 type restoredWriter struct {
 	http.ResponseWriter
 	ctx  context.Context //nolint:containedctx // 応答の間だけ生きる入れ物の context
@@ -42,6 +43,9 @@ type restoredWriter struct {
 }
 
 func (w *restoredWriter) WriteHeader(status int) {
+	if w.sent && status >= 200 {
+		return
+	}
 	if !w.sent && status >= 200 { // 1xx は最終の応答ではないので、その後の応答に付ける
 		w.sent = true
 		if status < 300 {
