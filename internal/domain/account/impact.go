@@ -24,15 +24,17 @@ func DeleteLines(a Account, uses []StoreUse, machineLogin string) []string {
 	if len(synced) > 0 {
 		lines = append(lines, strings.Join(synced, "・")+" の同期に使っているため、それらは同期できなくなります。")
 	}
-	return append(lines, identityLines(a.Login, machineLogin, uses)...)
+	return append(lines, LoginLines(a.Login, machineLogin, uses)...)
 }
 
 // EditLines は、07「編集」の「アカウントを変更」の確認の本文。「あなた」が変わる Store がなければ空。
 func EditLines(a Account, newLogin string, uses []StoreUse) []string {
-	return identityLines(a.Login, strings.TrimSpace(newLogin), uses)
+	return LoginLines(a.Login, strings.TrimSpace(newLogin), uses)
 }
 
-func identityLines(from, to string, uses []StoreUse) []string {
+// LoginLines は、uses の「あなた」が @from から to に変わることを、Store ごとに 1 行で返す(08。G1-15・G1-16)。
+// 大文字と小文字だけの違いは「あなた」が変わらないので空。
+func LoginLines(from, to string, uses []StoreUse) []string {
 	// 変わり先が空(マシンのログイン名が未設定)なら、「あなた」が何に変わるか言えないので行を出さない。
 	if to == "" || strings.EqualFold(from, to) {
 		return nil

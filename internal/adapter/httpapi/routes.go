@@ -95,6 +95,8 @@ type Deps struct {
 	Sync   *appsyncing.Service
 	Auto   *appsyncing.Auto
 	Events *events.Hub // nil なら NewAPI が作る(知らせる者がいない)
+	// SyncSettings は、設定の「一般」の同期のタイミングの読み書き(G1)。Auto に渡したものと同じ口
+	SyncSettings port.SyncSettings
 	// ClockSkew は、GitHub の応答で測った時計のずれの警告(C5d)。cmd が 1 つ作り、GitHub の問い合わせと git の通信と共用する。
 	ClockSkew *appsyncing.Skew
 	// GitHubSession は、GitHub の API と、同期・リンクの操作のトークンの入口で共用する Session。nil なら githubServices が作る。
@@ -131,6 +133,7 @@ func NewAPI(mux *http.ServeMux, deps Deps) huma.API {
 
 	system.Register(api, deps.Version)
 	stores.Register(api, appstores.Service{Stores: deps.StoreList})
+	stores.RegisterLogin(api, appstores.Login{GitHub: deps.StoreGitHub, Events: hub})
 	members.Register(api, appmembers.Service{Stores: deps.Stores, Identity: deps.Identity})
 	var scan projects.ScanFunc // Links がなければ(リンクの API を使わない組み立て)探さない
 	if deps.Links != (githublink.Links{}) {
@@ -175,6 +178,7 @@ func NewAPI(mux *http.ServeMux, deps Deps) huma.API {
 	ghapi.Register(api, githubServices(deps))
 	events.Register(api, hub)
 	syncapi.Register(api, syncapi.Services{Sync: deps.Sync, Auto: deps.Auto, Skew: deps.ClockSkew})
+	syncapi.RegisterTiming(api, deps.SyncSettings, hub)
 
 	return api
 }

@@ -101,8 +101,8 @@ func wireRunning(ctx context.Context, running *sync.WaitGroup) (httpapi.Deps, po
 	// state.db に置くもの(レポートの選択・画面の状態・最近開いたもの・時計のずれ・同期の行・同期で受け取った保存)と、コミットと版の印の読み口
 	deps.Reports, deps.Screens, deps.Recent, deps.ClockSkew = db.ReportSelections(), db.ScreenStates(), db.Recent(), skew
 	deps.SyncLog, deps.Commits, deps.Versions, deps.Received = db.SyncLog(), stores, stores, db
-	deps.Links = linksOf(deps, conn) // トークンの入口は同期と同じ Connector(D4a-2)
-	reader := &githublink.Reader{Links: deps.Links, Settings: file.SyncSettings(), Waiting: auto.Waiting}
+	deps.Links, deps.SyncSettings = linksOf(deps, conn), file.SyncSettings() // トークンの入口は同期と同じ Connector(D4a-2)
+	reader := &githublink.Reader{Links: deps.Links, Settings: deps.SyncSettings, Waiting: auto.Waiting}
 	running.Go(func() { reader.Run(ctx) })
 	return deps, db.JudgedSaves(), nil
 }
