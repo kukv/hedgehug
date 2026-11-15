@@ -77,6 +77,8 @@ export function createActivity(deps: ActivityDeps): Activity {
         if (mine !== loads) return;
         rows = [...rows, ...page.rows];
         more = page.more;
+        // 行が増えない読みは続きがないのと同じ。サーバーが空の行と more を返しても終わらせる。
+        if (page.rows.length === 0) break;
       } while (more && rows.length < shown.length);
     } catch (e) {
       if (mine === loads) state.update((s) => ({ ...s, loading: false }));

@@ -90,4 +90,38 @@ describe("createActivity (06「アクティビティ」)", () => {
     expect(get(t.activity.state).rows).toHaveLength(2);
     expect(get(t.toasts.list)).toHaveLength(0);
   });
+
+  it("drops the answer of a reload when the filter changes meanwhile", async () => {
+    const t = setup(vi.fn, rows(3));
+    await t.activity.open();
+    let release: (p: ActivityPage) => void = () => {};
+    t.port.list.mockImplementationOnce(() => new Promise<ActivityPage>((r) => (release = r)));
+    const reloading = t.activity.reload();
+    await t.activity.setFilter({ kind: "user" });
+    release({ rows: [row(9)], more: false });
+    await reloading;
+    expect(get(t.activity.state).filter.kind).toBe("user");
+    expect(get(t.activity.state).rows.map((r) => r.key)).toEqual(["k3", "k2", "k1"]);
+  });
+
+  it("drops the answer of a reload when more runs meanwhile", async () => {
+    const t = setup(vi.fn, rows(301));
+    await t.activity.open();
+    let release: (p: ActivityPage) => void = () => {};
+    t.port.list.mockImplementationOnce(() => new Promise<ActivityPage>((r) => (release = r)));
+    const reloading = t.activity.reload();
+    await t.activity.more();
+    release({ rows: [row(9)], more: false });
+    await reloading;
+    expect(get(t.activity.state).rows).toHaveLength(301);
+  });
+
+  it("stops a reload when the server returns no rows but more", async () => {
+    const t = setup(vi.fn, rows(301));
+    await t.activity.open();
+    t.port.list.mockImplementationOnce(async () => ({ rows: [], more: true }));
+    await t.activity.reload();
+    expect(t.port.list).toHaveBeenCalledTimes(2);
+    expect(get(t.activity.state)).toMatchObject({ rows: [], loading: false, loaded: true });
+  });
 });

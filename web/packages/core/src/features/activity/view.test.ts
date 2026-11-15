@@ -59,17 +59,25 @@ describe("options", () => {
   });
 
   it("builds workspace options from the catalog", () => {
+    const workspace = (id: string, storeId: string, name: string) => ({
+      id,
+      storeId,
+      name,
+      prefix: id,
+      oldPrefixes: [],
+      projects: [],
+    });
+    const store = (id: string, name: string, workspaces: StoreNode["workspaces"]): StoreNode => ({
+      id,
+      name,
+      color: "blue",
+      readOnly: false,
+      workspaces,
+    });
     const stores = [
-      {
-        id: "S1",
-        name: "team",
-        workspaces: [
-          { id: "W1", name: "メイン" },
-          { id: "W2", name: "サブ" },
-        ],
-      },
-      { id: "S2", name: "me", workspaces: [{ id: "W3", name: "個人" }] },
-    ] as unknown as StoreNode[];
+      store("S1", "team", [workspace("W1", "S1", "メイン"), workspace("W2", "S1", "サブ")]),
+      store("S2", "me", [workspace("W3", "S2", "個人")]),
+    ];
     expect(workspaceOptions(stores)).toEqual([
       { value: "", label: "すべて" },
       { value: "S1/W1", label: "team / メイン" },
