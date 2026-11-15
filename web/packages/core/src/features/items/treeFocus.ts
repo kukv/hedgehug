@@ -9,7 +9,7 @@ import type { TreeNodeOf, TreeRowLike } from "./tree";
 export interface TreeFocusState<T extends TreeRowLike = Item> {
   // rows は、見えている行を上から順に並べたもの(閉じている行の下は入れない)。
   rows: readonly T[];
-  // collapsed は、閉じている行の ID。初めはすべて開いている。
+  // collapsed は、閉じている行の ID。初めは createTreeFocus の initial(渡さなければすべて開いている)。
   collapsed: ReadonlySet<string>;
   // currentId は、フォーカスのある行。行がなければ、またはツリーに入っていなければ null。
   currentId: string | null;
