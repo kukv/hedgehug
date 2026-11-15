@@ -12,6 +12,7 @@ import {
   menuAt,
   type PaletteItem,
   rowMenuContext,
+  type Search,
   type SearchRow,
   type SelectedItem,
   setRowStatus,
@@ -35,6 +36,18 @@ export const search = createSearch({
   toasts,
   selection: searchSelection,
 });
+
+// active は、Store が変わった知らせと selectedOne が使う、いま出している検索の流れ(初めは search)。
+let active: Search = search;
+
+// activate は、いま出している検索の流れを s に置き換え、前の流れに戻す関数を返す(保存したビューの画面が使う)。
+export function activate(s: Search): () => void {
+  const prev = active;
+  active = s;
+  return () => {
+    active = prev;
+  };
+}
 
 // openRowMenu は、テーブルの行末の「…」で、行のアイテムのメニュー(02)を開く(E2a-17)。rect は「…」の
 // getBoundingClientRect()。プロジェクトのアイテムを読めない・アイテムがないときは何もしない。
@@ -61,7 +74,7 @@ export function selectedOne(): SelectedItem | null {
     source: "table",
     setStatus: (statusId) =>
       setRowStatus(
-        { items: itemsPort, toasts, reload: () => search.reload() },
+        { items: itemsPort, toasts, reload: () => active.reload() },
         storeId,
         itemId,
         statusId,
@@ -77,7 +90,7 @@ let refreshCandidates: (() => Promise<void>) | null = null;
 reloads.add(async () => {
   if (get(navigation.route).name !== "search") return;
   searchTreeData.reset();
-  await Promise.all([search.reload(), refreshCandidates?.()]);
+  await Promise.all([active.reload(), refreshCandidates?.()]);
 });
 
 export interface SearchCandidates {

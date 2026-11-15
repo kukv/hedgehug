@@ -6,6 +6,7 @@
     get,
     type Item,
     rowKey,
+    type Search,
     type SearchResult,
     type SearchTreeRow,
     type SearchTreeView,
@@ -13,11 +14,10 @@
     setRowStatus,
     treeScope,
   } from "@hedgehug/core";
-  import { tick } from "svelte";
+  import { tick, untrack } from "svelte";
   import { selection } from "../../palette";
   import { projectMover } from "../../projectRows";
   import { itemChanges } from "../../reloads";
-  import { search } from "../../search";
   import {
     createAt,
     dimKeys,
@@ -35,13 +35,14 @@
   // 検索の画面のツリー(04「ツリー」、E3a-3〜6・11・16・17・20)。結果が変わるたびに、木に入れるプロジェクトのデータを
   // 読み、読めたら木を組み直す。読んでいるあいだは前の木を出したままにする(読み直すたびに空にしない)。
   interface Props {
+    search: Search;
     // view は、描いている木と、その元の結果の書き方の誤り(件数と空の文に使う)。まだ組んでいなければ null。
     view?: (SearchTreeView & { errors: string[] }) | null;
   }
 
-  let { view = $bindable(null) }: Props = $props();
+  let { search, view = $bindable(null) }: Props = $props();
 
-  const searchState = search.state;
+  const searchState = $derived(search.state);
   const stores = catalog.stores;
   const result = $derived($searchState.result);
   const resultQuery = $derived($searchState.resultQuery);
@@ -69,9 +70,7 @@
   }
   // catalog も見る(プロジェクトの並べ替え・名前の変更は catalog だけが変わる)。
   $effect(() => void rebuild(result, resultQuery, $stores));
-  $effect(() => () => {
-    closed = true;
-  });
+  $effect(() => () => (closed = true));
 
   // refresh は、ツリーから書いたあとの読み直し。取っておいたものを捨てて検索を読み直し、木が組み直るまで待つ
   // (順番待ちの次のキーは、組み直した木で基準を決める)。検索が失敗すると結果が変わらず上の $effect が動かない
@@ -94,7 +93,7 @@
   });
 
   // 開閉は画面の状態に書く(E3a-11)。開閉が変わったときだけ書く(フォーカスの移動では書かない)。
-  const treeFocus = createTreeFocus<SearchTreeRow>(get(search.state).tree.collapsed);
+  const treeFocus = createTreeFocus<SearchTreeRow>(untrack(() => get(search.state).tree.collapsed));
   let written = get(treeFocus.state).collapsed;
   $effect(() =>
     treeFocus.state.subscribe((f) => {
