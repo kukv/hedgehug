@@ -98,7 +98,7 @@ export interface Search {
   // setCollapsed は、ツリーの閉じている行の鍵を書くだけ(E3a-11)。
   setCollapsed(collapsed: string[]): void;
   // cancelPrepare は、prepareQuery の印を消す(検索の画面へ移れなかったとき)。画面の状態は前のまま。
-  // 読む前なら、欄に出した絞り込みを初めの値に戻す。settled を待つものを解く。
+  // 読む前なら、欄の絞り込みを読む前に打ったもの(なければ初めの値)に戻す。settled を待つものを解く。
   cancelPrepare(): void;
   // reload は、Store が変わった知らせ(reloads)で、いまの絞り込みのまま読み直す。
   reload(): Promise<void>;

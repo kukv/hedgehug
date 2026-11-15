@@ -146,6 +146,16 @@ describe("createSearch layout (E3a-2・9・10・22・23)", () => {
     expect(t.sp.put).not.toHaveBeenCalled();
   });
 
+  it("cancelPrepare before open restores the query typed before the read", async () => {
+    const t = setup(savedTree("a", { columns: ["id", "title"], group: "none", sort: null }));
+    t.s.setQuery("typed");
+    t.s.prepareQuery("kind:bug");
+    t.s.cancelPrepare();
+    expect(get(t.s.state).query).toBe("typed");
+    await t.s.open();
+    expect(get(t.s.state).query).toBe("typed");
+  });
+
   // 移れなかった入口の絞り込みとテーブルへの切り替えは残さない(E3a-23)。
   it("prepareQuery then cancelPrepare before open releases settled and leaves the saved state", async () => {
     const t = setup(savedTree("a", { columns: ["id", "title"], group: "none", sort: null }));

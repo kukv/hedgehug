@@ -45,8 +45,7 @@ export function createSearch(deps: SearchDeps): Search {
   let flight = 0;
   let prepared = false;
   let waiters: (() => void)[] = [];
-  // loaded は、open が画面の状態を読み終えたか。stash は読む前に変えた項目。queued は prepareQuery の絞り込み(印だけで、
-  // 次の open がテーブルにして重ねる)。
+  // loaded は open が読み終えたか。stash は読む前に変えた項目。queued は prepareQuery の印(次の open がテーブルにして重ねる)。
   let loaded = false;
   let stash: Partial<SavedSearch> = {};
   let queued: string | null = null;
@@ -175,7 +174,8 @@ export function createSearch(deps: SearchDeps): Search {
     cancelPrepare() {
       prepared = false;
       queued = null;
-      if (!loaded) state.update((s) => ({ ...s, query: initialSearchState().query }));
+      const typed = stash.query ?? initialSearchState().query;
+      if (!loaded) state.update((s) => ({ ...s, query: typed }));
       release();
     },
     reload() {
