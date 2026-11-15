@@ -94,6 +94,26 @@ func TestLoginSetFromEmptyPublishes(t *testing.T) {
 	}
 }
 
+// listFails は、List だけが失敗する StoreGitHub。
+type listFails struct{ *apptest.StoreGitHub }
+
+func (listFails) List(context.Context) ([]port.StoreGitHubInfo, error) {
+	return nil, errors.New("list failed")
+}
+
+// 知らせる先を読めなければ、保存しない(保存したのに知らせない、をなくす)。
+func TestLoginSetSavesNothingWhenTheListFails(t *testing.T) {
+	ctx := context.Background()
+	gh := &apptest.StoreGitHub{Login: "taro"}
+	ev := &apptest.Events{}
+	if err := (stores.Login{GitHub: listFails{gh}, Events: ev}).Set(ctx, "tarou"); err == nil {
+		t.Error("Set succeeded")
+	}
+	if got, _ := gh.MachineLogin(ctx); got != "taro" || len(ev.List()) != 0 {
+		t.Errorf("login = %q, events = %+v", got, ev.List())
+	}
+}
+
 func TestLoginSetSameDoesNothing(t *testing.T) {
 	ctx := context.Background()
 	l, gh, ev := newLogin("taro")
