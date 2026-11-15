@@ -8,13 +8,15 @@ import { type Resolved, resolveRoute, routeOfProject, routeOfWorkspace } from ".
 import type { ProjectTab, WorkspaceTab } from "../router/route";
 import type { Toasts } from "../toasts/toasts";
 import { goneText, movedLine, workspaceGoneText, workspaceMovedLine } from "../transfers/movedText";
+import type { SavedView } from "../views/views";
 
 // いま出す画面。アドレスを一覧の状態で内部 ID にする(A2 の計画の決定 7)。
 // アイテムの入口は、そのアイテムのプロジェクトの「ツリー」に替え(履歴に積まない)、詳細パネルを開く(01)。
 // 旧 ID で開けないもの(削除済み・完全に削除・見えない Store)は、理由をトーストで出してホームに替える(02)。
 // プロジェクトの旧 ID で開いたときは、アドレスを移したプロジェクトの同じタブに替え(履歴に積まない)、移動の印を
 // projectMoved に置く(A5b-2・A5b-24)。ワークスペースの旧いアドレスも同じく、見つけた Store の名前の形に替え
-// (履歴に積まない)、workspaceMoved に置く(B5c-2・B5c-13)。
+// (履歴に積まない)、workspaceMoved に置く(B5c-2・B5c-13)。保存したビューのアドレスは、ビューの一覧にその識別子が
+// なければホームに替える(トーストなし。履歴に積まない。E3b-17)。
 
 // ProjectMoved は、旧 ID から開いたプロジェクトの画面と、その移動の印。
 export interface ProjectMoved {
@@ -41,13 +43,14 @@ export interface Screen {
   projectMoved: Readable<ProjectMoved | null>;
   // workspaceMoved は、古いアドレスから開いたワークスペースの移動の 1 行。別のワークスペースか別のタブになったら null。
   workspaceMoved: Readable<WorkspaceMoved | null>;
-  // start は、アドレスと一覧の変化を受け始め、止める関数を返す。一覧を読んだあとで呼ぶ。
+  // start は、アドレスと一覧(ビューの一覧も)の変化を受け始め、止める関数を返す。一覧を読んだあとで呼ぶ。
   start(): () => void;
 }
 
 export interface ScreenDeps {
   navigation: Navigation;
   catalog: Catalog;
+  views: Readable<SavedView[]>;
   items: ItemsPort;
   transfers: Pick<TransfersPort, "locate" | "locateProject" | "locateWorkspace">;
   toasts: Toasts;
@@ -123,6 +126,8 @@ export function createScreen(deps: ScreenDeps): Screen {
       deps.toasts.show(text(r.gone, deps.now()));
       return deps.navigation.replace({ name: "home" });
     }
+    if (r.name === "view" && !get(deps.views).some((v) => v.id === r.viewId))
+      return deps.navigation.replace({ name: "home" });
     // 出していたプロジェクトが、同期・別のタブ・別のプログラムで削除されたときは、ワークスペースの概要へ移る
     // (A4b-22。履歴には積まない。ワークスペースもなければホーム)。アドレスを打ち込んだだけの解決できないものはホームのまま。
     // 別の Store の同じ ID に解決された場合も、消えたものとして移る。
@@ -220,12 +225,14 @@ export function createScreen(deps: ScreenDeps): Screen {
     projectMoved: readonly(projectMoved),
     workspaceMoved: readonly(workspaceMoved),
     start() {
-      // どちらの subscribe も、いまの値ですぐに 1 回呼ぶ。2 回目の解決が 1 回目に勝つので、結果は同じ。
+      // どの subscribe も、いまの値ですぐに 1 回呼ぶ。後の解決が前の解決に勝つので、結果は同じ。
       const stopRoute = deps.navigation.route.subscribe(() => void resolve());
       const stopCatalog = deps.catalog.stores.subscribe(() => void resolve());
+      const stopViews = deps.views.subscribe(() => void resolve());
       return () => {
         stopRoute();
         stopCatalog();
+        stopViews();
       };
     },
   };

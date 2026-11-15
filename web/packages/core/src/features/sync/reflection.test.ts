@@ -107,7 +107,7 @@ describe("createReflection (06「画面への反映」)", () => {
     t.r.start();
     t.s.open();
     await t.advance(0);
-    expect(t.applied).toEqual([["store", "sync", "github", "inbox"]]);
+    expect(t.applied).toEqual([["store", "sync", "github", "inbox", "views"]]);
   });
 
   it("applies an event at once when nothing holds", async () => {
@@ -134,7 +134,7 @@ describe("createReflection (06「画面への反映」)", () => {
     t.hold(false);
     await t.advance(500);
     expect(t.applied).toEqual([
-      ["store", "sync", "github", "inbox"],
+      ["store", "sync", "github", "inbox", "views"],
       ["store", "sync"],
     ]);
   });
@@ -159,6 +159,17 @@ describe("createReflection (06「画面への反映」)", () => {
     expect(t.applied.at(-1)).toEqual(["inbox"]);
   });
 
+  // 別のタブでビューを書いたときの出来事(E3b-17。Review Focus 3)。
+  it("views event reaches reflect", async () => {
+    const t = setup();
+    t.r.start();
+    t.s.open();
+    await t.advance(0);
+    t.s.send("views");
+    await t.advance(0);
+    expect(t.applied.at(-1)).toEqual(["views"]);
+  });
+
   it("drops the stream while hidden and reloads everything when shown (決定 S22)", async () => {
     const t = setup();
     t.r.start();
@@ -177,8 +188,8 @@ describe("createReflection (06「画面への反映」)", () => {
     t.s.open();
     await t.advance(0);
     expect(t.applied).toEqual([
-      ["store", "sync", "github", "inbox"],
-      ["store", "sync", "github", "inbox"],
+      ["store", "sync", "github", "inbox", "views"],
+      ["store", "sync", "github", "inbox", "views"],
     ]);
   });
 
@@ -197,7 +208,7 @@ describe("createReflection (06「画面への反映」)", () => {
     await t.advance(0);
     t.hold(true);
     await t.r.now();
-    expect(t.applied.at(-1)).toEqual(["store", "sync", "github", "inbox"]);
+    expect(t.applied.at(-1)).toEqual(["store", "sync", "github", "inbox", "views"]);
   });
 
   it("reconnects after 1 second, doubling up to 10 seconds", async () => {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { get } from "../../reactive/store";
+import { get, writable } from "../../reactive/store";
 import { createCatalog } from "../catalog/catalog";
 import { fakeCatalogPort } from "../catalog/fixtures.test-util";
 import { fakeItemsPort, flush } from "../items/fixtures.test-util";
@@ -26,6 +26,7 @@ async function setup(start: string) {
   const screen = createScreen({
     navigation,
     catalog,
+    views: writable([]),
     items: fakeItemsPort(),
     transfers,
     toasts,

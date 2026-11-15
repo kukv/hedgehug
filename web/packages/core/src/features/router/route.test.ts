@@ -173,3 +173,19 @@ describe("activity (06「アクティビティ」)", () => {
     expect(parseRoute("/activity/x")).toEqual({ name: "home" });
   });
 });
+
+describe("view (E3b-2)", () => {
+  const id = "01jabcdefghjkmnpqrstvwxyz0";
+
+  it("reads /views/{id} and writes it back", () => {
+    expect(parseRoute(`/views/${id}`)).toEqual({ name: "view", id });
+    expect(formatRoute({ name: "view", id })).toBe(`/views/${id}`);
+  });
+
+  it.each(["/views/ABC", "/views/a/b", "/views", `/views/${id.toUpperCase()}`, `/views/${id}x`])(
+    "reads %s as home",
+    (path) => {
+      expect(parseRoute(path)).toEqual({ name: "home" });
+    },
+  );
+});

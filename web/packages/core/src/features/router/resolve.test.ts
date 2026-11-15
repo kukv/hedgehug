@@ -145,4 +145,13 @@ describe("resolveRoute settings", () => {
       name: "activity",
     });
   });
+
+  // ビューが一覧にあるかは、画面(screen.ts)がビューの一覧で確かめる。
+  it("resolves a view without any store", async () => {
+    const id = "01jabcdefghjkmnpqrstvwxyz0";
+    expect(await resolveRoute({ name: "view", id }, [], itemsIn("none"), transfers)).toEqual({
+      name: "view",
+      viewId: id,
+    });
+  });
 });

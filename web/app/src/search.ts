@@ -85,10 +85,11 @@ export function selectedOne(): SelectedItem | null {
 // refreshCandidates は、開いている検索の画面の候補の元を読み直す。画面を閉じると null。
 let refreshCandidates: (() => Promise<void>) | null = null;
 
-// Store が変わった知らせで、検索の画面を開いていれば、結果と候補の元を読み直す(E1-19)。ツリーのデータは、
-// 取っておいたものを捨ててから結果を読み直す(結果が変わるとツリーが読み直す。E3a-3)。
+// Store が変わった知らせで、検索の画面か保存したビューの画面(E3b-14)を開いていれば、結果と候補の元を読み直す(E1-19)。
+// ツリーのデータは、取っておいたものを捨ててから結果を読み直す(結果が変わるとツリーが読み直す。E3a-3)。
 reloads.add(async () => {
-  if (get(navigation.route).name !== "search") return;
+  const name = get(navigation.route).name;
+  if (name !== "search" && name !== "view") return;
   searchTreeData.reset();
   await Promise.all([active.reload(), refreshCandidates?.()]);
 });

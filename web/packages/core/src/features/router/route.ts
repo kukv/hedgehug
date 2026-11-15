@@ -7,6 +7,7 @@
 //   /inbox                          受信箱(06)
 //   /search                         検索(04)
 //   /activity                       アクティビティ(06)
+//   /views/{識別子}                   保存したビュー(04。識別子は ULID を小文字にした 26 文字。E3b-2)
 // 解釈できないアドレスはホームにする(決定 6)。
 
 export type ProjectTab = "overview" | "tree" | "settings";
@@ -22,7 +23,8 @@ export type Route =
   | { name: "settings"; tab: SettingsTab }
   | { name: "inbox" }
   | { name: "search" }
-  | { name: "activity" };
+  | { name: "activity" }
+  | { name: "view"; id: string };
 
 const projectTabs: readonly string[] = ["overview", "tree", "settings"] satisfies ProjectTab[];
 // workspaceTabs は、ワークスペースのタブ。画面のタブの並びと同じ順(F2a-13)。
@@ -35,6 +37,7 @@ export const workspaceTabs: readonly string[] = [
   "settings",
 ] satisfies WorkspaceTab[];
 const settingsTabs: readonly string[] = ["accounts"] satisfies SettingsTab[];
+const viewIdPattern = /^[0-9a-z]{26}$/;
 
 function decode(segment: string): string | null {
   try {
@@ -63,6 +66,12 @@ export function parseRoute(path: string): Route {
   if (segs[0] === "inbox" && segs.length === 1) return { name: "inbox" };
   if (segs[0] === "search" && segs.length === 1) return { name: "search" };
   if (segs[0] === "activity" && segs.length === 1) return { name: "activity" };
+  if (segs[0] === "views") {
+    const id = segs[1];
+    return segs.length === 2 && id && viewIdPattern.test(id)
+      ? { name: "view", id }
+      : { name: "home" };
+  }
   if (segs[0] === "settings" && segs.length <= 2) {
     const t = segs[1] ?? "accounts";
     return settingsTabs.includes(t)
@@ -108,6 +117,8 @@ export function formatRoute(route: Route): string {
       return "/search";
     case "activity":
       return "/activity";
+    case "view":
+      return `/views/${route.id}`;
   }
 }
 
