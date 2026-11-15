@@ -9,7 +9,7 @@ function body(query: string, table?: SearchTableRequest) {
   return table ? { query, sort: table.sort, group: table.group } : { query };
 }
 
-type SearchRowDto = Awaited<ReturnType<typeof search>>["rows"][number];
+export type SearchRowDto = Awaited<ReturnType<typeof search>>["rows"][number];
 
 // rowOf は、行 1 つを core の型にする(検索とマイタスクで使う)。
 export function rowOf(x: SearchRowDto): SearchRow {
@@ -44,6 +44,14 @@ export function rowOf(x: SearchRowDto): SearchRow {
     unused: x.unused ?? [],
     removed: x.removed ?? [],
     custom: x.custom ?? {},
+    values: {
+      priority: x.values.priority,
+      systems: x.values.systems ?? [],
+      choices: (x.values.choices ?? {}) as SearchRow["values"]["choices"],
+      fields: (x.values.fields ?? {}) as SearchRow["values"]["fields"],
+      sprint: x.values.sprint,
+      release: x.values.release,
+    },
   };
 }
 

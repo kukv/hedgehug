@@ -79,6 +79,7 @@ type SearchRow struct {
 	Unused   []string              `json:"unused" nullable:"false" doc:"「—」にする列の鍵"`
 	Removed  []string              `json:"removed" nullable:"false" doc:"「(削除された値)」にする列の鍵"`
 	Custom   map[string]SearchCell `json:"custom" doc:"追加プロパティの列の鍵 → 値"`
+	Values   SearchValues          `json:"values" doc:"セルの編集に要る、内部 ID のままの値"`
 }
 
 // SearchResult は、検索の結果。エラーがあれば rows は空。件数は rows の数。

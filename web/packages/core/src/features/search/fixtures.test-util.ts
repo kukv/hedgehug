@@ -5,7 +5,7 @@ import { createScreenStates } from "../screenstate/screenStates";
 import { createToasts, type Timer } from "../toasts/toasts";
 import { createSearch } from "./search";
 import { defaultTable } from "./table";
-import type { SearchResult } from "./types";
+import { emptyValues, type SearchResult } from "./types";
 
 // core の lib は ES2023 だけで setTimeout の型がないため、ここで宣言する。
 declare function setTimeout(fn: () => void, ms: number): unknown;
@@ -59,6 +59,7 @@ export const result = (...ids: string[]): SearchResult => ({
     unused: [],
     removed: [],
     custom: {},
+    values: emptyValues,
   })),
   columns: [],
   groupBy: "",

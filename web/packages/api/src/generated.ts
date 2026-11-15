@@ -1299,6 +1299,31 @@ export type SearchStatus = {
 } | null;
 
 /**
+ * 選択式の追加プロパティの値(プロパティの内部 ID → 値の内部 ID)
+ */
+export type SearchValuesChoices = {[key: string]: string[] | null};
+
+/**
+ * 追加プロパティの値(プロパティの内部 ID → 値)。型は設定で読む
+ */
+export type SearchValuesFields = {[key: string]: unknown};
+
+export interface SearchValues {
+  /** 選択式の追加プロパティの値(プロパティの内部 ID → 値の内部 ID) */
+  choices: SearchValuesChoices;
+  /** 追加プロパティの値(プロパティの内部 ID → 値)。型は設定で読む */
+  fields: SearchValuesFields;
+  /** 優先度の内部 ID。空は値なし */
+  priority: string;
+  /** リリースの内部 ID。空は「なし」 */
+  release: string;
+  /** スプリントの内部 ID。空はバックログ */
+  sprint: string;
+  /** 関連システムの内部 ID */
+  systems: string[];
+}
+
+/**
  * 追加プロパティの列の鍵 → 値
  */
 export type SearchRowCustom = {[key: string]: SearchCell};
@@ -1352,6 +1377,8 @@ export interface SearchRow {
   unused: string[];
   /** 更新の時刻(RFC 3339) */
   updated: string;
+  /** セルの編集に要る、内部 ID のままの値 */
+  values: SearchValues;
   workspaceId: string;
 }
 

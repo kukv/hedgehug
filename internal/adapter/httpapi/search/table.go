@@ -1,9 +1,11 @@
 package search
 
 import (
+	"encoding/json"
 	"time"
 
 	appsearch "github.com/kukv/hedgehug/internal/app/search"
+	"github.com/kukv/hedgehug/internal/domain/item"
 	"github.com/kukv/hedgehug/internal/domain/query"
 )
 
@@ -48,6 +50,16 @@ type SearchCell struct {
 	Type string `json:"type"`
 }
 
+// SearchValues は、セルの編集に要る、内部 ID のままの値(表示の名前でなく)。
+type SearchValues struct {
+	Priority string                     `json:"priority" doc:"優先度の内部 ID。空は値なし"`
+	Systems  []string                   `json:"systems" nullable:"false" doc:"関連システムの内部 ID"`
+	Choices  map[string][]string        `json:"choices" nullable:"false" doc:"選択式の追加プロパティの値(プロパティの内部 ID → 値の内部 ID)"`
+	Fields   map[string]json.RawMessage `json:"fields" nullable:"false" doc:"追加プロパティの値(プロパティの内部 ID → 値)。型は設定で読む"`
+	Sprint   string                     `json:"sprint" doc:"スプリントの内部 ID。空はバックログ"`
+	Release  string                     `json:"release" doc:"リリースの内部 ID。空は「なし」"`
+}
+
 func toSort(s *SearchSort) *query.Sort {
 	if s == nil {
 		return nil
@@ -85,10 +97,33 @@ func fillTable(row *SearchRow, r appsearch.Row) {
 	row.Created, row.Updated = rfc3339(f.Created), rfc3339(f.Updated)
 	row.Unused = append([]string{}, r.Cells.Unused...)
 	row.Removed = append([]string{}, r.Cells.Removed...)
+	fillValues(row, it)
 	row.Custom = make(map[string]SearchCell, len(r.Cells.Custom))
 	for k, c := range r.Cells.Custom {
 		row.Custom[k] = SearchCell{Text: c.Text, Type: string(c.Type)}
 	}
+}
+
+// fillValues は、アイテムの内部 ID のままの値を row.Values に入れる。
+func fillValues(row *SearchRow, it item.Item) {
+	v := SearchValues{
+		Priority: string(it.Priority), Sprint: string(it.Sprint), Release: string(it.Release),
+		Systems: []string{}, Choices: map[string][]string{}, Fields: map[string]json.RawMessage{},
+	}
+	for _, s := range it.Systems {
+		v.Systems = append(v.Systems, string(s))
+	}
+	for k, vs := range it.Choices {
+		ids := make([]string, 0, len(vs))
+		for _, x := range vs {
+			ids = append(ids, string(x))
+		}
+		v.Choices[string(k)] = ids
+	}
+	for k, x := range it.Fields {
+		v.Fields[string(k)] = x
+	}
+	row.Values = v
 }
 
 func rfc3339(t time.Time) string {

@@ -239,6 +239,12 @@ type tableBody struct {
 		Project                              struct{ Display, Title string }
 		Parent                               *struct{ ItemID, Display, Title string }
 		Custom                               map[string]struct{ Text, Type string }
+		Values                               struct {
+			Priority, Sprint, Release string
+			Systems                   []string
+			Choices                   map[string][]string
+			Fields                    map[string]json.RawMessage
+		}
 	}
 }
 
@@ -309,6 +315,20 @@ func TestSearchAPIRowValues(t *testing.T) {
 	p := got.Rows[0].Parent
 	if p == nil || p.Display != "HH-1" || p.Title != "認証" || p.ItemID != string(apptest.SampleEpic) {
 		t.Errorf("parent = %+v", p)
+	}
+}
+
+func TestSearchAPIRowRaw(t *testing.T) {
+	got, raw := tableOf(t, newAPI(t), map[string]string{"query": "kind:bug"})
+	if len(got.Rows) != 1 {
+		t.Fatalf("rows = %d", len(got.Rows))
+	}
+	v := got.Rows[0].Values
+	if v.Priority != string(apptest.SamplePriorityMedium) || !slices.Equal(v.Systems, []string{string(apptest.SampleSystemWeb)}) || v.Sprint != "" {
+		t.Errorf("values = %+v", v)
+	}
+	if v.Choices == nil || v.Fields == nil || !strings.Contains(raw, `"choices":{}`) || !strings.Contains(raw, `"fields":{}`) {
+		t.Errorf("choices・fields が {} でない: %+v %s", v, raw)
 	}
 }
 
