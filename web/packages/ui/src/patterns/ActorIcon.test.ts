@@ -26,10 +26,13 @@ describe("ActorIcon", () => {
   it("draws an svg mark for github and sync", () => {
     render(ActorIcon, { props: { kind: "github", name: "", title: "GitHub" } });
     render(ActorIcon, { props: { kind: "sync", name: "", title: "同期" } });
-    for (const name of ["GitHub", "同期"]) {
+    for (const [name, glyph] of [
+      ["GitHub", "github"],
+      ["同期", "sync"],
+    ]) {
       const icon = screen.getByRole("img", { name });
-      expect(icon.querySelector("svg")).not.toBeNull();
-      expect(icon.textContent).toBe("");
+      expect(icon.querySelector("svg")?.getAttribute("data-glyph")).toBe(glyph);
+      expect(icon.textContent?.trim()).toBe("");
     }
   });
 });
