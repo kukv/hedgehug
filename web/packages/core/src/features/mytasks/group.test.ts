@@ -115,6 +115,49 @@ describe("groupMyTasks", () => {
     expect(g.map((x) => x.store?.name)).toEqual(["e2e", "team"]);
   });
 
+  // 同名のときは、サイドバーの並び(Store → ワークスペース → プロジェクト)に従う(E4a-6)。
+  const withProjects = (id: string, name: string, projects: string[]) =>
+    ({
+      ...ws(id, name),
+      projects: projects.map((p) => ({ id: p, title: "同名" })),
+    }) as unknown as StoreNode["workspaces"][number];
+
+  it("same project name follows workspace order", () => {
+    const one: StoreNode[] = [
+      {
+        ...(stores[0] as StoreNode),
+        workspaces: [withProjects("w1", "W1", ["pa"]), withProjects("w2", "W2", ["pb"])],
+      },
+    ];
+    const rows = [
+      row({ id: "1", workspaceId: "w2", projectId: "pb", projectTitle: "同名" }),
+      row({ id: "2", workspaceId: "w1", projectId: "pa", projectTitle: "同名" }),
+    ];
+    const g = groupMyTasks(rows, "project", "2026-11-16", one);
+    expect(g.map((x) => ids(x.rows))).toEqual([["2"], ["1"]]);
+  });
+
+  it("same project name follows project order", () => {
+    const one: StoreNode[] = [
+      { ...(stores[0] as StoreNode), workspaces: [withProjects("w1", "W1", ["pb", "pa"])] },
+    ];
+    const rows = [
+      row({ id: "1", projectId: "pa", projectTitle: "同名" }),
+      row({ id: "2", projectId: "pb", projectTitle: "同名" }),
+    ];
+    const g = groupMyTasks(rows, "project", "2026-11-16", one);
+    expect(g.map((x) => ids(x.rows))).toEqual([["2"], ["1"]]);
+  });
+
+  it("same workspace name follows workspace order", () => {
+    const one: StoreNode[] = [
+      { ...(stores[0] as StoreNode), workspaces: [ws("w1", "同名"), ws("w2", "同名")] },
+    ];
+    const rows = [row({ id: "1", workspaceId: "w2" }), row({ id: "2", workspaceId: "w1" })];
+    const g = groupMyTasks(rows, "workspace", "2026-11-16", one);
+    expect(g.map((x) => ids(x.rows))).toEqual([["2"], ["1"]]);
+  });
+
   it("falls back to the row when the catalog lacks the store", () => {
     const rows = [
       {

@@ -57,13 +57,38 @@ function byEnd(a: SearchRow, b: SearchRow): number {
   return a.end < b.end ? -1 : 1;
 }
 
-// Draft は、キーごとに行を配ったグループ(並べる前)。
+// Draft は、キーごとに行を配ったグループ(並べる前)。order は、サイドバーでの位置(Store・ワークスペース・
+// プロジェクトの順の添え字。同名のときの並びに使う)。
 interface Draft {
   key: string;
   label: string;
-  storeIndex: number;
+  order: number[];
   store: MyTaskGroup["store"];
   rows: SearchRow[];
+}
+
+// indexOf は、見つからなければ末尾に回す添え字。
+function indexOf<T>(list: T[], hit: (x: T) => boolean): number {
+  const i = list.findIndex(hit);
+  return i < 0 ? list.length : i;
+}
+
+// orderOf は、行の Store・ワークスペース・プロジェクトの catalog での添え字。
+function orderOf(r: SearchRow, stores: StoreNode[]): number[] {
+  const si = indexOf(stores, (s) => s.id === r.storeId);
+  const workspaces = stores[si]?.workspaces ?? [];
+  const wi = indexOf(workspaces, (w) => w.id === r.workspaceId);
+  const projects = workspaces[wi]?.projects ?? [];
+  return [si, wi, indexOf(projects, (p) => p.id === r.projectId)];
+}
+
+// byOrder は、order を前から比べる。
+function byOrder(a: number[], b: number[]): number {
+  for (let i = 0; i < a.length; i++) {
+    const d = (a[i] ?? 0) - (b[i] ?? 0);
+    if (d !== 0) return d;
+  }
+  return 0;
 }
 
 function distribute(rows: SearchRow[], by: "project" | "workspace", stores: StoreNode[]): Draft[] {
@@ -72,13 +97,12 @@ function distribute(rows: SearchRow[], by: "project" | "workspace", stores: Stor
     const key = `${r.storeId}/${by === "project" ? r.projectId : r.workspaceId}`;
     let d = drafts.get(key);
     if (!d) {
-      const index = stores.findIndex((s) => s.id === r.storeId);
-      const s = stores[index];
+      const s = stores.find((x) => x.id === r.storeId);
       const w = s?.workspaces.find((x) => x.id === r.workspaceId);
       d = {
         key,
         label: by === "project" ? r.project.title : (w?.name ?? r.workspaceId),
-        storeIndex: index < 0 ? stores.length : index,
+        order: orderOf(r, stores),
         store:
           by === "workspace"
             ? { name: s?.name ?? r.storeName, color: s?.color ?? r.storeColor }
@@ -93,7 +117,8 @@ function distribute(rows: SearchRow[], by: "project" | "workspace", stores: Stor
 }
 
 // groupMyTasks は、行(サーバーの並び)をまとめ方ごとの見出しに分ける。today は YYYY-MM-DD、
-// stores は catalog の並び(ワークスペース名と、同名のときの並びに使う)。
+// stores は catalog の並び(ワークスペース名と、同名のときの並びに使う。同名はサイドバーの並び Store → ワークスペース
+// → プロジェクトに従う。E4a-6)。
 export function groupMyTasks(
   rows: SearchRow[],
   by: MyTasksGroupBy,
@@ -115,7 +140,7 @@ export function groupMyTasks(
   return distribute(rows, by, stores)
     .sort((a, b) => {
       if (a.label !== b.label) return a.label < b.label ? -1 : 1;
-      return a.storeIndex - b.storeIndex;
+      return byOrder(a.order, b.order);
     })
     .map((d) => ({
       key: d.key,
