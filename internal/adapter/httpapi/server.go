@@ -26,15 +26,17 @@ func New(token string, static fs.FS, deps Deps) http.Handler {
 // 種類ごとのヘッダーで付ける(画面がトーストを出す)。アイテム・プロジェクトの表示 ID は Hedgehug-Restored、
 // 設定の値などの名前は Hedgehug-Restored-Name(url.PathEscape)、コメントの持ち主の表示 ID は
 // Hedgehug-Restored-Comment。usecase は取り消したあとに断って巻き戻すことがあり、そのときも記録は残るので、
-// 付けるのは 2xx のときだけ。
+// 付けるのは 2xx のときだけ。書き込みと一緒にメンバーへ足したログイン名も、Hedgehug-Joined に 1 つのヘッダーで
+// ", " で区切って付ける(決定 G1-8。ログイン名は英数字・ハイフン・アンダースコアなのでエスケープしない)。
 func restoredHeader(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ctx := port.WithRevived(r.Context())
+		ctx := port.WithJoined(port.WithRevived(r.Context()))
 		next.ServeHTTP(&restoredWriter{ResponseWriter: w, ctx: ctx}, r.WithContext(ctx))
 	})
 }
 
-// restoredWriter は、最初の WriteHeader(Write が先なら 200 として)で、2xx なら取り消したものを種類ごとの Header に足す。
+// restoredWriter は、最初の WriteHeader(Write が先なら 200 として)で、2xx なら取り消したものを種類ごとの Header に、
+// メンバーへ足したログイン名を Hedgehug-Joined に足す。
 type restoredWriter struct {
 	http.ResponseWriter
 	ctx  context.Context //nolint:containedctx // 応答の間だけ生きる入れ物の context
@@ -54,6 +56,9 @@ func (w *restoredWriter) WriteHeader(status int) {
 				case port.RevivedComment:
 					w.Header().Add("Hedgehug-Restored-Comment", r.Text)
 				}
+			}
+			if joined := port.Joined(w.ctx); len(joined) > 0 {
+				w.Header().Set("Hedgehug-Joined", strings.Join(joined, ", "))
 			}
 		}
 	}
