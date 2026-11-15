@@ -20,7 +20,7 @@ const storeLogPath = ".hedgehug/log.jsonl"
 
 // History は、from から辿れる保存のコミット(親が 1 つで Hedgehug-Op を持つもの。マージと最初のコミットは
 // 含めない)を、作者の時刻の新しい順(同じなら SHA の辞書順)で返す(決定 C4d-2)。recall が返すコミットは
-// 差分を取らずにその値を使い(recall)、新しく読んだものは remember で覚えさせる。コミットは書き換わらないので、
+// 差分を取らずにその値を使い、新しく読んだものは remember で覚えさせる。コミットは書き換わらないので、
 // SHA で覚えてよい。
 func History(repo *git.Repository, from plumbing.Hash, recall func(plumbing.Hash) (port.Commit, bool), remember func(plumbing.Hash, port.Commit)) ([]port.Commit, error) {
 	if from.IsZero() {
