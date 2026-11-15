@@ -10,3 +10,5 @@ export const githubReloads = new Set<() => Promise<unknown>>();
 export const propertySaved = new Set<(storeId: string, propertyId: string, item: Item) => void>();
 // inboxReloads は、inbox の知らせのときだけ読み直すもの(受信箱の未読数と一覧。C4a-13)。
 export const inboxReloads = new Set<() => Promise<unknown>>();
+// syncReloads は、sync の知らせのときだけ読み直すもの(アクティビティの同期の行。C4d-15)。
+export const syncReloads = new Set<() => Promise<unknown>>();
