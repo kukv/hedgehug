@@ -2,6 +2,7 @@ package repairing
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 
 	"github.com/kukv/hedgehug/internal/app/port"
@@ -77,6 +78,7 @@ func collectFixes(r port.Reader, read func(port.Reader, workspace.ID, []change.R
 // readRefFixes は、ワークスペース ws の log にある、削除された値を指すものの修復。
 func readRefFixes(r port.Reader, ws workspace.ID, log []change.Record) ([]wsFix, error) {
 	var out []wsFix
+	names := automation.Names(log)
 	for _, rr := range repair.DanglingRefs(log) {
 		var s string
 		switch rr.Kind {
@@ -91,7 +93,7 @@ func readRefFixes(r port.Reader, ws workspace.ID, log []change.Record) ([]wsFix,
 		case repair.RefTemplateDefault:
 			s = rr.TemplateKind + " の既定のテンプレートを変更(削除された値)"
 		case repair.RefRule:
-			s = "自動化「" + oneLine(automation.Names(log)[rr.Rule]) + "」を無効にする(削除された値)"
+			s = "自動化「" + oneLine(names[rr.Rule]) + "」を無効にする(削除された値)"
 		}
 		out = append(out, wsFix{ws: ws, summary: s, drafts: rr.Drafts})
 	}
@@ -112,13 +114,11 @@ func readInitialFixes(_ port.Reader, ws workspace.ID, log []change.Record) ([]ws
 	if !ok {
 		return nil, nil
 	}
-	st, _ := workspace.SettingsFromLog(log)
-	var name string
-	for _, v := range st.Statuses {
-		if v.ID == st.CategoryDefaults[workspace.CategoryTodo] {
-			name = v.Name
-		}
+	var todo change.ID
+	if err := json.Unmarshal(d.To, &todo); err != nil {
+		return nil, err
 	}
+	name := workspace.NameOfDeleted(log, "statuses/"+string(todo)) // 戻し先の名前(削除の有無は見ない)
 	return []wsFix{{ws: ws, summary: "初期ステータスを「" + oneLine(name) + "」に戻し", drafts: []change.Draft{d}}}, nil
 }
 

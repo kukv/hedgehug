@@ -4,6 +4,8 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/kukv/hedgehug/internal/app/repairing"
+
 	"github.com/kukv/hedgehug/internal/app/apptest"
 	"github.com/kukv/hedgehug/internal/app/port"
 	"github.com/kukv/hedgehug/internal/domain/automation"
@@ -157,8 +159,11 @@ func (e *env) addTemplate() {
 }
 
 // addNotifyRule は、きっかけが「Review」の有効なルール「レビューで通知」を書く。
-func (e *env) addNotifyRule(enabled bool) {
-	r := automation.Rule{ID: notifyRule, Name: "レビューで通知", Trigger: automation.TriggerStatus, TriggerStatus: review, Action: automation.ActionAssignee, Value: automation.Unassigned, Enabled: enabled}
+func (e *env) addNotifyRule(enabled bool) { e.addRuleNamed("レビューで通知", enabled) }
+
+// addRuleNamed は、addNotifyRule の、名前を選べるもの。
+func (e *env) addRuleNamed(name string, enabled bool) {
+	r := automation.Rule{ID: notifyRule, Name: name, Trigger: automation.TriggerStatus, TriggerStatus: review, Action: automation.ActionAssignee, Value: automation.Unassigned, Enabled: enabled}
 	e.workspaceWrite(automation.Drafts(automation.Rule{}, r)...)
 }
 
@@ -240,4 +245,47 @@ func TestHiddenInitialNotRepaired(t *testing.T) {
 	e.addWebRules()
 	e.workspaceWrite(change.NewSet("initial_status", apptest.SampleStatusTodo, review))
 	wantOps(t, e.run(nil, nil))
+}
+
+// 名前の改行と続いた空白は、件名で 1 つの空白にする。
+func TestDropDanglingRefsOneLineName(t *testing.T) {
+	e := newEnv(t)
+	e.addRuleNamed("レビューで\n  通知", true)
+	e.deleteValues()
+	wantOps(t, e.run(nil, nil), "自動化「レビューで 通知」を無効にする(削除された値)")
+}
+
+// noGet は、Projects().Get がどのプロジェクトも読めない Reader。
+type noGet struct{ port.Reader }
+
+func (r noGet) Projects() port.ProjectReader { return noGetProjects{r.Reader.Projects()} }
+
+type noGetProjects struct{ port.ProjectReader }
+
+func (noGetProjects) Get(project.ID) (project.Project, error) {
+	return project.Project{}, port.ErrNotFound
+}
+
+// noGetWriter は、Read に noGet を渡す RepairWriter。
+type noGetWriter struct{ *apptest.RepairWriter }
+
+func (w noGetWriter) Read(fn func(r port.Reader) error) error {
+	return w.RepairWriter.Read(func(r port.Reader) error { return fn(noGet{r}) })
+}
+
+// プロジェクトを読めないときの {タイトル} は、内部 ID。
+func TestDropDanglingRefsTitleFallback(t *testing.T) {
+	e := newEnv(t)
+	e.addTemplate()
+	e.addWebRules()
+	e.deleteValues()
+	w := &apptest.RepairWriter{Stores: e.s, StoreID: store}
+	if err := repairing.Run(e.ctx, noGetWriter{w}); err != nil {
+		t.Fatal(err)
+	}
+	id := string(webProject)
+	wantOps(t, w.Ops,
+		"プロジェクト「"+id+"」のルールから「Review」を削除(削除された値)",
+		"プロジェクト「"+id+"」のルールから「バグ報告」を削除(削除された値)",
+		bugDefault)
 }
