@@ -13,7 +13,9 @@
   const stores = catalog.stores;
   const groups = $derived(groupMyTasks($view.rows, $view.groupBy, dayOf($today), $stores));
   const empty = $derived(
-    $view.rows.length === 0 && $view.loaded && $base !== null ? myTasksEmpty($base.length) : null,
+    $view.rows.length === 0 && $view.loaded && $base !== null
+      ? myTasksEmpty($base.length, $view.errors.length > 0)
+      : null,
   );
 </script>
 
