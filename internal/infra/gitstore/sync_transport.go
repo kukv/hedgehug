@@ -54,13 +54,45 @@ func watch(ctx context.Context) (context.Context, func()) {
 	}
 }
 
-// watchedTransport は、要求と応答の本文を読み書きするたびに、見張りの時計を戻す。
+type skewKey struct{}
+
+// skewProbe は、応答の Date とこのマシンの時計の差を渡す先。
+type skewProbe struct {
+	fn  func(time.Duration)
+	now func() time.Time
+}
+
+// withSkew は、ctx の中の git の通信の応答で、Date − now() を fn に渡すようにする(決定 C5d-3)。fn が nil なら ctx をそのまま返す。
+// 状態コードと相手のホストは問わない。
+func withSkew(ctx context.Context, fn func(time.Duration), now func() time.Time) context.Context {
+	if fn == nil {
+		return ctx
+	}
+	return context.WithValue(ctx, skewKey{}, skewProbe{fn: fn, now: now})
+}
+
+// observeSkew は、ctx に渡す先があり、応答の Date を読めれば、ずれを渡す。
+func observeSkew(ctx context.Context, res *http.Response) {
+	p, ok := ctx.Value(skewKey{}).(skewProbe)
+	if !ok {
+		return
+	}
+	if date, err := http.ParseTime(res.Header.Get("Date")); err == nil {
+		p.fn(date.Sub(p.now()))
+	}
+}
+
+// watchedTransport は、要求と応答の本文を読み書きするたびに、見張りの時計を戻す。応答の Date で時計のずれも測る。
 type watchedTransport struct{ base http.RoundTripper }
 
 func (t watchedTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	w, _ := req.Context().Value(watchKey{}).(*watchdog)
 	if w == nil {
-		return t.base.RoundTrip(req)
+		res, err := t.base.RoundTrip(req)
+		if err == nil {
+			observeSkew(req.Context(), res)
+		}
+		return res, err
 	}
 	w.touch()
 	if req.Body != nil {
@@ -72,6 +104,7 @@ func (t watchedTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 		return nil, err
 	}
 	w.touch()
+	observeSkew(req.Context(), res)
 	res.Body = touchingBody{ReadCloser: res.Body, w: w}
 	return res, nil
 }

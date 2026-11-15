@@ -98,6 +98,7 @@ func wire(ctx context.Context) (httpapi.Deps, port.JudgedSaves, error) {
 		Sync:        syncSvc,
 		Auto:        auto,
 		Events:      hub,
+		ClockSkew:   &syncing.Skew{Records: state.ClockSkews(), Events: hub},
 		Delivery:    syncSvc,
 		SyncTargets: syncSvc.Targets,
 		Recent:      state.Recent(),

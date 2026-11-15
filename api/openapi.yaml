@@ -3751,12 +3751,17 @@ components:
         auto:
           description: 「裏で自動的に同期する」がオンか(オフラインの帯の文を選ぶ)
           type: boolean
+        clockSkew:
+          description: 時計のずれの警告の分。正はこのマシンの時計が進んでいる、負は遅れている。0 は警告なし
+          format: int64
+          type: integer
         stores:
           items:
             $ref: "#/components/schemas/SyncStoreStatus"
           type: array
       required:
         - auto
+        - clockSkew
         - stores
       type: object
     SyncStoreResult:

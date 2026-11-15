@@ -46,15 +46,15 @@ func wire(ctx context.Context) (httpapi.Deps, port.JudgedSaves, error) {
 		return httpapi.Deps{}, nil, err
 	}
 	file := machineconfig.Open(cfg)
-	gh := github.New(nil) // 時計のずれは受け取らない(トラック D の計画の決定 3)
-	secrets := secret.New()
-	session := ghapp.NewSession()
 	hub := events.NewHub()
+	skew := &syncing.Skew{Records: db.ClockSkews(), Events: hub}
+	gh := github.New(skew.Observe) // 時計のずれは syncing.Skew が受け取る(C5d-3)
+	secrets, session := secret.New(), ghapp.NewSession()
 	conn := ghapp.Connector{
 		Session: session, Accounts: file.Accounts(), Secrets: secrets, GitHub: gh, Device: gh,
 		Hosts: file.Hosts(), Stores: noStoreGitHub{}, Clock: clock,
 	}
-	rep := newReplicator(stores, db, clock, hub)
+	rep := newReplicator(stores, db, clock, hub, skew)
 	svc := &syncing.Service{
 		Targets: noSyncTargets{}, Tokens: conn,
 		Replicator: rep, State: db.SyncState(), Log: db.SyncLog(), Events: hub, Clock: clock,
@@ -91,8 +91,8 @@ func wire(ctx context.Context) (httpapi.Deps, port.JudgedSaves, error) {
 		Delivery:      svc,
 		SyncTargets:   svc.Targets,
 	}
-	// state.db に置くもの(レポートの選択・画面の状態・最近開いたもの・同期の行・同期で受け取った保存)と、コミットと版の印の読み口
-	deps.Reports, deps.Screens, deps.Recent = db.ReportSelections(), db.ScreenStates(), db.Recent()
+	// state.db に置くもの(レポートの選択・画面の状態・最近開いたもの・時計のずれ・同期の行・同期で受け取った保存)と、コミットと版の印の読み口
+	deps.Reports, deps.Screens, deps.Recent, deps.ClockSkew = db.ReportSelections(), db.ScreenStates(), db.Recent(), skew
 	deps.SyncLog, deps.Commits, deps.Versions, deps.Received = db.SyncLog(), stores, stores, db
 	deps.Links = linksOf(deps, conn) // トークンの入口は同期と同じ Connector(D4a-2)
 	go (&githublink.Reader{Links: deps.Links, Settings: file.SyncSettings(), Waiting: auto.Waiting}).Run(ctx)
@@ -101,9 +101,11 @@ func wire(ctx context.Context) (httpapi.Deps, port.JudgedSaves, error) {
 
 // newReplicator は、合わせたあと、送る前に修復し(C3a の決定 C3a-3)、同期の最後に受け取った保存から通知を作る
 // (決定 C4b1-2)同期。「あなた」と表示中の Store は G までないので、本物のビルドではまだ通知は出ない(C4b1-15)。
-func newReplicator(stores *gitstore.Stores, db *statedb.DB, clock port.Clock, events port.Events) *gitstore.Replicator {
+// git の通信の応答で測った時計のずれは skew に渡す(C5d-3)。
+func newReplicator(stores *gitstore.Stores, db *statedb.DB, clock port.Clock, events port.Events, skew *syncing.Skew) *gitstore.Replicator {
 	rep := gitstore.NewReplicator(stores)
 	rep.Repair = repairing.Run
+	rep.OnSkew = skew.Observe
 	notices := noticing.Service{Inbox: appinbox.Notifier{Inbox: db.Inbox(clock), Events: events}, Identity: noIdentity{}, List: noStores{}}
 	rep.Judge, rep.Judged = notices.Judge, db.JudgedSaves()
 	return rep

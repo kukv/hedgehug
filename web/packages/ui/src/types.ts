@@ -47,6 +47,7 @@ export interface SyncCardView {
   error: boolean;
   last: string;
   stale: string | null;
+  clock: string | null;
   rows: { storeId: string; name: string; summary: string; time: string; stale: boolean }[];
 }
 

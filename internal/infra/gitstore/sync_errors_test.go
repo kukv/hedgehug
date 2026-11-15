@@ -2,10 +2,13 @@ package gitstore
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"slices"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -39,6 +42,39 @@ func statusServer(t *testing.T, code int) port.Remote {
 	}))
 	t.Cleanup(srv.Close)
 	return port.Remote{URL: srv.URL + "/o/r.git", Token: "tok-taro"}
+}
+
+// 決定 C5d-3: remote の応答の Date で時計のずれを測る(状態コードは問わない)。d は「Date − このマシンの時計」。
+// OnSkew が nil なら測らず、同期の結果は同じ。
+func TestSyncReportsSkewFromTheRemoteResponse(t *testing.T) {
+	m := localMachine(t)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Date", m.clock.Now().Add(-10*time.Minute).UTC().Format(http.TimeFormat))
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	t.Cleanup(srv.Close)
+	remote := port.Remote{URL: srv.URL + "/o/r.git"}
+
+	var mu sync.Mutex
+	var got []time.Duration
+	m.rep.OnSkew = func(d time.Duration) {
+		mu.Lock()
+		defer mu.Unlock()
+		got = append(got, d)
+	}
+	_, withSkew := m.rep.Sync(t.Context(), m.id, remote)
+	mu.Lock()
+	near := slices.ContainsFunc(got, func(d time.Duration) bool { return d > -11*time.Minute && d < -9*time.Minute })
+	mu.Unlock()
+	if !near {
+		t.Errorf("OnSkew got %v, want about -10m", got)
+	}
+
+	m.rep.OnSkew = nil
+	_, without := m.rep.Sync(t.Context(), m.id, remote)
+	if fmt.Sprint(without) != fmt.Sprint(withSkew) {
+		t.Errorf("Sync without OnSkew = %v, want %v", without, withSkew)
+	}
 }
 
 // 06「同期のエラー」: 受け取りで断られたら、Store を変えずに理由を返す。

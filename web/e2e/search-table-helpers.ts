@@ -1,22 +1,13 @@
 import type { Page, TestInfo } from "@playwright/test";
-import { prefixOf, resetSearchScreen, sidebar, tokenUrl } from "./helpers";
+import { prefixOf, resetSearchScreen, send, sidebar, tokenUrl } from "./helpers";
+
+export { send };
 
 // 検索のテーブルの通しのテスト(E2a)の材料。search-table.spec.ts と search-table-select.spec.ts で使う。
 
 export const e2eStore = "01E2ESTORE0000000000000001";
 export const auth = { Authorization: "Bearer e2e-token" };
 export const base = `/api/stores/${e2eStore}`;
-
-export async function send(
-  page: Page,
-  method: "post" | "put" | "delete",
-  path: string,
-  data: unknown,
-) {
-  const res = await page.request[method](path, { headers: auth, data });
-  if (!res.ok()) throw new Error(`${path}: ${res.status()} ${await res.text()}`);
-  return res.status() === 204 ? undefined : res.json();
-}
 
 // seed は、新しいワークスペースに、Epic「{mark} A」(接頭辞-1)とその下の Story「{mark} B」(接頭辞-2)を作る。
 export async function seed(page: Page, info: TestInfo) {

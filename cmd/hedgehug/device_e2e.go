@@ -132,9 +132,10 @@ func (d *e2eDevice) handler(token string, next http.Handler) http.Handler {
 }
 
 // wrap は、通しのテストが偽の GitHub とデバイスフローの答えを決める入口と、1 回の読み取りの入口と、受信箱に通知を足す入口と、同期の行を足す入口と、
-// 同期で受け取った保存を書く入口を足す。受け取った保存は judged(wire が返す、履歴が読む Received と同じ state.db の判定の記録)に書く。
+// 同期で受け取った保存を書く入口と、時計のずれを入れる入口を足す。受け取った保存は judged(wire が返す、履歴が読む Received と同じ state.db の判定の記録)に書く。
 func wrap(token string, deps httpapi.Deps, judged port.JudgedSaves, h http.Handler) http.Handler {
 	h = githubReadHandler(token, deps.Links, pullsHandler(token, githubHandler(token, e2eDeviceFlow.handler(token, h))))
 	h = receiveHandler(token, deps.Stores, judged, deps.IDs, deps.Clock, h)
+	h = clockSkewHandler(token, deps.ClockSkew, h)
 	return noticeHandler(token, deps.Inbox, syncLogHandler(token, deps.SyncLog, deps.Clock, deps.Events, h))
 }

@@ -12,7 +12,7 @@
 export type ProjectTab = "overview" | "tree" | "settings";
 export type WorkspaceTab = "overview" | "backlog" | "sprints" | "releases" | "reports" | "settings";
 
-export type SettingsTab = "accounts";
+export type SettingsTab = "general" | "accounts";
 
 export type Route =
   | { name: "home" }
@@ -34,7 +34,7 @@ export const workspaceTabs: readonly string[] = [
   "reports",
   "settings",
 ] satisfies WorkspaceTab[];
-const settingsTabs: readonly string[] = ["accounts"] satisfies SettingsTab[];
+const settingsTabs: readonly string[] = ["general", "accounts"] satisfies SettingsTab[];
 
 function decode(segment: string): string | null {
   try {

@@ -1,8 +1,10 @@
 package syncstatus_test
 
 import (
+	"math"
 	"slices"
 	"testing"
+	"time"
 
 	"github.com/kukv/hedgehug/internal/domain/syncstatus"
 )
@@ -80,5 +82,30 @@ func TestAll(t *testing.T) {
 	want := []string{"成功 1 件・失敗 2 件", "team: アカウントが設定されていません", "web: remote に接続できません"}
 	if !slices.Equal(got, want) {
 		t.Errorf("mixed: %q, want %q", got, want)
+	}
+}
+
+// 06「時計のずれの警告」: d は「GitHub の時刻 − このマシンの時計」。5 分以上ずれたら、警告の分を返す。
+func TestSkewMinutes(t *testing.T) {
+	cases := []struct {
+		name string
+		d    time.Duration
+		want int
+	}{
+		{"ずれなし", 0, 0},
+		{"遅れ 5 分未満", -4*time.Minute - 59*time.Second, 0},
+		{"進み 5 分未満", 4*time.Minute + 59*time.Second, 0},
+		{"進み 5 分ちょうど", -5 * time.Minute, 5},
+		{"遅れ 5 分ちょうど", 5 * time.Minute, -5},
+		{"進み 5 分 59 秒", -5*time.Minute - 59*time.Second, 5},
+		{"進み 7 分 30 秒", -7*time.Minute - 30*time.Second, 7},
+		{"遅れ 6 分 10 秒", 6*time.Minute + 10*time.Second, -6},
+		{"進み 3 時間", -3 * time.Hour, 180},
+		{"GitHub の時刻が頭打ち(時計が進んでいる)", time.Duration(math.MinInt64), int(time.Duration(math.MaxInt64) / time.Minute)},
+	}
+	for _, c := range cases {
+		if got := syncstatus.SkewMinutes(c.d); got != c.want {
+			t.Errorf("%s: SkewMinutes(%v) = %d, want %d", c.name, c.d, got, c.want)
+		}
 	}
 }

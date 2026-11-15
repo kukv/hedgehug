@@ -70,6 +70,7 @@ export function createSyncPort(): SyncPort {
         const body = await listSyncStatus();
         return {
           auto: body.auto,
+          clockSkew: body.clockSkew,
           stores: body.stores.map((s) => ({
             storeId: s.store,
             name: s.name,

@@ -104,6 +104,7 @@ test("「Store ごとの同期状態」 syncs one store", async ({ page }, info)
 test("a sync error shows on the card, the menu and the drawer button", async ({ page }, info) => {
   await status(page, {
     auto: true,
+    clockSkew: 0,
     stores: [
       {
         store: "S1",
@@ -189,6 +190,7 @@ test("offline shows the band, tells the server and refuses a manual sync", async
 test("the band follows the automatic sync setting", async ({ page }) => {
   await status(page, {
     auto: true,
+    clockSkew: 0,
     stores: [
       {
         store: "S1",
