@@ -20,19 +20,12 @@ type syncYAML struct {
 // 06「自動で同期する」の初期値。
 var defaultTiming = port.SyncTiming{Auto: true, Interval: 5 * time.Minute, AfterWrite: 30 * time.Second, GitHubEvery: 5 * time.Minute}
 
-// 08 の選択肢(G1-18)。ここにない値は初期値として扱う。
-var (
-	intervalChoices    = []time.Duration{time.Minute, 5 * time.Minute, 15 * time.Minute, 30 * time.Minute, time.Hour}
-	afterWriteChoices  = []time.Duration{10 * time.Second, 30 * time.Second, time.Minute}
-	githubEveryChoices = []time.Duration{5 * time.Minute, 15 * time.Minute, 30 * time.Minute, time.Hour}
-)
-
 // SyncSettings は、config.yaml の sync を読み書きする port.SyncSettings。
 func (f *File) SyncSettings() port.SyncSettings { return syncSettings{f} }
 
 type syncSettings struct{ f *File }
 
-// choice は、秒 sec が choices のどれかならその長さ、そうでなければ def(書かれていない 0 も def)。
+// choice は、秒 sec が choices(08 の選択肢。G1-18)のどれかならその長さ、そうでなければ def(書かれていない 0 も def)。
 func choice(sec int, choices []time.Duration, def time.Duration) time.Duration {
 	d := time.Duration(sec) * time.Second
 	if slices.Contains(choices, d) {
@@ -50,9 +43,9 @@ func (s syncSettings) Timing(context.Context) (port.SyncTiming, error) {
 	if c.Sync.Auto != nil {
 		t.Auto = *c.Sync.Auto
 	}
-	t.Interval = choice(c.Sync.Interval, intervalChoices, t.Interval)
-	t.AfterWrite = choice(c.Sync.PushInterval, afterWriteChoices, t.AfterWrite)
-	t.GitHubEvery = choice(c.Sync.GitHubInterval, githubEveryChoices, t.GitHubEvery)
+	t.Interval = choice(c.Sync.Interval, port.IntervalChoices, t.Interval)
+	t.AfterWrite = choice(c.Sync.PushInterval, port.AfterWriteChoices, t.AfterWrite)
+	t.GitHubEvery = choice(c.Sync.GitHubInterval, port.GitHubChoices, t.GitHubEvery)
 	return t, nil
 }
 

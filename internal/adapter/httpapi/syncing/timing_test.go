@@ -50,7 +50,7 @@ func TestPutTiming(t *testing.T) {
 	}
 }
 
-// 選択肢にない値は 400「選べない値です」で、保存しない。
+// 選択肢にない値は 422「選べない値です」で、保存しない。
 func TestPutTimingRefusesValuesOutsideTheChoices(t *testing.T) {
 	bodies := []map[string]any{
 		{"auto": true, "intervalMinutes": 2, "afterWriteSeconds": 30, "githubMinutes": 5},
@@ -61,7 +61,7 @@ func TestPutTimingRefusesValuesOutsideTheChoices(t *testing.T) {
 	for _, b := range bodies {
 		api, settings, ev := newTimingAPI(t)
 		res := api.Put("/api/sync/timing", b)
-		if res.Code != http.StatusBadRequest || detailOf(t, res.Body.Bytes()) != "選べない値です" {
+		if res.Code != http.StatusUnprocessableEntity || detailOf(t, res.Body.Bytes()) != "選べない値です" {
 			t.Errorf("%v: %d %s", b, res.Code, res.Body)
 		}
 		if got, _ := settings.Timing(context.Background()); got.GitHubEvery != 15*time.Minute || len(ev.List()) != 0 {

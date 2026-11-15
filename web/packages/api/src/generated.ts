@@ -2471,13 +2471,13 @@ export interface SyncStoreResult {
 }
 
 export interface SyncTimingSetting {
-  /** 書き込みのあと同期するまで(秒)。10・30・60 のどれか。ほかは 400 */
+  /** 書き込みのあと同期するまで(秒)。10・30・60 のどれか。ほかは 422 */
   afterWriteSeconds: number;
   /** 裏で自動的に同期する */
   auto: boolean;
-  /** GitHub を読む間隔(分)。5・15・30・60 のどれか。ほかは 400 */
+  /** GitHub を読む間隔(分)。5・15・30・60 のどれか。ほかは 422 */
   githubMinutes: number;
-  /** 間隔(分)。1・5・15・30・60 のどれか。ほかは 400 */
+  /** 間隔(分)。1・5・15・30・60 のどれか。ほかは 422 */
   intervalMinutes: number;
 }
 

@@ -60,10 +60,10 @@ func TestPreviewLogin(t *testing.T) {
 	}
 }
 
-func TestPreviewLoginRefusalIs400(t *testing.T) {
+func TestPreviewLoginRefusalIs422(t *testing.T) {
 	api, _, _ := newLoginAPI(t)
 	res := api.Post("/api/settings/login/preview", map[string]any{"login": "ta ro"})
-	if res.Code != http.StatusBadRequest || detail(t, res.Body.Bytes()) != loginRefusal {
+	if res.Code != http.StatusUnprocessableEntity || detail(t, res.Body.Bytes()) != loginRefusal {
 		t.Errorf("preview: %d %s", res.Code, res.Body)
 	}
 }
@@ -81,7 +81,7 @@ func TestPutLogin(t *testing.T) {
 		t.Errorf("events = %+v", got)
 	}
 	res := api.Put("/api/settings/login", map[string]any{"login": "ta ro"})
-	if res.Code != http.StatusBadRequest || detail(t, res.Body.Bytes()) != loginRefusal {
+	if res.Code != http.StatusUnprocessableEntity || detail(t, res.Body.Bytes()) != loginRefusal {
 		t.Errorf("put refused: %d %s", res.Code, res.Body)
 	}
 	if got, _ := gh.MachineLogin(ctx); got != "tarou" {

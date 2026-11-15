@@ -21,3 +21,10 @@ type SyncSettings interface {
 	// SetTiming は、sync の 4 つの項目をすべて書く。
 	SetTiming(ctx context.Context, t SyncTiming) error
 }
+
+// 08 の同期のタイミングの選択肢(G1-18)。ここにない値は、読むときは初期値として扱い、画面からは受け付けない。
+var (
+	IntervalChoices   = []time.Duration{time.Minute, 5 * time.Minute, 15 * time.Minute, 30 * time.Minute, time.Hour}
+	AfterWriteChoices = []time.Duration{10 * time.Second, 30 * time.Second, time.Minute}
+	GitHubChoices     = []time.Duration{5 * time.Minute, 15 * time.Minute, 30 * time.Minute, time.Hour}
+)
