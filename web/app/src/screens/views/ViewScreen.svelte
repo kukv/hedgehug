@@ -4,7 +4,7 @@
   import { onMount, untrack } from "svelte";
   import { selection } from "../../palette";
   import { activate, searchSelection, selectedOne } from "../../search";
-  import { createViewSearch, views } from "../../views";
+  import { createViewSearch, openViewMenu, views } from "../../views";
   import { toasts } from "../../wireBase";
   import SearchBody from "../search/SearchBody.svelte";
   import SearchFilter from "../search/SearchFilter.svelte";
@@ -56,7 +56,13 @@
       <Button size="sm" onclick={() => screen.discard()}>変更を破棄</Button>
       <Button size="sm" variant="primary" onclick={() => void screen.save()}>保存</Button>
     {/if}
-    <IconButton label="{name} のメニュー" size="sm">⋯</IconButton>
+    <IconButton
+      label="{name} のメニュー"
+      size="sm"
+      onclick={(e: MouseEvent) =>
+        openViewMenu({ id, name }, (e.currentTarget as HTMLElement).getBoundingClientRect())}
+      >⋯</IconButton
+    >
   {/snippet}
 </PageHead>
 <SearchFilter {search} />

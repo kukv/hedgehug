@@ -1,11 +1,16 @@
 import {
   createNameDialog,
   createSearch,
+  deleteView,
+  duplicateView,
   get,
+  menuAt,
+  readonly,
   type Search,
   saveAsView,
   type ViewContent,
   viewScreenKey,
+  writable,
 } from "@hedgehug/core";
 import { screenStates, searchPort, searchSelection } from "./search";
 import { navigation } from "./wire";
@@ -41,5 +46,68 @@ export function openSaveView(content: ViewContent): void {
   saveView.open((name) => saveAsView({ views, toasts, open: openView }, name, content));
 }
 
+// ビューの画面の見出しのメニュー(E3b-13)。開いているあいだは、対象のビューと位置を持つ。
+export interface ViewTarget {
+  id: string;
+  name: string;
+}
+
+interface OpenViewMenu extends ViewTarget {
+  x: number;
+  y: number;
+}
+
+const menu = writable<OpenViewMenu | null>(null);
+export const viewMenuState = readonly(menu);
+
+// openViewMenu は、見出しの「⋯」の下にメニューを開く。rect は「⋯」の getBoundingClientRect()。
+export function openViewMenu(view: ViewTarget, rect: { left: number; bottom: number }) {
+  menu.set({ ...view, ...menuAt(rect) });
+}
+
+export function closeViewMenu() {
+  menu.set(null);
+}
+
+// 「名前を変更…」のダイアログ。入力欄の初期値は対象のいまの名前。
+export const renameView = createNameDialog();
+const renameTarget = writable<ViewTarget | null>(null);
+export const renameViewTarget = readonly(renameTarget);
+
+export function openRenameView(view: ViewTarget): void {
+  renameTarget.set(view);
+  renameView.open((name) => views.rename(view.id, name));
+}
+
+// 「削除…」の確認。対象があるあいだ確認を出す。
+const deleting = writable<ViewTarget | null>(null);
+export const deletingView = readonly(deleting);
+
+export function cancelDeleteView(): void {
+  deleting.set(null);
+}
+
+export async function confirmDeleteView(): Promise<void> {
+  const target = get(deleting);
+  deleting.set(null);
+  if (target) await deleteView({ views, toasts, navigation }, target.id);
+}
+
+// selectViewMenu は、メニューの項目を実行して閉じる。
+export function selectViewMenu(id: "rename" | "duplicate" | "delete"): void {
+  const target = get(menu);
+  closeViewMenu();
+  if (!target) return;
+  const view = { id: target.id, name: target.name };
+  if (id === "rename") openRenameView(view);
+  else if (id === "delete") deleting.set(view);
+  else void duplicateView({ views, open: openView }, view.id);
+}
+
 // 画面を移ったら、出しているダイアログを閉じる(01「画面の移り方」)。
-navigation.route.subscribe(() => saveView.close());
+navigation.route.subscribe(() => {
+  saveView.close();
+  renameView.close();
+  deleting.set(null);
+  closeViewMenu();
+});
