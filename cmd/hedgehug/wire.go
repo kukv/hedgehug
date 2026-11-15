@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"log/slog"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/kukv/hedgehug/internal/adapter/httpapi"
@@ -32,6 +33,12 @@ import (
 // wire は、config.yaml の Store を開いて本物の部品を口に差し込み、自動の同期と GitHub の自動の読み取りと Store の見張りを
 // ctx が終わるまで動かす。2 つ目の戻り値は、wrap に渡す判定の記録(履歴が読むのと同じ state.db。本物のビルドの wrap は使わない)。
 func wire(ctx context.Context) (httpapi.Deps, port.JudgedSaves, error) {
+	return wireRunning(ctx, &sync.WaitGroup{})
+}
+
+// wireRunning は wire の本体。動かした goroutine を running に積む(テストが、止めたあと Store と state.db に
+// 触れなくなるまで待つため)。
+func wireRunning(ctx context.Context, running *sync.WaitGroup) (httpapi.Deps, port.JudgedSaves, error) {
 	clock, ids := sysclock.Clock{}, sysclock.IDs{}
 	stores := gitstore.New(clock, ids)
 	file, view, err := openStores(stores)
@@ -46,8 +53,7 @@ func wire(ctx context.Context) (httpapi.Deps, port.JudgedSaves, error) {
 	if err != nil {
 		return httpapi.Deps{}, nil, err
 	}
-	identity := appstores.Identity{GitHub: view.StoreGitHub(), Accounts: file.Accounts()}
-	hub := events.NewHub()
+	identity, hub := appstores.Identity{GitHub: view.StoreGitHub(), Accounts: file.Accounts()}, events.NewHub()
 	skew := &syncing.Skew{Records: db.ClockSkews(), Events: hub}
 	gh := github.New(skew.Observe) // 時計のずれは syncing.Skew が受け取る(C5d-3)
 	secrets, session := secret.New(), ghapp.NewSession()
@@ -65,8 +71,8 @@ func wire(ctx context.Context) (httpapi.Deps, port.JudgedSaves, error) {
 	notified := syncing.NotifyWrites(members.JoinOnWrite(stores, view.StoreGitHub()), auto.Wrote)
 	svc.Stores = notified
 	context.AfterFunc(ctx, hub.Close) // 止めるとき SSE の流れを終える(決定 C2-27)
-	go auto.Run(ctx)
-	go (&syncing.Watch{Versions: stores, Events: hub}).Run(ctx, 500*time.Millisecond)
+	running.Go(func() { auto.Run(ctx) })
+	running.Go(func() { (&syncing.Watch{Versions: stores, Events: hub}).Run(ctx, 500*time.Millisecond) })
 	// state.db は閉じない。プロセスが終わるときに閉じる。サーバーを止める 5 秒のあいだも、動いている同期が記録できるようにするため。
 	deps := httpapi.Deps{
 		Stores:        notified,
@@ -96,7 +102,8 @@ func wire(ctx context.Context) (httpapi.Deps, port.JudgedSaves, error) {
 	deps.Reports, deps.Screens, deps.Recent, deps.ClockSkew = db.ReportSelections(), db.ScreenStates(), db.Recent(), skew
 	deps.SyncLog, deps.Commits, deps.Versions, deps.Received = db.SyncLog(), stores, stores, db
 	deps.Links = linksOf(deps, conn) // トークンの入口は同期と同じ Connector(D4a-2)
-	go (&githublink.Reader{Links: deps.Links, Settings: file.SyncSettings(), Waiting: auto.Waiting}).Run(ctx)
+	reader := &githublink.Reader{Links: deps.Links, Settings: file.SyncSettings(), Waiting: auto.Waiting}
+	running.Go(func() { reader.Run(ctx) })
 	return deps, db.JudgedSaves(), nil
 }
 
@@ -115,6 +122,7 @@ func newReplicator(stores *gitstore.Stores, db *statedb.DB, clock port.Clock, ev
 // openStores は、config.yaml の stores の行の Store を開き、config.yaml と、開けた Store だけを見せる StoresView を返す。id のない行・
 // 同じ id の行がほかにもある行・path を開けない行・store.yaml の Store ID が id と違う行は、警告を出して開かない(G1-2)。
 // 開く前に別の gitstore.Stores で ID を確かめる(違う ID で開くと、その ID の Store のフォルダを差し替えてしまう)。
+// config.yaml を読めないときも、警告を出して Store を 1 つも開かずに起動を続ける(G1-2「読めない行で起動を止めない」)。
 func openStores(stores *gitstore.Stores) (*machineconfig.File, machineconfig.StoresView, error) {
 	cfg, err := configPath()
 	if err != nil {
@@ -123,7 +131,8 @@ func openStores(stores *gitstore.Stores) (*machineconfig.File, machineconfig.Sto
 	file := machineconfig.Open(cfg)
 	entries, err := file.StoreEntries()
 	if err != nil {
-		return nil, machineconfig.StoresView{}, err
+		slog.Warn("config.yaml の stores を読めないので、Store を開きません", "path", cfg, "error", err)
+		return file, file.Stores(func(port.StoreID) bool { return false }), nil
 	}
 	rows := map[port.StoreID]int{}
 	for _, e := range entries {

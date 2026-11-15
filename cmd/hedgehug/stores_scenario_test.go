@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"testing/fstest"
 
@@ -71,10 +72,16 @@ func wiredStoreDir(t *testing.T) string {
 // wire が出した警告を返す。
 func wireWith(t *testing.T, rows ...string) (httpapi.Deps, string) {
 	t.Helper()
+	return wireConfig(t, "login: taro\nstores:\n"+strings.Join(rows, ""))
+}
+
+// wireConfig は、config.yaml を body にして wire を呼び、wire が出した警告を返す。テストの終わりに止め、
+// wire が動かした goroutine が終わるのを待つ(一時フォルダを消す前に、Store と state.db に触れなくする)。
+func wireConfig(t *testing.T, body string) (httpapi.Deps, string) {
+	t.Helper()
 	cfg, data := t.TempDir(), t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", cfg)
 	t.Setenv("XDG_DATA_HOME", data)
-	body := "login: taro\nstores:\n" + strings.Join(rows, "")
 	if err := os.MkdirAll(filepath.Join(cfg, "hedgehug"), 0o700); err != nil {
 		t.Fatal(err)
 	}
@@ -86,8 +93,12 @@ func wireWith(t *testing.T, rows ...string) (httpapi.Deps, string) {
 	slog.SetDefault(slog.New(slog.NewTextHandler(&logs, nil)))
 	t.Cleanup(func() { slog.SetDefault(prev) })
 	ctx, cancel := context.WithCancel(context.Background())
-	t.Cleanup(cancel)
-	deps, _, err := wire(ctx)
+	var running sync.WaitGroup
+	t.Cleanup(func() {
+		cancel()
+		running.Wait()
+	})
+	deps, _, err := wireRunning(ctx, &running)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -191,5 +202,16 @@ func TestWireSkipsDuplicateIDs(t *testing.T) {
 	}
 	if n := strings.Count(logs, "level=WARN"); n != 2 {
 		t.Errorf("warnings = %d, want 2:\n%s", n, logs)
+	}
+}
+
+// config.yaml を読めなくても起動は止まらず、Store は 1 つも開かない(G1-2)。一覧は読めない理由を返す。
+func TestWireStartsWithBrokenConfig(t *testing.T) {
+	deps, logs := wireConfig(t, "stores: [\n")
+	if infos, err := deps.StoreList.List(t.Context()); len(infos) != 0 || err == nil {
+		t.Errorf("StoreList = %v, %v, want none and the parse error", infos, err)
+	}
+	if n := strings.Count(logs, "level=WARN"); n != 1 {
+		t.Errorf("warnings = %d, want 1:\n%s", n, logs)
 	}
 }
