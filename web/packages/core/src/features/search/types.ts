@@ -85,6 +85,8 @@ export interface SearchResult {
   // errors はクエリのエラー(1 語 1 行)。hasKey はキーのある語が 1 つ以上あるか。
   errors: string[];
   hasKey: boolean;
+  // hasSort は `sort:` の語があるか(サーバーが決める)。
+  hasSort: boolean;
   // group は `group:` の値。なければ空。deleted は `is:deleted` の検索か。
   group: string;
   deleted: boolean;

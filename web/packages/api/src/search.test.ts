@@ -56,6 +56,7 @@ describe("createSearchPort", () => {
     const fetch = respond(200, {
       errors: null,
       hasKey: true,
+      hasSort: true,
       group: "kind",
       deleted: false,
       rows: [{ ...row, assignee: { login: "a", name: null }, points: 3 }],
@@ -77,6 +78,7 @@ describe("createSearchPort", () => {
     const fetch = respond(200, {
       errors: [],
       hasKey: false,
+      hasSort: false,
       group: "",
       deleted: false,
       rows: [row],
@@ -98,7 +100,7 @@ describe("createSearchPort", () => {
   });
 
   it("maps a null list of rows to an empty one", async () => {
-    respond(200, { errors: ["x"], hasKey: false, group: "", deleted: false, rows: null });
+    respond(200, { errors: ["x"], hasKey: false, hasSort: false, group: "", deleted: false, rows: null });
     expect(await createSearchPort().search("")).toMatchObject({ errors: ["x"], rows: [] });
   });
 });

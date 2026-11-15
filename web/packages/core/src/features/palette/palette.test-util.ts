@@ -82,6 +82,7 @@ export interface Opts {
 export const noKey: SearchResult = {
   errors: [],
   hasKey: false,
+  hasSort: false,
   group: "",
   deleted: false,
   rows: [],

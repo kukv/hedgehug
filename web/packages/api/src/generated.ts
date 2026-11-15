@@ -2064,6 +2064,8 @@ export interface SearchResult {
   groups: SearchGroup[];
   /** キーのある語が 1 つ以上あるか */
   hasKey: boolean;
+  /** sort: の語があるか(サーバーが決める。ツリー・ガントの注記に使う) */
+  hasSort: boolean;
   rows: SearchRow[];
 }
 

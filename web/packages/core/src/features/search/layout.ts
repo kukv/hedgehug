@@ -14,6 +14,18 @@ export const layoutChoices: { id: SearchLayout; label: string }[] = [
   { id: "table", label: "テーブル" },
 ];
 
+// deletedTreeText は、ツリーで `is:deleted` の検索をしたときに本体の代わりに出す文(E3a-7)。
+export const deletedTreeText = "削除済みのアイテムはテーブルで表示します。";
+
+// layoutNote は、ツリーで sort:・group: が書かれているときに、絞り込み欄の下へ灰色で出す注記(E3a-8)。
+// 書いてあるかは応答から決める(画面は解析しない)。テーブルや結果がないときは null。
+export function layoutNote(layout: SearchLayout, result: SearchResult | null): string | null {
+  if (layout !== "tree" || !result) return null;
+  const names = [result.hasSort && "sort:", result.group !== "" && "group:"].filter(Boolean);
+  if (names.length === 0) return null;
+  return `ツリー・ガントでは ${names.join(" と ")} は使われず、並び順のままです`;
+}
+
 // TreeSettings は、ツリーの設定。collapsed は閉じている行の鍵(行がなくなった鍵も残す。E3a-11)。
 export interface TreeSettings {
   collapsed: string[];

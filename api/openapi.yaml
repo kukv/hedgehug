@@ -2991,6 +2991,9 @@ components:
         hasKey:
           description: キーのある語が 1 つ以上あるか
           type: boolean
+        hasSort:
+          description: "sort: の語があるか(サーバーが決める。ツリー・ガントの注記に使う)"
+          type: boolean
         rows:
           items:
             $ref: "#/components/schemas/SearchRow"
@@ -2998,6 +3001,7 @@ components:
       required:
         - errors
         - hasKey
+        - hasSort
         - group
         - deleted
         - rows

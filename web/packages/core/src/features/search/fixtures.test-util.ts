@@ -25,6 +25,7 @@ export const newBody = body("new");
 export const result = (...ids: string[]): SearchResult => ({
   errors: [],
   hasKey: true,
+  hasSort: false,
   group: "",
   deleted: false,
   rows: ids.map((id) => ({

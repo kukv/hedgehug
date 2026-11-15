@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { layoutChoices, readSearchState } from "./layout";
+import { result } from "./fixtures.test-util";
+import { deletedTreeText, layoutNote, layoutChoices, readSearchState } from "./layout";
 import { defaultTable } from "./table";
 
 describe("readSearchState (E3a-2)", () => {
@@ -35,5 +36,37 @@ describe("readSearchState (E3a-2)", () => {
       { id: "tree", label: "ツリー" },
       { id: "table", label: "テーブル" },
     ]);
+  });
+});
+
+describe("layoutNote (E3a-8)", () => {
+  const base = result();
+
+  it("notes sort: only", () => {
+    expect(layoutNote("tree", { ...base, hasSort: true })).toBe(
+      "ツリー・ガントでは sort: は使われず、並び順のままです",
+    );
+  });
+
+  it("notes group: only", () => {
+    expect(layoutNote("tree", { ...base, group: "kind" })).toBe(
+      "ツリー・ガントでは group: は使われず、並び順のままです",
+    );
+  });
+
+  it("notes both", () => {
+    expect(layoutNote("tree", { ...base, hasSort: true, group: "kind" })).toBe(
+      "ツリー・ガントでは sort: と group: は使われず、並び順のままです",
+    );
+  });
+
+  it("has no note without sort: or group:, in the table, or without a result", () => {
+    expect(layoutNote("tree", base)).toBeNull();
+    expect(layoutNote("table", { ...base, hasSort: true, group: "kind" })).toBeNull();
+    expect(layoutNote("tree", null)).toBeNull();
+  });
+
+  it("has the text for deleted items in the tree (E3a-7)", () => {
+    expect(deletedTreeText).toBe("削除済みのアイテムはテーブルで表示します。");
   });
 });

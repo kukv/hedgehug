@@ -14,7 +14,9 @@ export { type CellView, cellView, updatedHint } from "./features/search/cells";
 export { type ChangeAllDeps, createChangeAll } from "./features/search/changeAll";
 export { searchHelp } from "./features/search/help";
 export {
+  deletedTreeText,
   layoutChoices,
+  layoutNote,
   readSearchState,
   type SearchLayout,
   type TreeSettings,
