@@ -49,16 +49,17 @@
   // ほかの画面にいたあいだの変更を拾うため、開いたときは取っておいたものを捨てる。
   searchTreeData.reset();
   // round は、組み直した回数。古い読み込みのあとでは組み直さない。building は、いちばん新しい組み直し。
-  let round = 0;
+  // closed は、閉じたか。閉じたあとは組み直さない(読んでいる途中のものも refresh の続きも、view に古い木を書き戻さない)。
+  let [round, closed] = [0, false];
   let building: Promise<void> = Promise.resolve();
   // rebuild は、絞り込み(応答の元。E3a-3)で木に入れるプロジェクトを読み、読めたら組み直す。最後の検索が失敗して
   // 前の結果を残しているあいだ(resultQuery が null)は、前の木のままにする。
   function rebuild(res: SearchResult | null, query: string | null, all: StoreNode[]) {
-    if (!res || query === null) return building;
+    if (closed || !res || query === null) return building;
     const filtered = query.trim() !== "";
     const mine = ++round;
     building = searchTreeData.load(treeScope(all, res.rows, filtered)).then(() => {
-      if (mine !== round) return;
+      if (closed || mine !== round) return;
       view = {
         ...buildSearchTree(all, res.rows, filtered, searchTreeData.get),
         errors: res.errors,
@@ -68,8 +69,9 @@
   }
   // catalog も見る(プロジェクトの並べ替え・名前の変更は catalog だけが変わる)。
   $effect(() => void rebuild(result, resultQuery, $stores));
-  // 閉じたら、読んでいる途中の組み直しを捨てる(閉じたあとで view に古い木を書き戻さない)。
-  $effect(() => () => void ++round);
+  $effect(() => () => {
+    closed = true;
+  });
 
   // refresh は、ツリーから書いたあとの読み直し。取っておいたものを捨てて検索を読み直し、木が組み直るまで待つ
   // (順番待ちの次のキーは、組み直した木で基準を決める)。検索が失敗すると結果が変わらず上の $effect が動かない

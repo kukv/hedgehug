@@ -199,6 +199,16 @@ describe("createSearch layout (E3a-2・9・10・22)", () => {
     expect(t.clear).toHaveBeenCalledTimes(1);
   });
 
+  // 前にテーブルで選んだ行を、ツリーで開いたあとも残さない(パレットの「選んでいるアイテム」に出さない。E3a-10)。
+  it("open with a saved tree clears the selection, and with a table keeps it", async () => {
+    const tree = setup('{"query":"a","layout":"tree"}');
+    await tree.s.open();
+    expect(tree.clear).toHaveBeenCalledTimes(1);
+    const table = setup('{"query":"a","layout":"table"}');
+    await table.s.open();
+    expect(table.clear).not.toHaveBeenCalled();
+  });
+
   it("setCollapsed writes the collapsed keys without searching", async () => {
     const t = setup();
     await t.s.open();

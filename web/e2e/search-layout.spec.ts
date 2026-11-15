@@ -2,7 +2,7 @@ import type { Page, TestInfo } from "@playwright/test";
 import { expect, test } from "./fixtures";
 import { resetSearchScreen, sidebar, tokenUrl } from "./helpers";
 import { lastHeader } from "./search-table-helpers";
-import { e2eStore, filterOf, rowOf, search, seed } from "./search-tree-helpers";
+import { e2eStore, filterOf, pick, rowOf, search, seed } from "./search-tree-helpers";
 
 // 検索の画面のレイアウトの切り替え・ツリーの注記・削除済みの案内・テーブルで開く入口(E3a-1・7〜10、Review Focus 5)の
 // 通しのテスト。画面の状態はサーバーに残るので、各テストの前に初めの値(テーブル)に戻す。
@@ -241,5 +241,48 @@ test("does not show a stale tree count after switching back", async ({ page }, i
   await choose(page, "ツリー");
   await expect(page.getByText(/^\d+ 件$/)).toHaveCount(0);
   open();
+  await expect(page.getByText("2 件", { exact: true })).toBeVisible();
+});
+
+// ツリーから書いたあとの読み直しのあいだにテーブルへ切り替えても、閉じたツリーは組み直さない(戻したとき前の件数を出さない)。
+test("does not show a stale tree count after switching during a refresh", async ({
+  page,
+}, info) => {
+  const s = await seedTask(page, info);
+  await resetSearchScreen(page.request, "tree", s.mark);
+  await openAt(page);
+  await expect(page.getByText("2 件", { exact: true })).toBeVisible();
+
+  // 検索の読み直しを止めてから、Space でステータスを変える(ツリーが読み直す)。
+  let open = () => {};
+  const gate = new Promise<void>((r) => (open = r));
+  await page.route("**/api/search", async (route) => {
+    await gate;
+    await route.continue();
+  });
+  const reloading = page.waitForRequest((r) => r.url().endsWith("/api/search"));
+  await pick(rowOf(treeOf(page), e2eStore, s.task));
+  await page.keyboard.press("Space");
+  await reloading;
+  await choose(page, "テーブル");
+  // 読み直しが終わったあと、閉じたツリーが組み直すなら、アイテムとメンバーを読む。読まなければ(直したあと)待ちきる。
+  const reads = ["/items", "/members"].map((tail) =>
+    page.waitForResponse((r) => r.url().endsWith(tail), { timeout: 3000 }).catch(() => null),
+  );
+  const done = page.waitForResponse((r) => r.url().endsWith("/api/search"));
+  open();
+  await done;
+  await Promise.all(reads);
+  await expect(page.getByText("2 件", { exact: true })).toBeVisible();
+
+  let release = () => {};
+  const hold = new Promise<void>((r) => (release = r));
+  await page.route("**/api/stores/*/projects/*/items", async (route) => {
+    await hold;
+    await route.continue();
+  });
+  await choose(page, "ツリー");
+  await expect(page.getByText(/^\d+ 件$/)).toHaveCount(0);
+  release();
   await expect(page.getByText("2 件", { exact: true })).toBeVisible();
 });

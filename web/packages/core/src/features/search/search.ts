@@ -131,6 +131,8 @@ export function createSearch(deps: SearchDeps): Search {
       if (query !== null) saved.query = query;
       if (switched) saved.layout = "table";
       state.update((s) => ({ ...s, ...saved }));
+      // テーブル以外で開いたら、前にテーブルで選んでいた行を残さない(E3a-10)。
+      if (saved.layout !== "table") deps.selection?.clear();
       if (switched) write();
       await run();
     },
