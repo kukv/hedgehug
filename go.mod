@@ -3,7 +3,7 @@ module github.com/kukv/hedgehug
 go 1.27.3
 
 require (
-	github.com/danielgtaylor/huma/v2 v2.40.0
+	github.com/danielgtaylor/huma/v2 v2.41.0
 	github.com/go-git/go-billy/v5 v5.9.2
 	github.com/go-git/go-git/v5 v5.19.3
 	github.com/oklog/ulid/v2 v2.1.2
@@ -12,13 +12,13 @@ require (
 	github.com/pkg/browser v0.0.0-20240102092130-5ac0b6a4141c
 	github.com/sergi/go-diff v1.4.0
 	github.com/spf13/cobra v1.10.2
-	github.com/spf13/pflag v1.0.10
+	github.com/spf13/pflag v1.1.0
 	github.com/zalando/go-keyring v0.2.8
 	go.yaml.in/yaml/v4 v4.0.0
-	golang.org/x/sync v0.24.0
-	golang.org/x/sys v0.49.0
-	golang.org/x/term v0.47.0
-	golang.org/x/text v0.43.0
+	golang.org/x/sync v0.25.0
+	golang.org/x/sys v0.50.0
+	golang.org/x/term v0.48.0
+	golang.org/x/text v0.44.0
 )
 
 require (
@@ -46,7 +46,7 @@ require (
 	github.com/pjbgf/sha1cd v0.7.0 // indirect
 	github.com/skeema/knownhosts v1.3.1 // indirect
 	github.com/xanzy/ssh-agent v0.3.3 // indirect
-	golang.org/x/crypto v0.58.0 // indirect
-	golang.org/x/net v0.62.0 // indirect
+	golang.org/x/crypto v0.59.0 // indirect
+	golang.org/x/net v0.63.0 // indirect
 	gopkg.in/warnings.v0 v0.1.2 // indirect
 )
